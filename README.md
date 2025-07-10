@@ -4,9 +4,9 @@ ChatBot RPG is a new approach to text-based interactive fiction, putting the "G"
 
 **Why?**
 
-We've all had a couple of years to explore it - going back and forth with a chat bot set up to roleplay as some kind of interesting or beloved persona, prompting a 'text adventure' with suggested next actions, and have pinged off of an AI to discuss worldbuilding and discover their depth as a GMing aid. It is very clear that the large language model, inherently predisposed and even designed to adopt and simulate some kind of role, has enormous potential in the area of roleplaying and storytelling. In many ways they even solve some of the issues inherent to only-human roleplaying, such as scheduling, group availability, turn pacing, GM burnout, and content preference.
+We've all had a couple of years to explore it - going back and forth with a chat bot set up to roleplay as some kind of interesting or beloved persona, prompting a 'text adventure' with suggested next actions, and have pinged off of an AI to discuss worldbuilding and discover their depth as a GMing aid. It is very clear that the large language model, inherently predisposed and even designed to adopt and simulate some kind of role, has enormous potential in the area of roleplaying and storytelling. In many ways they even solve some of the issues inherent to human-only roleplaying, such as scheduling, group availability, turn pacing, GM burnout, and content preference (although we also want to preserve and boost its capacity to tell **our** stories, our human stories and ideas and lore, not its own memorized cliches and "isms").
 
-However, just like in only-human storytelling and roleplaying, all of this pent up potential is lost when given only its own devices to manage and deliver the content. Limitations such as context length, keeping accurate score of mechanics or counts, and strong internal biases become quickly known and ruin the experience, reducing a chatbot's capacity to roleplay into a short-term "proof of concept" demo instead of a whole experience.
+However, just like in human-only storytelling and roleplaying, all of this pent up potential is lost when given only its own devices to manage and deliver the content. Limitations such as context length, keeping accurate score of mechanics or counts, and strong internal biases become quickly known and ruin the experience, reducing a chatbot's capacity to roleplay into a short-term "proof of concept" demo instead of a whole experience.
 Take, for example, trying to roleplay with a chatbot inside your own fantasy world:
 
 - In the majority of cases, the first female NPC you meet will always be named Elara
@@ -25,7 +25,7 @@ Let's move beyond this, and give AI the actual capacity to run campaign-level ga
 
 To aid in the construction of RPGs, this toolkit provides a number of modules that are inspired by current existing RPG creation kits and allow creators to build their own games. These are:
 
-- **Rules Engine**: Create conditional logic that executes on timers or on each turn, which follows an "if-then-else" format
+- **Rules Engine**: The core of the engine - create powerful conditional logic that executes on timers or on each turn, which follows an "if-then-else" format
 - **Settings/Worlds**: Build interconnected settings with as nodes on actual maps, link them together with paths that have travel times between their settings, and overlay regions and features to allow dynamic descriptions of these locations in game
 - **Time Passage**: Sync your game to your computer clock or simulate the passage of its own time, allowing for dynamic pacing, changing world events, day/night cycles, and more
 - **Character Management**: Design NPCs with variables/status, equipment, backstories, and real schedules that allow them to move around the world
