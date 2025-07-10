@@ -111,6 +111,7 @@ A: I do plan to prioritize optimizations in the future - but for now, just getti
 - Some bugs may occur during the creation of settings if a certain order of operations are not followed.
 - Changing games causes a visual UI artifact if the main window is rescaled after the switch. Restarting the app fixes this problem.
 - Changing colors doesn't cause all UI elements to change right away. Restarting will fix this issue.
+- The mouse cursor is wrong or doesn't interact with some GUI elements correctly. A fix for this is coming soon.
 
 ## Acknowledgments
 
