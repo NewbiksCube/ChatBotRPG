@@ -23,7 +23,7 @@ Let's move beyond this, and give AI the actual capacity to run campaign-level ga
 
 **How do we fix it?**
 
-To aid in the construction of RPGs, this toolkit provides a number of modules that are inspired by current existing RPG creation kits and allow creators to build their own games. These are:
+To aid in the construction of RPGs, this toolkit provides a number of modules that are inspired by current existing RPG creation kits and allow creators to build their own games and systems, without needing to have any coding experience. These are:
 
 - **Rules Engine**: The core of the engine - create powerful conditional logic that executes on timers or on each turn, which follows an "if-then-else" format
 - **Settings/Worlds**: Build interconnected settings with as nodes on actual maps, link them together with paths that have travel times between their settings, and overlay regions and features to allow dynamic descriptions of these locations in game
