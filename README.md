@@ -17,6 +17,7 @@ Take, for example, trying to roleplay with a chatbot inside your own fantasy wor
 - Weather patterns might have difficulty changing
 - Once a character starts talking to you, they might have difficulty stopping or leaving
 - Characters introduced later in a scene might assume they know the names of characters referenced previously in the scene, even if they've never met
+- What is narrated as an internal experience to your character or an NPC may become referenced by other characters the next turn in their dialogue
 - Among many, many other immersion-breaking cliches, inconsistencies, and hallucinations
 
 Let's move beyond this, and give AI the actual capacity to run campaign-level games and tell consistent, epic stories.
