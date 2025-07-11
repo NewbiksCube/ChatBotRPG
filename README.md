@@ -67,9 +67,9 @@ Q: Why is it all in only one color?
 
 A: Doing the UI from scratch purely by vision was complicated, and iterating through all the little pieces to set up different visual themes, and then deciding on all that to show off the stylization conventions was just too much off-priority work for right now. While UI styling may improve in the future, for now, I'm focused on the game engine and my own game contents instead, so the monochrome CRT style kept it very uniform for me. Plus, it looks kind of like some of the first text adventures like Zork, and everyone has a favorite color (I think), so this should do for now.
 
-Q: What's with the splash screen?
+Q: Why is it shimmering?
 
-A: Currently, it's there to cover up certain visual artifacts that occur during the setting up of the UI during loading (although I've found that on some screen resolutions, it still wont). Plus, it was kind of fun.
+A: It's like an old CRT monitor. This is a pretty common visual trope with cyberpunk or sci fi type computer terminals and it kind of fits the first theme I was looking for. If it bothers you then you can disable or adjust it in the options menu but I think it's kind of cool.
 
 Q: Sprites? Pictures? Tilesets?
 
