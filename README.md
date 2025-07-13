@@ -87,9 +87,9 @@ A: No. This engine is not intended to render that kind of game. For visual mater
 
 A: Yes, support for this is planned in the near future. UI has some basic sound effects with more planned in the future.
 
-**Q: I started this through a development console and the output says (this/that/error etc). Should I be concerned?**
+**Q: I started this through my dev console and the output says (this/that/error etc). Should I be concerned?**
 
-A: No. Ignore all the console output, that is only for the developer.
+A: No. Ignore all the console output, that is only for me at this time.
 
 **Q: It's hard to talk RPG without talking combat, or at least conflict.  Is there a combat system, conflict resolution, player or NPC death? Consequences?**
 
