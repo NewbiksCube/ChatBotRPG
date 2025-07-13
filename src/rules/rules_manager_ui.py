@@ -2,7 +2,6 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from core.utils import is_valid_widget, _get_available_actors, _get_available_settings
-from generate.generate_story import create_generate_story_widget
 
 def create_generate_setting_widget(parent=None):
     widget = QWidget(parent)
@@ -643,9 +642,6 @@ def create_pair_widget(tab_data):
         generate_setting_widget = create_generate_setting_widget(parent=row_widget)
         generate_setting_widget.setVisible(False)
         top_h_layout.addWidget(generate_setting_widget)
-        generate_story_widget = create_generate_story_widget(parent=row_widget)
-        generate_story_widget.setVisible(False)
-        top_h_layout.addWidget(generate_story_widget)
         generate_character_widget = QWidget(row_widget)
         generate_character_layout = QVBoxLayout(generate_character_widget)
         generate_character_layout.setContentsMargins(0, 0, 0, 0)
@@ -1220,7 +1216,6 @@ def create_pair_widget(tab_data):
             position_container.setVisible(is_sys_msg)
             switch_model_widget.setVisible(is_switch_model)
             generate_setting_widget.setVisible(is_generate_setting)
-            generate_story_widget.setVisible(is_generate_story)
             generate_character_widget.setVisible(is_generate_character)
             generate_random_list_widget.setVisible(is_generate_random_list)
             change_location_widget.setVisible(is_change_location)
