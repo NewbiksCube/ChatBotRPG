@@ -128,4 +128,4 @@ A: I do plan to prioritize optimizations in the future - but for now, just getti
 
 ## Acknowledgments
 
-Built with passion for the emerging intersection of AI technology and interactive fiction. Special thanks to the LLM RPG communities SillyTavern (especially Veritasr and his LLM World Engine thread) and Tenebrous Tales Interactive for inspiration and feedback.
+Built with passion for the emerging intersection of AI technology and interactive fiction. Special thanks to the LLM RPG communities SillyTavern (especially Veritasr's LLM World Engine thread) and Tenebrous Tales Interactive for inspiration and feedback.
