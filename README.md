@@ -1,12 +1,12 @@
 # Chatbot RPG
-ChatBot RPG is a new approach to text-based interactive fiction, putting the "G" in "RPG" and moving past simple roleplay chats with personas. Build whole games and scenarios in which the AI operates within a framework of rules, enabling complex quest stage tracking, dynamic events, real inventory, and emergent storytelling with a consistency that is not possible with a chat bot and some vector db wizardry alone. The goal of this project is to unlock a multitude of new kinds of play styles around the LLM chat medium, from simple branched-narrative games to sandboxing in entirely new open worlds with whole parties of companions.
+ChatBot RPG is a new approach to text-based interactive fiction, putting the "G" in "RPG" and moving past simple roleplay chats with personas. Build whole games and scenarios in which the AI operates within a framework of rules, enabling complex quest stage tracking, dynamic events, real inventory, and emergent storytelling with a consistency that is not possible with a chat bot and some memory tricks alone. The goal of this project is to unlock a multitude of new kinds of play styles around the LLM chat medium, from simple branched-narrative games to sandboxing in entirely new open worlds with whole parties of companions.
 
 
 **Why?**
 
 We've all had a couple of years to explore it - going back and forth with a chat bot set up to roleplay as some kind of interesting or beloved persona, prompting a 'text adventure' with suggested next actions, and have pinged off of an AI to discuss worldbuilding and discover their depth as a storytelling aid. It is very clear that the large language model, inherently predisposed and even designed to adopt and simulate some kind of role, has enormous potential in the area of roleplaying games. In many ways they even solve some of the issues with human-only games, such as scheduling, group availability, turn pacing, GM burnout, and content preference (although we also want to preserve and boost its capacity to tell **our** human stories and ideas and lore, not its own memorized cliches and "isms").
 
-Just like in human storytelling, all of this pent up potential can be lost when given only its own devices to manage and deliver the content (which is why we have tabletop systems, etc). Limitations such as context length, keeping accurate score of mechanics or variables, and strong internal biases and repetition can quickly ruin the experience, reducing a chatbot's capacity to roleplay into something more like a dream than a coherent and whole experience.
+Just like in human storytelling, all of this pent up potential can be lost when given only its own devices to manage and deliver the content (which is why we have storytelling frameworks, like tabletop games). Limitations such as context length, keeping accurate score of mechanics or variables, and strong internal biases and repetition can quickly ruin the experience, reducing a chatbot's capacity to roleplay into something more like a dream than a coherent and whole experience.
 Take, for example, trying to roleplay with a chatbot inside your own fantasy world:
 
 - In the majority of cases, the first female NPC you meet will always be named Elara
@@ -39,12 +39,13 @@ This is currently an initial preview. Full implementation of these modules is ne
 
 ## Getting Started
 
-1. **Add your OpenRouter API key to `config.json. More LLM services will be supported soon.`**
-2. **Run `START.bat`**
+1. **Add your OpenRouter API key to `config.json.` More LLM services will be supported soon.**
+2. **Ensure that Python is installed.
+3. **Run `START.bat`**
 
 ## Documentation
 
-- **WIP**
+- **Coming Soon**
 
 ## Anticipated FAQ:
 
