@@ -353,6 +353,8 @@ class ChatbotUI(QWidget):
             chargen_widget.setParent(None)
             chargen_widget.deleteLater()
             del tab_data['_chargen_widget']
+        if hasattr(self, '_actor_name_to_file_cache'):
+            self._actor_name_to_file_cache.clear()
         right_splitter = tab_data.get('right_splitter')
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if right_splitter and workflow_data_dir:
@@ -751,7 +753,23 @@ class ChatbotUI(QWidget):
                          print(f"on_tab_changed (Tab: '{tab_name_for_debug}'): Hiding top splitter (input state: chargen).")
                          top_splitter.setVisible(False)
                      else:
-                         top_splitter.setVisible(True)
+                         left_splitter = tab_data.get('left_splitter')
+                         if left_splitter and hasattr(left_splitter, 'live_game_button'):
+                             live_game_checked = left_splitter.live_game_button.isChecked()
+                             if live_game_checked:
+                                 output_widget = tab_data.get('output')
+                                 has_ongoing_conversation = False
+                                 if output_widget and hasattr(output_widget, 'get_message_roles'):
+                                     message_roles = output_widget.get_message_roles()
+                                     if message_roles:
+                                         user_messages = [role for role in message_roles if role == 'user']
+                                         assistant_messages = [role for role in message_roles if role == 'assistant']
+                                         has_ongoing_conversation = len(user_messages) > 0 and len(assistant_messages) > 0
+                                 top_splitter.setVisible(has_ongoing_conversation)
+                             else:
+                                 top_splitter.setVisible(False)
+                         else:
+                             top_splitter.setVisible(False)
                  right_splitter = tab_data.get('right_splitter')
                  left_splitter = tab_data.get('left_splitter')
                  if right_splitter:
@@ -3373,9 +3391,7 @@ p, li { white-space: pre-wrap; }
         )
         result_text = text_to_process
         if '(character)' in result_text and actor_name_context:
-            print(f"[SUBSTITUTION DEBUG] Replacing '(character)' with '{actor_name_context}' in '{text_to_process}'")
             result_text = result_text.replace('(character)', actor_name_context)
-            print(f"[SUBSTITUTION DEBUG] Result: '{result_text}'")
         if '(player)' in result_text:
             workflow_data_dir = tab_data.get('workflow_data_dir') if tab_data else None
             if workflow_data_dir:
