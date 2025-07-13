@@ -55,7 +55,7 @@ A: It just happens to be the service I use for my inferences, support for other 
 
 Q: Which model should I use?
 
-A: My favorite one that sits at the most optimal place regarding functionality/reasoning, and cost per inference, is the Gemini 2.5 Flash Lite Preview. However, most models that understand basic reasoning and classification will do. Do not use "thinking" models - this project might not account for "thinking" tokens correctly in all cases, and is already designed to allow game designers to funnel the AI down its own "thinking" trees of thought that are more closely aligned to the goals of their game mechanics.
+A: My favorite one that sits at the most optimal place regarding functionality/reasoning, and cost per inference, is the Gemini 2.5 Flash Lite Preview. However, most models that understand basic reasoning and classification will do. Do not use "thinking" models - this project might not account for "thinking" tokens correctly in all cases, and is already designed to allow game designers to funnel the AI down its own "thinking" trees of thought that are more closely aligned to the goals of their game mechanics. Do not use models that are predisposed towards long, flowery text such as creative writing models (following instructions directly without adding extra stuff is going to be the number one priority).
 
 Q: Can I run locally?
 
