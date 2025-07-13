@@ -46,7 +46,7 @@ This is currently an initial preview. Full implementation of these modules is ne
 
 - **WIP**
 
-## Anticipated FAQ (AKA all the things I'm insecure about):
+## Anticipated FAQ:
 
 Q: Why is it only OpenRouter.ai? Can I use (inference service XYZ)?
 
@@ -79,6 +79,10 @@ A: No. This engine is not intended to render that kind of game. For visual mater
 Q: Music? Sound effects?
 
 A: Yes, support for this is planned in the near future. UI has some basic sound effects with more planned in the future.
+
+Q: I started this through a development console and the output says (this/that/error etc). Should I be concerned?
+
+A: No. Ignore all the console output, that is only for the developer.
 
 Q: It's hard to talk RPG without talking combat, or at least conflict.  Is there a combat system, conflict resolution, player or NPC death? Consequences?
 
