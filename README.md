@@ -118,6 +118,7 @@ A: I do plan to prioritize optimizations in the future - but for now, just getti
 ## Known Issues
 
 - Small window popup on game switch or loading.
+- Windows might twitch or adjust upon receiving some chat messages and other events. This is being worked on.
 - The window dimensions are not collapsible to as small as I want, yet, and may have inconsistencies or issues on some smaller resolution devices.
 - Some UI elements might be too small or cluttered to provide a smooth experience.
 - Some bugs may occur during the creation of settings if a certain order of operations are not followed.
