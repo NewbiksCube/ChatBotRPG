@@ -1,9 +1,10 @@
 {
-  "openrouter_api_key": "put your key here",
+  "openrouter_api_key": "Put OpenRouter.ai API Key Here",
   "openrouter_base_url": "https://openrouter.ai/api/v1",
   "default_model": "google/gemini-2.5-flash-lite-preview-06-17",
   "default_cot_model": "google/gemini-2.5-flash-lite-preview-06-17",
   "default_utility_model": "google/gemini-2.5-flash-lite-preview-06-17",
   "default_temperature": 0.3,
-  "default_max_tokens": 2048
-,\n  "setup_complete": true\n}
+  "default_max_tokens": 2048,
+  "setup_complete": false
+}
