@@ -42,7 +42,7 @@ This is currently an initial preview for developers, game masters, and tech enth
 1. **Download files to a virtual environment or folder somewhere.**
 2. **Add your OpenRouter API key to `config.json.` More LLM services will be supported soon.**
 3. **Ensure that Python is installed.**
-4. **Unzip the contents of `Demo.zip` into the main folder (this contains the actual demo "game").
+4. **Unzip the contents of `Demo.zip` into the main folder (this contains the actual demo "game").**
 5. **Run `START.bat`**
 
 ## Documentation
