@@ -53,7 +53,7 @@ This is currently an initial preview for developers, game masters, and tech enth
 
 Q: How is any one game represented?
 
-A: A game is represented by certain files and folders inside the /data/ directory (example, /game/My RPG/various files and folders). While other approaches to data persistence might be explored in the future, game data is currently stored as various .json files within various subfolders (the game engine will organize this on its own). Game state is primarily maintained by these files. Saves are currently just duplicate folders containing exact copies or snapshots of a game state at the time it was saved and kept in a /saves/ folder (Loading a save just restores this to the main state). If you are using map images, .jpg or other image formats can also be stored in there.
+A: A game is represented by certain files and folders inside the /data/ directory (example, /data/My RPG/various files and folders). While other approaches to data persistence might be explored in the future, game data is currently stored as various .json files within various subfolders (the game engine will organize this on its own). Game state is primarily maintained by these files. Saves are currently just duplicate folders containing exact copies or snapshots of a game state at the time it was saved and kept in a /saves/ folder (Loading a save just restores this to the main state). If you are using map images, .jpg or other image formats can also be stored in there.
 
 Q: Why is it only OpenRouter.ai? Can I use (inference service XYZ)?
 
