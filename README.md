@@ -51,67 +51,67 @@ This is currently an initial preview for developers, game masters, and tech enth
 
 ## Anticipated FAQ:
 
-Q: How is any one game represented?
+**Q: How is any one game represented?**
 
 A: A game is represented by certain files and folders inside the /data/ directory (example, /data/My RPG/various files and folders). While other approaches to data persistence might be explored in the future, game data is currently stored as various .json files within various subfolders (the game engine will organize this on its own). Game state is primarily maintained by these files. Saves are currently just duplicate folders containing exact copies or snapshots of a game state at the time it was saved and kept in a /saves/ folder (Loading a save just restores this to the main state). If you are using map images, .jpg or other image formats can also be stored in there.
 
-Q: Why is it only OpenRouter.ai? Can I use (inference service XYZ)?
+**Q: Why is it only OpenRouter.ai? Can I use (inference service XYZ)?**
 
 A: It just happens to be the service I use for my inferences, support for other stuff coming soon.
 
-Q: Which model should I use?
+**Q: Which model should I use?**
 
 A: My favorite one that sits at the most optimal place regarding functionality/reasoning, and cost per inference, is the Gemini 2.5 Flash Lite Preview. However, most models that understand basic reasoning and classification will do. Do not use "thinking" models - this project might not account for "thinking" tokens correctly in all cases, and is already designed to allow game designers to funnel the AI down its own "thinking" trees of thought that are more closely aligned to the goals of their game mechanics. Do not use models that are predisposed towards long, flowery text such as creative writing models (following instructions directly without adding extra stuff is going to be the number one priority).
 
-Q: Can I run locally?
+**Q: Can I run this locally?**
 
-A: Maybe, probably, and I suspect that will be a standard soon but it's important to emphasize that reasoning, instructions-following, and newer models when picking which LLM to run the game. Very often, reasoning skills are a bit of a trade-off with the creative writing models, so the creative writing or RP-based models are not going to be nearly as useful here (counter-intuitive as it may sound) as something that can classify things with a little bit of common sense, and follow instructions reasonably well. You might also want about 16k or more token context window.
+A: Maybe, probably, and I suspect that will be a standard soon but it's important to emphasize that reasoning, instructions-following, and newer models when picking which LLM to run the game. Locally hosted models tend to be smaller, and smaller models often do not reason very well. Very often, reasoning skills are a bit of a trade-off with the creative writing models, so the creative writing or RP-based models are not going to be nearly as useful here (counter-intuitive as it may sound) as something that can classify things with a little bit of common sense, and follow instructions reasonably well. You might also want about 32k or more token context window.
 
-Q: What are you using for UI? Why no browser-based or website?
+**Q: What are you using for UI? Why no browser-based or website?**
 
 A: Currently PyQt5, as LLMs themselves are pretty familiar with it and I preferred a standalone experience I could do to my exact vision. One of the design choices I made early on is keeping dependencies and the install process relatively straightforward and I wanted it to run with just Python. If the demand is there, then I may explore other UI choices or browser-based things in the future.
 
-Q: Why is it all in only one color?
+**Q: Why is it all in only one color?**
 
 A: Doing the UI from scratch purely by vision was complicated, and iterating through all the little pieces to set up different visual themes, and then deciding on all that to show off the stylization conventions was just too much off-priority work for right now. While UI styling may improve in the future, for now, I'm focused on the game engine and my own game contents instead, so the monochrome CRT style kept it very uniform for me. Plus, it looks kind of like some of the first text adventures like Zork, and everyone has a favorite color (I think), so this should do for now.
 
-Q: Why is it shimmering?
+**Q: Why is it shimmering?**
 
 A: It's like an old CRT monitor. This is a pretty common visual trope with cyberpunk or sci fi type computer terminals and it kind of fits the first theme I was looking for. If it bothers you then you can disable or adjust it in the options menu but I think it's kind of cool.
 
-Q: Sprites? Pictures? Tilesets?
+**Q: Sprites? Pictures? Tilesets?**
 
 A: No. This engine is not intended to render that kind of game. For visual material, maps are supported and encouraged, and there may be some limited support for character portraits or images in the future. However, it is my expectation that as AI, VR, and other cool stuff continues to develop, future technologies will already become capable of rendering visual scenes from text. I would also like to reserve future space for the idea of getting to play using only voice input/output. For these reasons I like to consider that ChatBot RPG does "computer games," but it does not do "video games." There are however some basic screen effects and sound effects that can optionally be used.
 
-Q: Music? Sound effects?
+**Q: Music? Sound effects?**
 
 A: Yes, support for this is planned in the near future. UI has some basic sound effects with more planned in the future.
 
-Q: I started this through a development console and the output says (this/that/error etc). Should I be concerned?
+**Q: I started this through a development console and the output says (this/that/error etc). Should I be concerned?**
 
 A: No. Ignore all the console output, that is only for the developer.
 
-Q: It's hard to talk RPG without talking combat, or at least conflict.  Is there a combat system, conflict resolution, player or NPC death? Consequences?
+**Q: It's hard to talk RPG without talking combat, or at least conflict.  Is there a combat system, conflict resolution, player or NPC death? Consequences?**
 
 A: The tools should exist for game makers to create their own combat or conflict-resolution systems. One will certainly be in place for the world/game I am building. Game creators can use the "Game Over" trigger action in the Rules system to force an end to the current game session and reset the player to the starting screen.
 
-Q: Multiplayer??
+**Q: Multiplayer??**
 
 A: Possibly, especially if I got a lot of technical help and a strong demand for it, but it's not a current priority. I'm not opposed to the idea and I do one day want to be able to play with some friends, but a completed single player experience for things is my first priority. However, given how quickly material can be built within this engine, there is probably a big opportunity right away for collaborative worldbuilding (sort of like Skyrim mods). This is the main communal experience I'm looking forward to, if this project generates any interest.
 
-Q: Why can't I select text and copy/paste to/from the chat? Why can't I redo post? Why do I have to write like (3rd person, full sentences, etc)?
+**Q: Why can't I select text and copy/paste to/from the chat? Why can't I redo post? Why do I have to write like (3rd person, full sentences, etc)?**
 
 A: While people can make any games they want, the type of game this is intended to help create are those that can exercise some kind of faculties of the player. Not being able to just rewrite things (beyond the save/load functions), having timed elements rather than strict turn-based order, and solid in-game consequences for decisions will all put a strong emphasis on making sound decisions in a timely fashion, while sometimes under pressure. This more game-like experience is what I'm aiming for, so the project will lean more in that direction and less in the experimental chatbot direction.
 
-Q: But, what if the AI makes a mistake? Wont the randomness make a game-like environment impossible?
+**Q: But, what if the AI makes a mistake? Wont the randomness make a game-like environment impossible?**
 
 A: Most of the elements of a scene can be programatically tracked (or randomized properly), and broken into very small moving parts that are easily tracked and handled by modern LLMs. Strong state-tracking pipelines, clear prompting, and later models vs. earlier models can all come together in a manner that make such mistakes very rare. The goal of this project is to finally provide the tools needed to properly and comprehensively rein in the chaos that often defines LLM use (at least in the context of text adventure). At the end of the day this is mainly a prompt-engineering toolkit, and that's a skillset that's still being explored, but what's consistently kept me developing this project is actually the success rate I've experienced from strong prompt engineering. The one thing that might convince me to stop working on this has always been some barrier that proves impossible to overcome, but so far, each element that an RPG engine needs has, through trial and error, been successfully prototyped in my journey and I just haven't hit that limit yet.
 
-Q: Why is the source code bad? Why no comments in the code? Why the monolithic functions?
+**Q: Why is the source code bad? Why no comments in the code? Why the monolithic functions?**
 
 A: This has been largely a solo endeavor, and a running theme of the development of the project has been the use of AI pair programming. The process of iterating on this, day in and day out (including on other projects), and learning patterns along the way has led to the development of my own personal code structures and conventions that are sort of optimized for my own AI use and IDE setup.
 
-Q: Why is the map editor so CPU heavy?
+**Q: Why is the map editor so CPU heavy?**
 
 A: I do plan to prioritize optimizations in the future - but for now, just getting it working at all was a really huge task for me.
 
