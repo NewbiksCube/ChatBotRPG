@@ -35,7 +35,7 @@ To aid in the construction of RPGs, this toolkit provides a number of modules th
 - **Random Lists**: Preset, generate, and use weighted random lists to help eliminate bias, such as the infamous "Elara" bias
 - **Scribe**: An in-built AI agent specifically for the purpose of scaling up the game-building process. Leverage its help for worldbuilding, writing rule files for your game automatically, generating character files for your game automatically, or just explaining the interface and UI to you.
 
-This is currently an initial preview. Full implementation of these modules is nearing completion, and about 90% of the features are now explorable. There should be enough there to help you begin forming large swaths of your game world and logic, while the rest of the features are completed in the near term, so despite it being a bit rough around the edges, feel free to start building serious stuff now and the engine will catch up to you.
+This is currently an initial preview for developers, game masters, and tech enthusiasts. There are no fully playable games yet or any plug-and-play experiences for the casual roleplayer or gamer. Full implementation of these creation modules is nearing completion, and about 80%-90% of the features are now explorable. If you enjoy game design and worldbuilding, there should be enough there to help you begin forming large swaths of your game world and logic, while the rest of the features are completed in the near term, so despite it being a bit rough around the edges, feel free to start building serious stuff now and the engine will catch up to you.
 
 ## Getting Started
 
