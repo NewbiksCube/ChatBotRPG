@@ -52,7 +52,7 @@ def _evaluate_conditions(self, tab_data, conditions, operator, current_turn, tri
     return final_result
 
 def _process_specific_rule(self, rule, current_user_msg, prev_assistant_msg, rules_list, rule_index=None, triggered_directly=False, is_post_phase=False, character_name=None, original_sequential_context=None):
-    from chatBotTest import InferenceThread
+    from chatBotRPG import InferenceThread
     tab_data = self.get_current_tab_data()
     if tab_data:
         applies_to_char = rule.get('applies_to', 'Narrator') == 'Character'
@@ -804,7 +804,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                                                         new_content = f"Your character sheet (JSON format):\n```json\n{json.dumps(updated_character_data, indent=2)}\n```"
                                                         context[i]['content'] = new_content
                                                         break
-                                                from chatBotTest import get_npc_notes_from_character_file, format_npc_notes_for_context
+                                                from chatBotRPG import get_npc_notes_from_character_file, format_npc_notes_for_context
                                                 updated_notes = get_npc_notes_from_character_file(npc_file_path)
                                                 if updated_notes:
                                                     formatted_updated_notes = format_npc_notes_for_context(updated_notes, target_actor_name)
@@ -1192,7 +1192,7 @@ def _apply_rule_action(self, rule, user_msg, assistant_msg, character_name=None)
     return True
 
 def _retry_rule_with_fallback(self, rule, rule_id, rule_index, current_user_msg, prev_assistant_msg, rules_list, fallback_model, tried_fallback1=False, tried_fallback2=False, tried_fallback3=False, is_post_phase=False, triggered_directly=False, character_name_for_rule_context=None):
-    from chatBotTest import InferenceThread
+    from chatBotRPG import InferenceThread
     tab_data = self.get_current_tab_data()
     if not tab_data:
         return
