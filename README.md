@@ -65,7 +65,7 @@ A: My favorite one that sits at the most optimal place regarding functionality/r
 
 **Q: Can I run this locally?**
 
-A: Maybe, probably, and I suspect that will be a standard soon but it's important to emphasize that reasoning, instructions-following, and newer models when picking which LLM to run the game. Locally hosted models tend to be smaller, and smaller models often do not reason very well. Very often, reasoning skills are a bit of a trade-off with the creative writing models, so the creative writing or RP-based models are not going to be nearly as useful here (counter-intuitive as it may sound) as something that can classify things with a little bit of common sense, and follow instructions reasonably well. You might also want about 32k or more token context window.
+A: Maybe, I haven't tested this and support for it is coming soon. I must emphasize the importance of reasoning, instructions-following, and probably newer models, when picking which model to run the game. Locally hosted models tend to be smaller, and smaller models often do not reason very well. Very often, reasoning skills are a bit of a trade-off with the creative writing models, so the creative writing or RP-based models are not going to be nearly as useful here (counter-intuitive as it may sound) as something that can classify things with a little bit of common sense, and follow instructions reasonably well. You might also want about 32k or more token context window.
 
 **Q: What are you using for UI? Why no browser-based or website?**
 
