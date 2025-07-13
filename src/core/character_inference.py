@@ -657,7 +657,7 @@ def _start_next_npc_inference(self):
         print("[ERROR] Missing context in _start_next_npc_inference.")
         return
     self._npc_inference_in_progress = True
-    from src.chatBotRPG import InferenceThread
+    from chatBotRPG import InferenceThread
     thread = InferenceThread(
         context,
         character,
@@ -1105,7 +1105,7 @@ Brief note from {character_name}'s perspective:"""
             {"role": "user", "content": note_prompt}
         ]
         model = tab_data.get('settings', {}).get('cot_model', get_default_cot_model())
-        from src.chatBotRPG import UtilityInferenceThread
+        from chatBotRPG import UtilityInferenceThread
         thread = UtilityInferenceThread(
             chatbot_ui_instance=self,
             context=note_context,
