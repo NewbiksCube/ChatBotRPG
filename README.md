@@ -120,7 +120,7 @@ A: I do plan to prioritize optimizations in the future - but for now, just getti
 - Small window popup on game switch or loading.
 - Windows might twitch or adjust upon receiving some chat messages and other events. This is being worked on.
 - The window dimensions are not collapsible to as small as I want, yet, and may have inconsistencies or issues on some smaller resolution devices.
-- Some UI elements might be too small or cluttered to provide a smooth experience.
+- Some UI elements might be a bit cluttered to provide a smooth experience, but it was the best I could do for now.
 - Some bugs may occur during the creation of settings if a certain order of operations are not followed.
 - Changing games causes a visual UI artifact if the main window is rescaled after the switch. Restarting the app fixes this problem.
 - Changing colors doesn't cause all UI elements to change right away. Restarting will fix this issue.
