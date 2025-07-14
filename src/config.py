@@ -1,7 +1,7 @@
 import os
 import json
 
-CONFIG_FILE = "config.json"
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
 
 DEFAULT_CONFIG = {
     "openrouter_api_key": "",
@@ -71,4 +71,4 @@ def update_default_models(main_model=None, cot_model=None, utility_model=None):
         config["default_cot_model"] = cot_model
     if utility_model:
         config["default_utility_model"] = utility_model
-    save_config(config)
+    save_config(config) 
