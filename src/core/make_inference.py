@@ -28,9 +28,23 @@ def make_inference(context, user_message, character_name, url_type, max_tokens, 
     api_key = get_openrouter_api_key()
     if not api_key:
         return "Sorry, API error: OpenRouter API key not configured. Please check config.json file."
-    base_url = f"{get_openrouter_base_url()}/chat/completions"
+    base_url = get_openrouter_base_url()
+    if base_url.endswith('/'):
+        base_url = base_url.rstrip('/')
+    base_url = f"{base_url}/chat/completions"
+    
+    is_local_model_type = False
+    if isinstance(url_type, str):
+        is_local_model_type = any(kw in url_type.lower() for kw in ["ollama", "lmstudio"]) or \
+                              (url_type.split('/')[0].lower() if '/' in url_type else "") in ["local_mode"]
+    
     final_data = { "model": url_type, "temperature": temperature, "max_tokens": max_tokens, "top_p": 0.95, "messages": context }
-    headers = { "Authorization": f"Bearer {api_key}", "Content-Type": "application/json" }
+    headers = { "Content-Type": "application/json" }
+    
+    if not is_local_model_type:
+        headers["Authorization"] = f"Bearer {api_key}"
+    else:
+        api_key = "placeholder_for_local"
     try:
         final_response = requests.post(base_url, headers=headers, json=final_data, timeout=180)
         final_response.raise_for_status()
