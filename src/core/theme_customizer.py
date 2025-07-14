@@ -10,7 +10,7 @@ from core.apply_stylesheet import generate_and_apply_stylesheet
 from core.ui_widgets import ChatMessageWidget, ChatMessageListWidget
 from editor_panel.world_editor.world_editor import WorldEditorWidget
 from editor_panel.start_conditions_manager import StartConditionsManagerWidget
-from config import get_default_model, get_default_cot_model
+from config import get_default_model, get_default_cot_model, get_openrouter_api_key, get_openrouter_base_url
 
 
 def create_themed_cursor(base_color, cursor_type="arrow", intensity=0.8):
@@ -235,8 +235,6 @@ def update_ui_colors(chatbot_ui_instance, theme_colors):
                         text_cursor = chatbot_ui_instance.themed_cursors.get('text')
                         if text_cursor:
                             input_widget.setCursor(text_cursor)
-                    
-                    # Update character generator theme if it exists
                     if hasattr(input_widget, '_chargen_widget') and input_widget._chargen_widget:
                         try:
                             input_widget._chargen_widget.update_theme(new_theme)
@@ -286,8 +284,7 @@ class ThemeCustomizationDialog(QDialog):
         bg_value = int(80 * self.current_theme["contrast"])
         self.bg_color = f"#{bg_value:02x}{bg_value:02x}{bg_value:02x}"
         darker_bg = f"#{max(bg_value-10, 0):02x}{max(bg_value-10, 0):02x}{max(bg_value-10, 0):02x}"
-        
-        # Set dialog styling
+
         self.setStyleSheet(f"""
             QDialog {{
                 background-color: {self.bg_color};
@@ -418,6 +415,46 @@ class ThemeCustomizationDialog(QDialog):
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(20, 20, 20, 20)
         content_layout.setSpacing(15)
+        
+        api_section_label = QLabel("API Configuration:")
+        api_section_label.setFont(QFont('Arial', 12, QFont.Bold))
+        content_layout.addWidget(api_section_label)
+        
+        api_key_layout = QHBoxLayout()
+        self.api_key_label = QLabel("API Key:")
+        self.api_key_label.setFont(QFont('Arial', 12))
+        self.api_key_input = QTextEdit()
+        self.api_key_input.setObjectName("ApiKeyInput")
+        self.api_key_input.setMaximumHeight(40)
+        self.api_key_input.setFont(QFont('Arial', 12))
+        self.api_key_input.setPlaceholderText("Enter your API key (hidden)")
+        self.api_key_input.setStyleSheet("QTextEdit { color: #666666; }")
+        self.api_key_input.textChanged.connect(self.update_api_key)
+        self.api_key_input.focusInEvent = lambda event: self._handle_api_key_focus()
+        self.api_key_input.focusOutEvent = lambda event: self._handle_api_key_blur()
+        current_api_key = get_openrouter_api_key() or ""
+        if current_api_key:
+            self.api_key_input.setText("*" * len(current_api_key))
+        self.api_key_input.setToolTip("Click to edit API key")
+        api_key_layout.addWidget(self.api_key_label)
+        api_key_layout.addWidget(self.api_key_input, 1)
+        content_layout.addLayout(api_key_layout)
+        
+        api_url_layout = QHBoxLayout()
+        self.api_url_label = QLabel("API Base URL:")
+        self.api_url_label.setFont(QFont('Arial', 12))
+        self.api_url_input = QTextEdit()
+        self.api_url_input.setObjectName("ApiUrlInput")
+        self.api_url_input.setMaximumHeight(40)
+        self.api_url_input.setFont(QFont('Arial', 12))
+        self.api_url_input.setPlaceholderText("e.g., https://openrouter.ai/api/v1 or http://127.0.0.1:1234/v1")
+        self.api_url_input.textChanged.connect(self.update_api_url)
+        current_api_url = get_openrouter_base_url() or ""
+        self.api_url_input.setText(current_api_url)
+        api_url_layout.addWidget(self.api_url_label)
+        api_url_layout.addWidget(self.api_url_input, 1)
+        content_layout.addLayout(api_url_layout)
+        
         model_temp_layout = QHBoxLayout()
         self.model_label = QLabel("Model:")
         self.model_label.setFont(QFont('Arial', 12))
@@ -452,6 +489,7 @@ class ThemeCustomizationDialog(QDialog):
         cot_model_layout.addWidget(self.cot_model_label)
         cot_model_layout.addWidget(self.cot_model_input, 1)
         content_layout.addLayout(cot_model_layout)
+        
         color_layout = QHBoxLayout()
         self.color_label = QLabel("Base Color:")
         self.color_label.setFont(QFont('Arial', 12))
@@ -681,9 +719,6 @@ class ThemeCustomizationDialog(QDialog):
     def _close_with_sound(self):
         self.reject()
     
-    def _accept_with_sound(self):
-        self.accept()
-    
     def update_model(self):
         self.result_theme["model"] = self.model_input.toPlainText().strip()
 
@@ -692,3 +727,32 @@ class ThemeCustomizationDialog(QDialog):
 
     def update_cot_model(self):
         self.result_theme["cot_model"] = self.cot_model_input.toPlainText().strip()
+
+    def update_api_key(self):
+        self.result_theme["api_key"] = self.api_key_input.toPlainText().strip()
+
+    def update_api_url(self):
+        self.result_theme["api_url"] = self.api_url_input.toPlainText().strip()
+
+    def _handle_api_key_focus(self):
+        current_api_key = get_openrouter_api_key() or ""
+        if current_api_key and self.api_key_input.toPlainText().strip() == "*" * len(current_api_key):
+            self.api_key_input.setText(current_api_key)
+            self.api_key_input.setStyleSheet("QTextEdit { color: #000000; }")
+
+    def _handle_api_key_blur(self):
+        api_key = self.api_key_input.toPlainText().strip()
+        if api_key and not api_key.startswith("*"):
+            self.api_key_input.setText("*" * len(api_key))
+            self.api_key_input.setStyleSheet("QTextEdit { color: #666666; }")
+
+    def _accept_with_sound(self):
+        api_key = self.api_key_input.toPlainText().strip()
+        api_url = self.api_url_input.toPlainText().strip()
+        if api_key or api_url:
+            from config import update_config
+            if api_key:
+                update_config("openrouter_api_key", api_key)
+            if api_url:
+                update_config("openrouter_base_url", api_url)
+        self.accept()
