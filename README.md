@@ -1,4 +1,4 @@
-# Chatbot RPG (Early Preview Release)
+# ChatBot RPG (Early Preview Release)
 ChatBot RPG is a new approach to text-based interactive fiction, putting the "G" in "RPG" and moving past simple roleplay chats with personas. Build whole games and scenarios in which the AI operates within a framework of rules, enabling complex quest stage tracking, dynamic events, real inventory, and emergent storytelling with a consistency that is not possible with a chat bot and some memory tricks alone. The goal of this project is to unlock a multitude of new kinds of play styles around the LLM chat medium, from simple branched-narrative games to sandboxing in entirely new open worlds with whole parties of companions.
 
 
