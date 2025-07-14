@@ -965,7 +965,7 @@ class WorldEditorWidget(QWidget):
                 if os.path.exists(world_json_path):
                     data = self._load_json(world_json_path)
                 else:
-                    data = {}
+                    data = {"locations": {}}
                 data["map_image"] = rel_path
                 if self._save_json(world_json_path, data):
                     self._current_map_relpath = rel_path
@@ -1071,6 +1071,10 @@ class WorldEditorWidget(QWidget):
             if os.path.exists(world_json_path):
                 with open(world_json_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
+            if not isinstance(data, dict):
+                data = {}
+            if "locations" not in data:
+                data["locations"] = {}
             if "map_image" in data:
                 del data["map_image"]
             with open(world_json_path, "w", encoding="utf-8") as f:
