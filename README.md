@@ -133,3 +133,11 @@ A: I do plan to prioritize optimizations in the future - but for now, just getti
 ## Acknowledgments
 
 Built with passion for the emerging intersection of AI technology and interactive fiction. Special thanks to the LLM RPG communities SillyTavern (especially Veritasr's LLM World Engine thread) and Tenebrous Tales Interactive for inspiration and feedback.
+
+## License
+
+This project is licensed under the GNU General Public License v3.0.
+
+## Community
+
+A place to talk about it: https://discord.gg/bwpYhcVs
