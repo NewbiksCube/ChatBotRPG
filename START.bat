@@ -90,7 +90,7 @@ if not exist "config.json" (
     findstr /C:"setup_complete" config.json >nul 2>&1
     if errorlevel 1 (
         echo [INFO] Adding setup status to config.json...
-        powershell -Command "(Get-Content config.json) -replace '}$', ',\n  \"setup_complete\": true\n}' | Set-Content config.json"
+        powershell -Command "$content = Get-Content config.json -Raw; if ($content -notmatch '\"setup_complete\"') { $content = $content -replace '}$', ',\n  \"setup_complete\": true\n}'; Set-Content config.json $content -NoNewline}"
     )
 )
 
@@ -102,6 +102,4 @@ if not exist "sounds" (
 
 echo [INFO] Launching ChatBotRPG...
 start /min pythonw src\chatBotRPG.py
-echo [SUCCESS] Application launched!
-echo [INFO] Console will close automatically...
 timeout /t 2 /nobreak >nul
