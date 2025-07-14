@@ -1637,6 +1637,7 @@ class SettingManagerWidget(QWidget):
                 current_list_item = current_list_widget.currentItem()
             if json_path: data = self._load_json(json_path)
             data['features'] = self.current_world_features
+            data['locations'] = {}
             path_list = []
             for path_name, path_data in self.current_world_path_data_cache.items():
                 if isinstance(path_data, dict):
