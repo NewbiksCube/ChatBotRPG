@@ -273,7 +273,7 @@ class ChatbotUI(QWidget):
                         msg.get('metadata', {}).get('turn', 0) == current_turn):
                         character_name = msg.get('metadata', {}).get('character_name')
                         if character_name and character_name not in characters_processed:
-                            print(f"[TIMER DEBUG] Processing character post timers for: {character_name}")
+                    
                             characters_processed.append(character_name)
                             self.timer_manager.process_post_events(
                                 is_player_post=False,
@@ -744,13 +744,13 @@ class ChatbotUI(QWidget):
                          current_input_field.set_input_state('normal')
                  if top_splitter: 
                      if is_actively_showing_intro:
-                         print(f"on_tab_changed (Tab: '{tab_name_for_debug}'): Hiding top splitter (_is_showing_intro=True).")
+                 
                          top_splitter.setVisible(False)
                      elif current_input_field and current_input_field._current_state == 'intro_streaming':
-                         print(f"on_tab_changed (Tab: '{tab_name_for_debug}'): Hiding top splitter (input state: intro_streaming).")
+                 
                          top_splitter.setVisible(False)
                      elif current_input_field and current_input_field._current_state == 'chargen':
-                         print(f"on_tab_changed (Tab: '{tab_name_for_debug}'): Hiding top splitter (input state: chargen).")
+                 
                          top_splitter.setVisible(False)
                      else:
                          left_splitter = tab_data.get('left_splitter')
@@ -1301,10 +1301,10 @@ class ChatbotUI(QWidget):
                 base_sys = self.get_system_context()
                 if is_current_call_force_narrator_first and forced_narrator_sys_msg:
                     base_sys += f"\\n\\n{forced_narrator_sys_msg}" 
-                    print(f"[INFO] Applying Force Narrator (First) system message: {forced_narrator_sys_msg[:100]}...")
+            
                 elif is_current_call_force_narrator_last and forced_narrator_sys_msg:
                     base_sys += f"\\n\\n{forced_narrator_sys_msg}" 
-                    print(f"[INFO] Applying Force Narrator (Last) system message: {forced_narrator_sys_msg[:100]}...")
+            
                 if self.character_name == "Narrator": 
                      base_sys += "\\nRemember, you are the Narrator, not an NPC. Describe events and environments objectively. Do not adopt a character's voice or perspective."
                 final_system_prompt_content = base_sys
@@ -1432,11 +1432,11 @@ class ChatbotUI(QWidget):
                         break
                 if not has_player_user_message_this_scene:
                     context_for_llm.append({"role": "user", "content": "(A moment passes...)"})
-                    print(f"DEBUG: Timer action for {self.character_name}, added placeholder user message as none from player existed for current scene in history_to_add.")
+            
             timer_instruction = tab_data.get('_timer_final_instruction')
             if timer_instruction:
                 context_for_llm.append({"role": "user", "content": f"({timer_instruction})"})
-                print(f"DEBUG: Added timer instruction at end of context: '{timer_instruction[:100]}...'")
+        
             last_mods = [mod for mod in cot_modifications if mod.get('system_message_position') == 'last']
             for mod in last_mods:
                 action_text = mod['action']
@@ -1465,7 +1465,7 @@ class ChatbotUI(QWidget):
                 if self.character_name == "Narrator": 
                     should_suppress = _should_suppress_narrator(self, tab_data)
             if should_suppress:
-                print(f"[INFO] Narrator suppressed by _should_suppress_narrator. (is_narrator_timer_call: {is_narrator_timer_call}, self.character_name: {self.character_name})")
+        
                 self._narrator_streaming_lock = False
                 if tab_data and self.character_name == "Narrator":
                     is_timer_triggered = bool(
@@ -1840,7 +1840,7 @@ class ChatbotUI(QWidget):
         is_fn_last_active = force_narrator_details.get('active') and force_narrator_details.get('order', '').lower() == 'last'
         fn_last_npc_turn_done = tab_data.get('_fn_last_npc_turn_done', False) if tab_data else False
         if is_fn_last_active and fn_last_npc_turn_done and self.character_name == "Narrator":
-            print("[INPUT DEBUG] Force Narrator Last complete - re-enabling input")
+    
             self._re_enable_input_after_pipeline()
             self._allow_live_input_for_current_action = False
         else:
@@ -3173,6 +3173,7 @@ p, li { white-space: pre-wrap; }
 
     def _make_api_call_sync(self, api_key, base_url, model_name, messages, max_tokens, temperature):
         headers = {
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         data = {
@@ -3180,10 +3181,12 @@ p, li { white-space: pre-wrap; }
              "messages": messages,
              "max_tokens": max_tokens,
              "temperature": temperature,
+             "top_p": 0.95,
         }
-        actual_url = base_url
-        if api_key != "lm-studio":
-            headers["Authorization"] = f"Bearer {api_key}"
+        base_url_clean = base_url
+        if base_url_clean.endswith('/'):
+            base_url_clean = base_url_clean.rstrip('/')
+        actual_url = f"{base_url_clean}/chat/completions"
         try:
             import requests 
             response = requests.post(actual_url, headers=headers, json=data, timeout=60)
