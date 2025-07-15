@@ -266,29 +266,28 @@ def _start_npc_inference_threads(self):
                     trigger_msg = self._last_user_msg_for_post_rules if hasattr(self, '_last_user_msg_for_post_rules') and self._last_user_msg_for_post_rules else "FN:Last deferred trigger (no NPCs in scene)"
                     QTimer.singleShot(0, lambda: self._complete_message_processing(trigger_msg))
                     self._npc_lock = False
-                    # Resume timers when NPC processing is complete
                     if hasattr(self, 'timer_manager') and self.timer_manager:
                         self.timer_manager.resume_timers()
                     return
             self._npc_lock = False
-            # Resume timers when NPC processing is complete
             if hasattr(self, 'timer_manager') and self.timer_manager:
                 self.timer_manager.resume_timers()
             return
         final_npcs_to_infer_after_rules = []
-        print(f"[DEBUG] npcs_in_scene before sorting: {npcs_in_scene}")
-        print(f"[DEBUG] npcs_in_scene types: {[type(x) for x in npcs_in_scene]}")
-        # Filter out non-string elements to prevent sorting errors
         npcs_in_scene_filtered = [char for char in npcs_in_scene if isinstance(char, str)]
         print(f"[DEBUG] npcs_in_scene_filtered: {npcs_in_scene_filtered}")
         for char_index, char in enumerate(sorted(npcs_in_scene_filtered)):
-            system_msg_base_intro = (
-                "You are in a third-person text RPG. "
-                "You are responsible for writing ONLY the actions and dialogue of your assigned character, as if you are a narrator describing them. "
-                "You must ALWAYS write in third person (using the character's name or 'he/she/they'), NEVER in first or second person. "
-                "Assume other characters are strangers unless otherwise stated in special instructions. "
-                "Write one single open-ended response (do NOT describe the OUTCOME of actions)."
-            )
+            character_system_context = self.get_character_system_context()
+            if character_system_context:
+                system_msg_base_intro = character_system_context
+            else:
+                system_msg_base_intro = (
+                    "You are in a third-person text RPG. "
+                    "You are responsible for writing ONLY the actions and dialogue of your assigned character, as if you are a narrator describing them. "
+                    "You must ALWAYS write in third person (using the character's name or 'he/she/they'), NEVER in first or second person. "
+                    "Assume other characters are strangers unless otherwise stated in special instructions. "
+                    "Write one single open-ended response (do NOT describe the OUTCOME of actions)."
+                )
             full_history_context = self.get_current_context()
             current_scene = tab_data.get('scene_number', 1)
             history_to_add = []
