@@ -20,7 +20,7 @@ from core.memory import get_npc_notes_from_character_file, format_npc_notes_for_
 from editor_panel.timer_manager import TimerManager, execute_timer_action
 from rules.screen_effects import BlurEffect, FlickerEffect, StaticNoiseEffect, DarkenBrightenEffect, load_effects_from_gamestate
 from core.splash_screen import SplashScreen
-from config import get_default_model, get_default_cot_model
+from config import get_default_model, get_default_cot_model, get_api_key_for_service, get_base_url_for_service, get_current_service
 from core.process_keywords import inject_keywords_into_context, get_location_info_for_keywords
 from editor_panel.time_manager import update_time
 
@@ -93,21 +93,20 @@ class UtilityInferenceThread(QThread):
 
     def run(self):
         try:
-            from config import get_openrouter_api_key, get_openrouter_base_url
-            api_key = get_openrouter_api_key()
-            if not api_key:
-                error_msg = "OpenRouter API key not configured. Please check config.json file."
+            
+            current_service = get_current_service()
+            api_key = get_api_key_for_service()
+            if not api_key and current_service != "local":
+                service_names = {"openrouter": "OpenRouter", "google": "Google GenAI"}
+                service_name = service_names.get(current_service, current_service.title())
+                error_msg = f"{service_name} API key not configured. Please check config.json file."
                 print(f"[UtilityInferenceThread] {error_msg}")
                 self.error_message = error_msg
                 self.error_signal.emit(error_msg)
                 return
-            base_url = f"{get_openrouter_base_url()}/chat/completions"
-            is_local_model_type = False
-            if isinstance(self.model_identifier, str):
-                is_local_model_type = any(kw in self.model_identifier.lower() for kw in ["ollama", "lmstudio"]) or \
-                                      (self.model_identifier.split('/')[0].lower() if '/' in self.model_identifier else "") in ["local_mode"]
-            if is_local_model_type:
-                api_key = "placeholder_for_local"
+            base_url = get_base_url_for_service()
+            if base_url.endswith('/'):
+                base_url = base_url.rstrip('/')
             for i, msg in enumerate(self.context):
                 role = msg.get('role', 'unknown')
                 content = msg.get('content', '')
@@ -3172,10 +3171,21 @@ p, li { white-space: pre-wrap; }
         return thread.result_data
 
     def _make_api_call_sync(self, api_key, base_url, model_name, messages, max_tokens, temperature):
+        current_service = get_current_service()
         headers = {
-            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
+        
+        if current_service == "openrouter":
+            headers["Authorization"] = f"Bearer {api_key}"
+            headers["HTTP-Referer"] = "https://github.com/your-repo/your-project"
+            headers["X-Title"] = "ChatBot RPG"
+        elif current_service == "google":
+            headers["Authorization"] = f"Bearer {api_key}"
+        elif current_service == "local":
+            if api_key and api_key != "local":
+                headers["Authorization"] = f"Bearer {api_key}"
+        
         data = {
              "model": model_name,
              "messages": messages,
