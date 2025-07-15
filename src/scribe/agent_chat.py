@@ -14,19 +14,24 @@ from PyQt5.QtGui import QPixmap, QFont, QColor
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 
 try:
-    from config import get_api_key_for_service, get_current_service
+    from config import get_api_key_for_service, get_current_service, get_default_model, get_default_utility_model
     current_service = get_current_service()
     LLM_API_KEY = get_api_key_for_service(current_service)
+    DEFAULT_MODEL = get_default_model()
+    if current_service == "openrouter":
+        SEARCH_MODEL = "openai/gpt-4o-mini-search-preview"
+    else:
+        SEARCH_MODEL = get_default_model()
 except (ImportError, ModuleNotFoundError):
-    LLM_API_KEY = os.environ.get("OPENROUTER_API_KEY", "your_api_key_here")
+    LLM_API_KEY = os.environ.get("LLM_API_KEY", "your_api_key_here")
+    DEFAULT_MODEL = "google/gemini-2.5-flash-lite-preview-06-17"
+    SEARCH_MODEL = "google/gemini-2.5-flash-lite-preview-06-17"
 
 STANDALONE_PRIMARY_COLOR = "#00FF66"
 STANDALONE_BG_COLOR = "#1E1E1E"
 STANDALONE_SECONDARY_COLOR = "#2A2A2A"
 STANDALONE_TERTIARY_COLOR = "#3D3D3D"
 STANDALONE_LINK_COLOR = "#99FFBB"
-DEFAULT_MODEL = "google/gemini-2.5-flash-lite-preview-06-17"
-SEARCH_MODEL = "openai/gpt-4o-mini-search-preview"
 DEFAULT_TEMP = 0.7
 MAX_HISTORY = 200
 CONVERSATION_DIR = "conversations"
@@ -418,7 +423,8 @@ class AgentPanel(QWidget):
         self.setup_ui()
         self.try_load_recent_conversation()
         if LLM_API_KEY == "your_api_key_here":
-            QMessageBox.warning(self, "API Key Missing", "OpenRouter API key not set. Please check config or environment variables.")
+            service_name = current_service.title() if 'current_service' in locals() else "API"
+            QMessageBox.warning(self, "API Key Missing", f"{service_name} API key not set. Please check config.json file.")
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
