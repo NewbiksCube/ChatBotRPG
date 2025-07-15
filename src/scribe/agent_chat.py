@@ -6,6 +6,8 @@ from datetime import datetime
 import markdown2
 from core.make_inference import make_inference
 
+_scribe_instances = []
+
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, 
                              QPushButton, QFileDialog, QTextBrowser, QMessageBox, 
                              QMainWindow)
@@ -215,7 +217,7 @@ class IntentAnalysisThread(QThread):
             if len(user_messages) > 1:
                 conversation_themes = [
                     "rules" if any("rule" in msg.lower() or "timer" in msg.lower() or "trigger" in msg.lower() for msg in user_messages) else None,
-                    "game" if any("scene" in msg.lower() or "character" in msg.lower() or "what happened" in msg.lower() for msg in user_messages) else None,
+                    "game" if any("scene" in msg.lower() or "what happened" in msg.lower() or "game context" in msg.lower() for msg in user_messages) else None,
                     "search" if any("search" in msg.lower() or "news" in msg.lower() or "current" in msg.lower() for msg in user_messages) else None,
                     "character_gen" if any("create" in msg.lower() or "generate" in msg.lower() or "character" in msg.lower() for msg in user_messages) else None
                 ]
@@ -526,10 +528,9 @@ class AgentPanel(QWidget):
             self.display_message(user_display_message, image_path=self.current_image_path)
         else:
             self.display_message(user_display_message)
-        if self.parent_app:
-            for child in self.parent_app.findChildren(AgentPanel):
-                if child != self:
-                    child.context.append({"role": "user", "content": message})
+        for instance in _scribe_instances:
+            if instance != self:
+                instance.context.append({"role": "user", "content": message})
         self.intent_thread = IntentAnalysisThread(
             message,
             self.model_path,
@@ -599,10 +600,10 @@ class AgentPanel(QWidget):
                 html_message += f"<i style='color:red'>[Could not display image: {e}]</i>"
         self.output_field.append(html_message)
         self.output_field.verticalScrollBar().setValue(self.output_field.verticalScrollBar().maximum())
-        if not skip_sync and self.parent_app:
-            for child in self.parent_app.findChildren(AgentPanel):
-                if child != self:
-                    child._rebuild_display_from_context()
+        if not skip_sync:
+            for instance in _scribe_instances:
+                if instance != self:
+                    instance._rebuild_display_from_context()
 
     def attach_image(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -632,10 +633,16 @@ class AgentPanel(QWidget):
             content = message.get("content")
             if role == "user":
                 display_message = self._format_user_message(content)
-                self.display_message(display_message, skip_sync=True)
+                self._append_message_directly(display_message)
             elif role == "assistant":
                 display_message = self._format_assistant_message(content)
-                self.display_message(display_message, skip_sync=True)
+                self._append_message_directly(display_message)
+    
+    def _append_message_directly(self, html_message):
+        if self.output_field.toPlainText().strip():
+            self.output_field.append("<hr>")
+        self.output_field.append(html_message)
+        self.output_field.verticalScrollBar().setValue(self.output_field.verticalScrollBar().maximum())
 
     def clear_conversation(self):
         self.context = []
@@ -652,23 +659,22 @@ class AgentPanel(QWidget):
                 os.remove(file_path)
             except Exception:
                 pass
-        if self.parent_app:
-            for child in self.parent_app.findChildren(AgentPanel):
-                if child != self:
-                    child.context = []
-                    child.output_field.clear()
-                    child.clear_attachment()
-                    child.conversation_name = "conversation_" + datetime.now().strftime("%Y%m%d_%H%M%S")
-                    child.game_context_injected = False
-                    child.rules_context_injected = False
-                    child.character_generation_context_injected = False
-                    auto_save_dir = os.path.join(child.get_conversation_dir(), "autosave")
-                    file_path = os.path.join(auto_save_dir, f"{child.conversation_name}.json")
-                    if os.path.exists(file_path):
-                        try:
-                            os.remove(file_path)
-                        except Exception:
-                            pass
+        for instance in _scribe_instances:
+            if instance != self:
+                instance.context = []
+                instance.output_field.clear()
+                instance.clear_attachment()
+                instance.conversation_name = "conversation_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+                instance.game_context_injected = False
+                instance.rules_context_injected = False
+                instance.character_generation_context_injected = False
+                auto_save_dir = os.path.join(instance.get_conversation_dir(), "autosave")
+                file_path = os.path.join(auto_save_dir, f"{instance.conversation_name}.json")
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception:
+                        pass
 
     def auto_save_conversation(self):
         try:
@@ -882,11 +888,10 @@ class AgentPanel(QWidget):
         response_html = self._format_assistant_message(response)
         self.display_message(response_html)
         self.auto_save_conversation()
-        if self.parent_app:
-            for child in self.parent_app.findChildren(AgentPanel):
-                if child != self:
-                    child.context.append({"role": "assistant", "content": response})
-                    child.auto_save_conversation()
+        for instance in _scribe_instances:
+            if instance != self:
+                instance.context.append({"role": "assistant", "content": response})
+                instance.auto_save_conversation()
         try:
             sound_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sounds", "MessageIn.mp3")
             self.sound_player.setMedia(QMediaContent(QUrl.fromLocalFile(sound_path)))
@@ -1152,13 +1157,7 @@ class AgentPanel(QWidget):
                 enhanced_message = f"{context_text}USER QUESTION: {message}"
                 self.process_normal_message(enhanced_message, already_displayed=False)
             else:
-                no_context_message = (
-                    "I don't have access to the current game conversation context. "
-                    "This might be because there's no active game session or no conversation history available. "
-                    "I'll try to help with your question based on general knowledge instead."
-                )
-                enhanced_message = f"SYSTEM NOTE: {no_context_message}\n\nUSER QUESTION: {message}"
-                self.process_normal_message(enhanced_message, already_displayed=False)
+                self.process_normal_message(message, already_displayed=True)
         except Exception as e:
             self.process_normal_message(message, already_displayed=True)
 
