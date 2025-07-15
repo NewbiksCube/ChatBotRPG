@@ -4,8 +4,13 @@ import json
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
 
 DEFAULT_CONFIG = {
+    "current_service": "openrouter",
     "openrouter_api_key": "",
     "openrouter_base_url": "https://openrouter.ai/api/v1",
+    "google_api_key": "",
+    "google_base_url": "https://generativelanguage.googleapis.com/v1beta",
+    "local_api_key": "",
+    "local_base_url": "http://127.0.0.1:1234/v1",
     "default_model": "google/gemini-2.5-flash-lite-preview-06-17",
     "default_cot_model": "google/gemini-2.5-flash-lite-preview-06-17",
     "default_utility_model": "google/gemini-2.5-flash-lite-preview-06-17",
@@ -35,16 +40,34 @@ def save_config(config):
     except Exception as e:
         print(f"Error saving configuration: {e}")
 
-def get_openrouter_api_key():
+def get_current_service():
     config = load_config()
-    api_key = config.get("openrouter_api_key", "").strip()
+    return config.get("current_service", "openrouter")
+
+def get_api_key_for_service(service=None):
+    if service is None:
+        service = get_current_service()
+    config = load_config()
+    
+    if service == "local":
+        return "local"  # Local APIs don't need real API keys
+    
+    api_key = config.get(f"{service}_api_key", "").strip()
     if not api_key:
         return None
     return api_key
 
-def get_openrouter_base_url():
+def get_base_url_for_service(service=None):
+    if service is None:
+        service = get_current_service()
     config = load_config()
-    return config.get("openrouter_base_url", "https://openrouter.ai/api/v1")
+    return config.get(f"{service}_base_url", "")
+
+def get_openrouter_api_key():
+    return get_api_key_for_service("openrouter")
+
+def get_openrouter_base_url():
+    return get_base_url_for_service("openrouter")
 
 def get_default_model():
     config = load_config()
