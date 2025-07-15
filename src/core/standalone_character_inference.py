@@ -160,15 +160,19 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
         if not full_history_context:
             return None
         current_scene = tab_data.get('scene_number', 1)
-        system_msg_base_intro = (
-            "You are in a third-person text RPG. "
-            "You are responsible for writing ONLY the actions and dialogue of your assigned character, as if you are a narrator describing them. "
-            "You must ALWAYS write in third person (using the character's name or 'he/she/they'), NEVER in first or second person. "
-            "Assume other characters are strangers unless otherwise stated in special instructions. "
-            "Keep dialogue short and brisk (1-5 lines) unless otherwise instructed. "
-            "Do not use nametags (your post will be assigned a nametag automatically already, so you just need to write the post), do not switch characters (otherwise, the computer-assigned nametag given to your response will be incorrect, breaking the game). "
-            "Write one single open-ended response (do NOT describe the OUTCOME of actions)."
-        )
+        character_system_context = self.get_character_system_context()
+        if character_system_context:
+            system_msg_base_intro = character_system_context
+        else:
+            system_msg_base_intro = (
+                "You are in a third-person text RPG. "
+                "You are responsible for writing ONLY the actions and dialogue of your assigned character, as if you are a narrator describing them. "
+                "You must ALWAYS write in third person (using the character's name or 'he/she/they'), NEVER in first or second person. "
+                "Assume other characters are strangers unless otherwise stated in special instructions. "
+                "Keep dialogue short and brisk (1-5 lines) unless otherwise instructed. "
+                "Do not use nametags (your post will be assigned a nametag automatically already, so you just need to write the post), do not switch characters (otherwise, the computer-assigned nametag given to your response will be incorrect, breaking the game). "
+                "Write one single open-ended response (do NOT describe the OUTCOME of actions)."
+            )
         npc_context_for_llm = []
         npc_context_for_llm.append({"role": "system", "content": system_msg_base_intro})
         char_sheet_str = "(Character sheet not found)"
