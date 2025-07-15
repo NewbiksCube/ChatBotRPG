@@ -37,7 +37,7 @@ if exist "config.json" (
     if not errorlevel 1 (
         echo [INFO] Setup already complete, checking dependencies...
         set "all_good=true"
-        for %%p in (PyQt5 pygame markdown2 beautifulsoup4 requests numpy pyfiglet opencv-python) do (
+        for %%p in (PyQt5 pygame markdown2 beautifulsoup4 requests numpy pyfiglet opencv-python google-genai) do (
             python -c "import %%p" >nul 2>&1
             if errorlevel 1 (
                 set "all_good=false"
@@ -57,7 +57,7 @@ if exist "config.json" (
     echo [INFO] First time setup - installing required packages...
 )
 
-pip install PyQt5 pygame markdown2 beautifulsoup4 requests numpy pyfiglet opencv-python openai tiktoken
+pip install PyQt5 pygame markdown2 beautifulsoup4 requests numpy pyfiglet opencv-python openai tiktoken google-genai
 
 if exist "config.json" (
     echo [INFO] Setup complete! Future launches will be faster.
