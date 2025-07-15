@@ -295,6 +295,8 @@ def _start_npc_inference_threads(self):
             for msg in full_history_context:
                 if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene:
                     content = msg['content']
+                    if content and "Sorry, API error" in content:
+                        continue
                     if (
                         msg.get('role') == 'assistant'
                         and 'metadata' in msg
@@ -1104,6 +1106,7 @@ Brief note from {character_name}'s perspective:"""
             {"role": "system", "content": "You are helping an NPC character write brief personal notes about recent events. Keep notes very concise and in first person."},
             {"role": "user", "content": note_prompt}
         ]
+        
         model = tab_data.get('settings', {}).get('cot_model', get_default_cot_model())
         from chatBotRPG import UtilityInferenceThread
         thread = UtilityInferenceThread(
@@ -1117,6 +1120,7 @@ Brief note from {character_name}'s perspective:"""
             'character_name': character_name,
             'session_file_path': session_file_path
         }
+
         def on_note_generated(note_content):
             try:
                 if note_content and note_content.strip():
