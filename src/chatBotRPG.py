@@ -1238,7 +1238,6 @@ class ChatbotUI(QWidget):
                         tab_data.get('_is_timer_narrator_action_active') or
                         tab_data.get('_last_timer_action_type')
                     )
-                    
                     if not is_timer_triggered:
                         if '_last_timer_action_type' in tab_data:
                             tab_data.pop('_last_timer_action_type', None)
@@ -1300,10 +1299,8 @@ class ChatbotUI(QWidget):
                 base_sys = self.get_system_context()
                 if is_current_call_force_narrator_first and forced_narrator_sys_msg:
                     base_sys += f"\\n\\n{forced_narrator_sys_msg}" 
-            
                 elif is_current_call_force_narrator_last and forced_narrator_sys_msg:
                     base_sys += f"\\n\\n{forced_narrator_sys_msg}" 
-            
                 if self.character_name == "Narrator": 
                      base_sys += "\\nRemember, you are the Narrator, not an NPC. Describe events and environments objectively. Do not adopt a character's voice or perspective."
                 final_system_prompt_content = base_sys
@@ -1433,11 +1430,9 @@ class ChatbotUI(QWidget):
                         break
                 if not has_player_user_message_this_scene:
                     context_for_llm.append({"role": "user", "content": "(A moment passes...)"})
-            
             timer_instruction = tab_data.get('_timer_final_instruction')
             if timer_instruction:
                 context_for_llm.append({"role": "user", "content": f"({timer_instruction})"})
-        
             last_mods = [mod for mod in cot_modifications if mod.get('system_message_position') == 'last']
             for mod in last_mods:
                 action_text = mod['action']
@@ -1466,7 +1461,6 @@ class ChatbotUI(QWidget):
                 if self.character_name == "Narrator": 
                     should_suppress = _should_suppress_narrator(self, tab_data)
             if should_suppress:
-        
                 self._narrator_streaming_lock = False
                 if tab_data and self.character_name == "Narrator":
                     is_timer_triggered = bool(
@@ -1474,7 +1468,6 @@ class ChatbotUI(QWidget):
                         tab_data.get('_is_timer_narrator_action_active') or
                         tab_data.get('_last_timer_action_type')
                     )
-                    
                     if not is_timer_triggered:
                         tab_data.pop('_is_timer_narrator_action_active', None)
                 QTimer.singleShot(0, lambda: _start_npc_inference_threads(self))
@@ -2010,7 +2003,6 @@ class ChatbotUI(QWidget):
         formatted_message = re.sub(r'<pre><code[^>]*>(.*?)</code></pre>', replace_code_style, html_message, flags=re.DOTALL | re.IGNORECASE)
         return formatted_message
 
-
     def get_current_model(self):
         tab_data = self.get_current_tab_data()
         if tab_data and 'settings' in tab_data and 'model' in tab_data['settings']:
@@ -2164,14 +2156,48 @@ class ChatbotUI(QWidget):
             return ""
         tab_data = self.tabs_data[tab_index]
         system_context_file = tab_data.get('system_context_file')
-        if not system_context_file or not os.path.exists(system_context_file):
+        if not system_context_file:
             return ""
-        try:
-            with open(system_context_file, 'r', encoding='utf-8') as f:
-                return f.read().strip()
-        except Exception as e:
-            print(f"Error reading system context from file {system_context_file}: {e}")
+        gamestate_path = system_context_file.replace('system_context.txt', 'gamestate.json')
+        if os.path.exists(gamestate_path):
+            try:
+                with open(gamestate_path, 'r', encoding='utf-8') as f:
+                    gamestate = json.load(f)
+                system_prompts = gamestate.get('system_prompts', {})
+                narrator_prompt = system_prompts.get('narrator', '')
+                if narrator_prompt:
+                    return narrator_prompt
+            except Exception as e:
+                print(f"Error reading system context from gamestate: {e}")
+        if os.path.exists(system_context_file):
+            try:
+                with open(system_context_file, 'r', encoding='utf-8') as f:
+                    return f.read().strip()
+            except Exception as e:
+                print(f"Error reading system context from file {system_context_file}: {e}")
+        return ""
+
+    def get_character_system_context(self, tab_index=None):
+        if tab_index is None:
+            tab_index = self.current_tab_index
+        if not (0 <= tab_index < len(self.tabs_data) and self.tabs_data[tab_index] is not None):
             return ""
+        tab_data = self.tabs_data[tab_index]
+        system_context_file = tab_data.get('system_context_file')
+        if not system_context_file:
+            return ""
+        
+        gamestate_path = system_context_file.replace('system_context.txt', 'gamestate.json')
+        if os.path.exists(gamestate_path):
+            try:
+                with open(gamestate_path, 'r', encoding='utf-8') as f:
+                    gamestate = json.load(f)
+                system_prompts = gamestate.get('system_prompts', {})
+                character_prompt = system_prompts.get('character', '')
+                return character_prompt
+            except Exception as e:
+                print(f"Error reading character system context from gamestate: {e}")
+        return ""
 
     def _update_rules_display(self, rules, rules_list):
         filter_input = rules_list.parent().findChild(QLineEdit, "RulesFilterInput")
@@ -3342,7 +3368,7 @@ p, li { white-space: pre-wrap; }
         try:
             setting_data = _load_json_safely(setting_file_path)
             characters_in_setting = setting_data.get('characters', [])
-            npc_names = [name for name in characters_in_setting if isinstance(name, str) and name != player_character_name]
+            npc_names = [name for name in characters_in_setting if isinstance(name, str) and name != player_character_name and name != "Player"]
             return npc_names
         except Exception as e:
             return []
