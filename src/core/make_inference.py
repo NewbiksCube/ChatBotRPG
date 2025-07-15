@@ -3,6 +3,17 @@ import requests
 import json
 from config import get_api_key_for_service, get_base_url_for_service, get_current_service, get_default_utility_model
 
+try:
+    from google import genai
+    GOOGLE_GENAI_AVAILABLE = True
+except ImportError:
+    GOOGLE_GENAI_AVAILABLE = False
+
+def _convert_model_name_for_google(model_name):
+    if model_name.startswith("google/"):
+        return model_name[7:]
+    return model_name
+
 def _internal_summarize_chunk(text_chunk, instruction, original_user_message_for_context):
     summary_prompt_for_llm = f"{instruction}\n\nTEXT TO SUMMARIZE:\n{text_chunk}"
     max_summary_tokens = 1536
@@ -22,15 +33,63 @@ def _internal_summarize_chunk(text_chunk, instruction, original_user_message_for
         return "[Summarization failed to produce content]"
     return summary
 
+def _make_google_genai_request(context, model_name, max_tokens, temperature, api_key):
+    if not GOOGLE_GENAI_AVAILABLE:
+        return "Sorry, API error: google-genai package not installed. Please install it with 'pip install google-genai'"
+    
+    try:
+        client = genai.Client(api_key=api_key)
+        
+        formatted_messages = []
+        for msg in context:
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            
+            if role == 'system':
+                formatted_messages.append(genai.types.Content(role='user', parts=[genai.types.Part(text=f"[SYSTEM] {content}")]))
+            elif role == 'user':
+                formatted_messages.append(genai.types.Content(role='user', parts=[genai.types.Part(text=content)]))
+            elif role == 'assistant':
+                formatted_messages.append(genai.types.Content(role='model', parts=[genai.types.Part(text=content)]))
+        
+        converted_model_name = _convert_model_name_for_google(model_name)
+        
+        config = genai.types.GenerateContentConfig(
+            max_output_tokens=max_tokens,
+            temperature=temperature,
+            top_p=0.95
+        )
+        
+        response = client.models.generate_content(
+            model=converted_model_name,
+            contents=formatted_messages,
+            config=config
+        )
+        
+        if response and response.candidates:
+            candidate = response.candidates[0]
+            if candidate.content and candidate.content.parts:
+                return candidate.content.parts[0].text
+        
+        return ""
+    
+    except Exception as e:
+        return f"Sorry, API error: Google GenAI request failed - {str(e)}"
+
 def make_inference(context, user_message, character_name, url_type, max_tokens, temperature, seed=None, is_utility_call=False, allow_summarization_retry=True):
     if seed is not None:
         random.seed(seed); seed = random.randint(-1, 100000)
     current_service = get_current_service()
     api_key = get_api_key_for_service()
+    
     if not api_key and current_service != "local":
         service_names = {"openrouter": "OpenRouter", "google": "Google GenAI"}
         service_name = service_names.get(current_service, current_service.title())
         return f"Sorry, API error: {service_name} API key not configured. Please check config.json file."
+    
+    if current_service == "google":
+        return _make_google_genai_request(context, url_type, max_tokens, temperature, api_key)
+    
     base_url = get_base_url_for_service()
     if base_url.endswith('/'):
         base_url = base_url.rstrip('/')
@@ -39,16 +98,14 @@ def make_inference(context, user_message, character_name, url_type, max_tokens, 
     final_data = { "model": url_type, "temperature": temperature, "max_tokens": max_tokens, "top_p": 0.95, "messages": context }
     headers = { "Content-Type": "application/json" }
     
-    current_service = get_current_service()
     if current_service == "openrouter":
         headers["Authorization"] = f"Bearer {api_key}"
         headers["HTTP-Referer"] = "https://github.com/your-repo/your-project"
         headers["X-Title"] = "ChatBot RPG"
-    elif current_service == "google":
-        headers["Authorization"] = f"Bearer {api_key}"
     elif current_service == "local":
         if api_key and api_key != "local":
             headers["Authorization"] = f"Bearer {api_key}"
+    
     try:
         final_response = requests.post(base_url, headers=headers, json=final_data, timeout=180)
         final_response.raise_for_status()
