@@ -1415,6 +1415,8 @@ class ChatbotUI(QWidget):
                     content = msg['content']
                     if is_timer_triggered_action and "INTERNAL_TIMER_" in content and msg['role'] == 'user':
                         continue
+                    if content and "Sorry, API error" in content:
+                        continue
                     if (msg.get('role') == 'assistant'
                         and 'metadata' in msg
                         and msg['metadata'].get('character_name')):
@@ -3172,6 +3174,51 @@ p, li { white-space: pre-wrap; }
 
     def _make_api_call_sync(self, api_key, base_url, model_name, messages, max_tokens, temperature):
         current_service = get_current_service()
+        
+        if current_service == "google":
+            try:
+                from google import genai
+                client = genai.Client(api_key=api_key)
+                
+                formatted_messages = []
+                for msg in messages:
+                    role = msg.get('role', 'user')
+                    content = msg.get('content', '')
+                    
+                    if role == 'system':
+                        formatted_messages.append(genai.types.Content(role='user', parts=[genai.types.Part(text=f"[SYSTEM] {content}")]))
+                    elif role == 'user':
+                        formatted_messages.append(genai.types.Content(role='user', parts=[genai.types.Part(text=content)]))
+                    elif role == 'assistant':
+                        formatted_messages.append(genai.types.Content(role='model', parts=[genai.types.Part(text=content)]))
+                
+                converted_model_name = model_name[7:] if model_name.startswith("google/") else model_name
+                
+                config = genai.types.GenerateContentConfig(
+                    max_output_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=0.95
+                )
+                
+                response = client.models.generate_content(
+                    model=converted_model_name,
+                    contents=formatted_messages,
+                    config=config
+                )
+                
+                if response and response.candidates:
+                    candidate = response.candidates[0]
+                    if candidate.content and candidate.content.parts:
+                        return candidate.content.parts[0].text
+                
+                return ""
+            except ImportError:
+                print("[ERROR] google-genai package not installed. Please install it with 'pip install google-genai'")
+                return None
+            except Exception as e:
+                print(f"[ERROR] Google GenAI synchronous request failed: {e}")
+                return None
+        
         headers = {
             "Content-Type": "application/json",
         }
@@ -3180,8 +3227,6 @@ p, li { white-space: pre-wrap; }
             headers["Authorization"] = f"Bearer {api_key}"
             headers["HTTP-Referer"] = "https://github.com/your-repo/your-project"
             headers["X-Title"] = "ChatBot RPG"
-        elif current_service == "google":
-            headers["Authorization"] = f"Bearer {api_key}"
         elif current_service == "local":
             if api_key and api_key != "local":
                 headers["Authorization"] = f"Bearer {api_key}"
