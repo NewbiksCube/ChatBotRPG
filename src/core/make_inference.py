@@ -1,7 +1,7 @@
 import random
 import requests
 import json
-from config import get_openrouter_api_key, get_openrouter_base_url, get_default_utility_model
+from config import get_api_key_for_service, get_base_url_for_service, get_current_service, get_default_utility_model
 
 def _internal_summarize_chunk(text_chunk, instruction, original_user_message_for_context):
     summary_prompt_for_llm = f"{instruction}\n\nTEXT TO SUMMARIZE:\n{text_chunk}"
@@ -25,26 +25,30 @@ def _internal_summarize_chunk(text_chunk, instruction, original_user_message_for
 def make_inference(context, user_message, character_name, url_type, max_tokens, temperature, seed=None, is_utility_call=False, allow_summarization_retry=True):
     if seed is not None:
         random.seed(seed); seed = random.randint(-1, 100000)
-    api_key = get_openrouter_api_key()
-    if not api_key:
-        return "Sorry, API error: OpenRouter API key not configured. Please check config.json file."
-    base_url = get_openrouter_base_url()
+    current_service = get_current_service()
+    api_key = get_api_key_for_service()
+    if not api_key and current_service != "local":
+        service_names = {"openrouter": "OpenRouter", "google": "Google GenAI"}
+        service_name = service_names.get(current_service, current_service.title())
+        return f"Sorry, API error: {service_name} API key not configured. Please check config.json file."
+    base_url = get_base_url_for_service()
     if base_url.endswith('/'):
         base_url = base_url.rstrip('/')
     base_url = f"{base_url}/chat/completions"
     
-    is_local_model_type = False
-    if isinstance(url_type, str):
-        is_local_model_type = any(kw in url_type.lower() for kw in ["ollama", "lmstudio"]) or \
-                              (url_type.split('/')[0].lower() if '/' in url_type else "") in ["local_mode"]
-    
     final_data = { "model": url_type, "temperature": temperature, "max_tokens": max_tokens, "top_p": 0.95, "messages": context }
     headers = { "Content-Type": "application/json" }
     
-    if not is_local_model_type:
+    current_service = get_current_service()
+    if current_service == "openrouter":
         headers["Authorization"] = f"Bearer {api_key}"
-    else:
-        api_key = "placeholder_for_local"
+        headers["HTTP-Referer"] = "https://github.com/your-repo/your-project"
+        headers["X-Title"] = "ChatBot RPG"
+    elif current_service == "google":
+        headers["Authorization"] = f"Bearer {api_key}"
+    elif current_service == "local":
+        if api_key and api_key != "local":
+            headers["Authorization"] = f"Bearer {api_key}"
     try:
         final_response = requests.post(base_url, headers=headers, json=final_data, timeout=180)
         final_response.raise_for_status()
