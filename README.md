@@ -61,7 +61,7 @@ A: A game is represented by certain files and folders inside the /data/ director
 
 **Q: What inference services can I use?**
 
-A: This was developed with OpenRouter.ai, but you can also run it locally. Google GenAI support is in development, and more services are coming soon.
+A: This was developed with OpenRouter.ai, but you can also run it locally. There is also support for Google GenAI. Mre services are coming soon.
 
 **Q: Which model should I use?**
 
