@@ -59,9 +59,9 @@ A: There is a small splitter handle to the left of the chat screen. Drag it open
 
 A: A game is represented by certain files and folders inside the /data/ directory (example, /data/My RPG/various files and folders). While other approaches to data persistence might be explored in the future, game data is currently stored as various .json files within various subfolders (the game engine will organize this on its own). Game state is primarily maintained by these files. Saves are currently just duplicate folders containing exact copies or snapshots of a game state at the time it was saved and kept in a /saves/ folder (Loading a save just restores this to the main state). If you are using map images, .jpg or other image formats can also be stored in there.
 
-**Q: Why is it only OpenRouter.ai? Can I use (inference service XYZ)?**
+**Q: What inference services can I use?**
 
-A: It just happens to be the service I use for my inferences, support for other stuff coming soon.
+A: This was developed with OpenRouter.ai, but you can also run it locally. Google GenAI support is in development, and more services are coming soon.
 
 **Q: Which model should I use?**
 
