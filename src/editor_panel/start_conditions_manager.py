@@ -18,6 +18,7 @@ class StartConditionsManagerWidget(QWidget):
         self._init_ui()
         self._load_intro_state()
         self._load_system_prompt()
+        self._load_character_system_prompt()
         self._load_origin()
         self._load_starting_datetime()
 
@@ -165,6 +166,17 @@ class StartConditionsManagerWidget(QWidget):
         self.system_prompt_editor.setPlaceholderText("Enter system instructions for the AI here.\nThis message will be sent as a system prompt with each interaction.")
         layout.addWidget(self.system_prompt_editor)
         self.system_prompt_editor.textChanged.connect(self._save_system_prompt)
+        
+        self.char_sys_label = QLabel("Character System Prompt:")
+        self.char_sys_label.setFont(QFont('Consolas', 12, QFont.Bold))
+        layout.addWidget(self.char_sys_label)
+        self.character_system_prompt_editor = QTextEdit()
+        self.character_system_prompt_editor.setObjectName("CharacterSystemPromptEditor")
+        self.character_system_prompt_editor.setFont(QFont('Consolas', 12))
+        self.character_system_prompt_editor.setPlaceholderText("Enter system instructions for character AI here.\nThis message will be sent as a system prompt for character interactions.")
+        layout.addWidget(self.character_system_prompt_editor)
+        self.character_system_prompt_editor.textChanged.connect(self._save_character_system_prompt)
+        
         layout.addStretch(1)
         self.intro_checkbox.stateChanged.connect(self._on_intro_changed)
         self.scroll_area.setWidget(self.scroll_content)
@@ -216,6 +228,17 @@ class StartConditionsManagerWidget(QWidget):
         self.intro_text_label.setStyleSheet(f"color: {self.theme_colors['base_color']};")
         self.system_prompt_editor.setStyleSheet(f"""
             QTextEdit#SystemPromptEditor {{
+                color: {self.theme_colors['base_color']};
+                background-color: {self.theme_colors['bg_color']};
+                border: 1px solid {self.theme_colors['base_color']};
+                border-radius: 4px;
+                padding: 4px;
+                selection-background-color: {QColor(self.theme_colors['base_color']).darker(300).name()};
+                selection-color: white;
+            }}
+        """)
+        self.character_system_prompt_editor.setStyleSheet(f"""
+            QTextEdit#CharacterSystemPromptEditor {{
                 color: {self.theme_colors['base_color']};
                 background-color: {self.theme_colors['bg_color']};
                 border: 1px solid {self.theme_colors['base_color']};
@@ -298,6 +321,7 @@ class StartConditionsManagerWidget(QWidget):
         """)
         
         self.system_prompt_editor.setCursorWidth(4)
+        self.character_system_prompt_editor.setCursorWidth(4)
     def update_theme(self, theme_colors):
         default_theme = {
             'base_color': '#00FF66',
@@ -345,6 +369,7 @@ class StartConditionsManagerWidget(QWidget):
         
         self._apply_theme_styles()
         self.system_prompt_editor.setCursorWidth(4)
+        self.character_system_prompt_editor.setCursorWidth(4)
         self.starting_datetime_label.setStyleSheet(f"color: {self.theme_colors['base_color']};")
         self.datetime_edit.setStyleSheet(f"""
             QDateTimeEdit#StartingDateTimeEdit {{
@@ -879,20 +904,73 @@ class StartConditionsManagerWidget(QWidget):
             print(f"[StartConditionsManager] Error saving origin: {e}")
 
     def _load_system_prompt(self):
-        if self.system_context_file and os.path.exists(self.system_context_file):
+        if self.system_context_file:
             try:
-                with open(self.system_context_file, 'r', encoding='utf-8') as f:
-                    self.system_prompt_editor.setPlainText(f.read())
+                gamestate_path = self.system_context_file.replace('system_context.txt', 'gamestate.json')
+                if os.path.exists(gamestate_path):
+                    with open(gamestate_path, 'r', encoding='utf-8') as f:
+                        gamestate = json.load(f)
+                    system_prompts = gamestate.get('system_prompts', {})
+                    narrator_prompt = system_prompts.get('narrator', '')
+                    self.system_prompt_editor.setPlainText(narrator_prompt)
+                elif os.path.exists(self.system_context_file):
+                    with open(self.system_context_file, 'r', encoding='utf-8') as f:
+                        self.system_prompt_editor.setPlainText(f.read())
             except Exception as e:
                 print(f"[StartConditionsManager] Error loading system prompt: {e}")
 
     def _save_system_prompt(self):
         if self.system_context_file:
             try:
-                with open(self.system_context_file, 'w', encoding='utf-8') as f:
-                    f.write(self.system_prompt_editor.toPlainText())
+                gamestate_path = self.system_context_file.replace('system_context.txt', 'gamestate.json')
+                if os.path.exists(gamestate_path):
+                    with open(gamestate_path, 'r', encoding='utf-8') as f:
+                        gamestate = json.load(f)
+                else:
+                    gamestate = {}
+                
+                if 'system_prompts' not in gamestate:
+                    gamestate['system_prompts'] = {}
+                
+                gamestate['system_prompts']['narrator'] = self.system_prompt_editor.toPlainText()
+                
+                with open(gamestate_path, 'w', encoding='utf-8') as f:
+                    json.dump(gamestate, f, indent=2, ensure_ascii=False)
             except Exception as e:
-                print(f"[StartConditionsManager] Error saving system prompt: {e}") 
+                print(f"[StartConditionsManager] Error saving system prompt: {e}")
+
+    def _load_character_system_prompt(self):
+        if self.system_context_file:
+            try:
+                gamestate_path = self.system_context_file.replace('system_context.txt', 'gamestate.json')
+                if os.path.exists(gamestate_path):
+                    with open(gamestate_path, 'r', encoding='utf-8') as f:
+                        gamestate = json.load(f)
+                    system_prompts = gamestate.get('system_prompts', {})
+                    character_prompt = system_prompts.get('character', '')
+                    self.character_system_prompt_editor.setPlainText(character_prompt)
+            except Exception as e:
+                print(f"[StartConditionsManager] Error loading character system prompt: {e}")
+
+    def _save_character_system_prompt(self):
+        if self.system_context_file:
+            try:
+                gamestate_path = self.system_context_file.replace('system_context.txt', 'gamestate.json')
+                if os.path.exists(gamestate_path):
+                    with open(gamestate_path, 'r', encoding='utf-8') as f:
+                        gamestate = json.load(f)
+                else:
+                    gamestate = {}
+                
+                if 'system_prompts' not in gamestate:
+                    gamestate['system_prompts'] = {}
+                
+                gamestate['system_prompts']['character'] = self.character_system_prompt_editor.toPlainText()
+                
+                with open(gamestate_path, 'w', encoding='utf-8') as f:
+                    json.dump(gamestate, f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                print(f"[StartConditionsManager] Error saving character system prompt: {e}") 
 
     def _get_main_ui(self):
         """Get the main UI instance to access sound effects."""
