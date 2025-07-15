@@ -55,7 +55,7 @@ This is currently an initial preview for developers, game masters, and tech enth
 
 A: There is a small splitter handle to the left of the chat screen. Drag it open (to the right) to open the tool bar.
 
-**Q: How is any one game represented?**
+**Q: How is a game represented?**
 
 A: A game is represented by certain files and folders inside the /data/ directory (example, /data/My RPG/various files and folders). While other approaches to data persistence might be explored in the future, game data is currently stored as various .json files within various subfolders (the game engine will organize this on its own). Game state is primarily maintained by these files. Saves are currently just duplicate folders containing exact copies or snapshots of a game state at the time it was saved and kept in a /saves/ folder (Loading a save just restores this to the main state). If you are using map images, .jpg or other image formats can also be stored in there.
 
@@ -110,10 +110,6 @@ A: While people can make any games they want, the type of game this is intended 
 **Q: But, what if the AI makes a mistake? Wont the randomness make a game-like environment impossible?**
 
 A: Most of the elements of a scene can be programatically tracked (or randomized properly), and broken into very small moving parts that are easily tracked and handled by modern LLMs. Strong state-tracking pipelines, clear prompting, and later models vs. earlier models can all come together in a manner that make such mistakes very rare. The goal of this project is to finally provide the tools needed to properly and comprehensively rein in the chaos that often defines LLM use (at least in the context of text adventure). At the end of the day this is mainly a prompt-engineering toolkit, and that's a skillset that's still being explored, but what's consistently kept me developing this project is actually the success rate I've experienced from strong prompt engineering. The one thing that might convince me to stop working on this has always been some barrier that proves impossible to overcome, but so far, each element that an RPG engine needs has, through trial and error, been successfully prototyped in my journey and I just haven't hit that limit yet.
-
-**Q: Why is the source code bad? Why no comments in the code? Why the monolithic functions?**
-
-A: This has been largely a solo endeavor, and a running theme of the development of the project has been the use of AI pair programming. The process of iterating on this, day in and day out (including on other projects), and learning patterns along the way has led to the development of my own personal code structures and conventions that are sort of optimized for my own AI use and IDE setup.
 
 **Q: Why is the map editor so CPU heavy?**
 
