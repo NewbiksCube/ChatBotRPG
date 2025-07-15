@@ -809,8 +809,8 @@ class ChatMessageWidget(QFrame):
         else:
             content_html_md = markdown2.markdown(content_str, extras=["fenced-code-blocks", "code-friendly"])
             soup = BeautifulSoup(content_html_md, 'html.parser')
-        quote_chars = r'"""'
-        closing_quote_chars = r'"""'
+        quote_chars = r'"“'
+        closing_quote_chars = r'"”'
         non_tag_non_quote_char = rf'[^<{quote_chars}{closing_quote_chars}]'
         simple_inline_tag = rf'<(?:em|strong|i|b)\b[^>]*>.*?<\/(?:em|strong|i|b)>'
         inner_quote_content = rf'(?:{non_tag_non_quote_char}*?(?:{simple_inline_tag})?)*?{non_tag_non_quote_char}*?'
