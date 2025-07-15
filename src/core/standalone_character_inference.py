@@ -207,6 +207,8 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
         for msg in full_history_context:
             if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene:
                 content = msg['content']
+                if content and "Sorry, API error" in content:
+                    continue
                 if (msg.get('role') == 'assistant' and 'metadata' in msg and 
                     msg['metadata'].get('character_name')):
                     char_name_hist = msg['metadata']['character_name']
