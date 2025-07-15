@@ -14,8 +14,9 @@ from PyQt5.QtGui import QPixmap, QFont, QColor
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 
 try:
-    from config import get_openrouter_api_key
-    LLM_API_KEY = get_openrouter_api_key()
+    from config import get_api_key_for_service, get_current_service
+    current_service = get_current_service()
+    LLM_API_KEY = get_api_key_for_service(current_service)
 except (ImportError, ModuleNotFoundError):
     LLM_API_KEY = os.environ.get("OPENROUTER_API_KEY", "your_api_key_here")
 
@@ -24,7 +25,7 @@ STANDALONE_BG_COLOR = "#1E1E1E"
 STANDALONE_SECONDARY_COLOR = "#2A2A2A"
 STANDALONE_TERTIARY_COLOR = "#3D3D3D"
 STANDALONE_LINK_COLOR = "#99FFBB"
-DEFAULT_MODEL = "google/gemini-2.5-flash-preview"
+DEFAULT_MODEL = "google/gemini-2.5-flash-lite-preview-06-17"
 SEARCH_MODEL = "openai/gpt-4o-mini-search-preview"
 DEFAULT_TEMP = 0.7
 MAX_HISTORY = 200
@@ -519,8 +520,6 @@ class AgentPanel(QWidget):
             self.display_message(user_display_message, image_path=self.current_image_path)
         else:
             self.display_message(user_display_message)
-            
-        # Sync context with other agent panels
         if self.parent_app:
             for child in self.parent_app.findChildren(AgentPanel):
                 if child != self:
@@ -1066,10 +1065,8 @@ class AgentPanel(QWidget):
         try:
             tab_data = self.parent_app.get_current_tab_data()
             if not tab_data:
-                print("[DEBUG] No tab data available")
                 return None
             if 'context' not in tab_data:
-                print(f"[DEBUG] No context in tab data. Available keys: {list(tab_data.keys())}")
                 return None
             context = tab_data['context']
             if not context:
@@ -1086,7 +1083,6 @@ class AgentPanel(QWidget):
                 if msg_scene in target_scenes:
                     game_messages.append(msg)
             if not game_messages:
-                print(f"[DEBUG] No messages found for scenes {target_scenes}")
                 return None
             formatted_context = {
                 'scenes_included': target_scenes,
@@ -1096,7 +1092,6 @@ class AgentPanel(QWidget):
             }
             return formatted_context
         except Exception as e:
-            print(f"[ERROR] Failed to get game context: {e}")
             return None
     
     def format_game_context_for_llm(self, game_context):
@@ -1264,7 +1259,6 @@ class AgentPanel(QWidget):
             }
             return rules_context
         except Exception as e:
-            print(f"[ERROR] Failed to get rules context: {e}")
             return None
     
     def format_rules_context_for_llm(self, rules_context):
