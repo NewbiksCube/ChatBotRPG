@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QDialog, QHBoxLayout, QLabel, 
     QPushButton, QColorDialog, QTextEdit, QSlider, QWidget, QVBoxLayout,
-    QCheckBox, QDoubleSpinBox, QSpacerItem, QSizePolicy
+    QCheckBox, QDoubleSpinBox, QSpacerItem, QSizePolicy, QComboBox
 )
 from PyQt5.QtCore import Qt, QPoint
 from PyQt5.QtGui import QFont, QColor, QPixmap, QPainter, QBrush, QPen, QCursor, QPolygon
@@ -10,7 +10,7 @@ from core.apply_stylesheet import generate_and_apply_stylesheet
 from core.ui_widgets import ChatMessageWidget, ChatMessageListWidget
 from editor_panel.world_editor.world_editor import WorldEditorWidget
 from editor_panel.start_conditions_manager import StartConditionsManagerWidget
-from config import get_default_model, get_default_cot_model, get_openrouter_api_key, get_openrouter_base_url
+from config import get_default_model, get_default_cot_model, get_openrouter_api_key, get_openrouter_base_url, get_current_service, get_api_key_for_service, get_base_url_for_service
 
 
 def create_themed_cursor(base_color, cursor_type="arrow", intensity=0.8):
@@ -420,6 +420,25 @@ class ThemeCustomizationDialog(QDialog):
         api_section_label.setFont(QFont('Arial', 12, QFont.Bold))
         content_layout.addWidget(api_section_label)
         
+        service_layout = QHBoxLayout()
+        self.service_label = QLabel("Service:")
+        self.service_label.setFont(QFont('Arial', 12))
+        self.service_dropdown = QComboBox()
+        self.service_dropdown.setFont(QFont('Arial', 12))
+        self.service_dropdown.addItems(["OpenRouter", "Google GenAI", "Local API"])
+        current_service = get_current_service()
+        if current_service == "openrouter":
+            self.service_dropdown.setCurrentText("OpenRouter")
+        elif current_service == "google":
+            self.service_dropdown.setCurrentText("Google GenAI")
+        elif current_service == "local":
+            self.service_dropdown.setCurrentText("Local API")
+        self.service_dropdown.currentTextChanged.connect(self.update_service)
+        service_layout.addWidget(self.service_label)
+        service_layout.addWidget(self.service_dropdown)
+        service_layout.addStretch(1)
+        content_layout.addLayout(service_layout)
+        
         api_key_layout = QHBoxLayout()
         self.api_key_label = QLabel("API Key:")
         self.api_key_label.setFont(QFont('Arial', 12))
@@ -432,7 +451,11 @@ class ThemeCustomizationDialog(QDialog):
         self.api_key_input.textChanged.connect(self.update_api_key)
         self.api_key_input.focusInEvent = lambda event: self._handle_api_key_focus()
         self.api_key_input.focusOutEvent = lambda event: self._handle_api_key_blur()
-        current_api_key = get_openrouter_api_key() or ""
+        self.api_key_modified = False
+        self.original_api_key = None
+        self.modified_api_key = None
+        current_service = get_current_service()
+        current_api_key = get_api_key_for_service(current_service) or ""
         if current_api_key:
             self.api_key_input.setText("*" * len(current_api_key))
         self.api_key_input.setToolTip("Click to edit API key")
@@ -449,7 +472,8 @@ class ThemeCustomizationDialog(QDialog):
         self.api_url_input.setFont(QFont('Arial', 12))
         self.api_url_input.setPlaceholderText("e.g., https://openrouter.ai/api/v1 or http://127.0.0.1:1234/v1")
         self.api_url_input.textChanged.connect(self.update_api_url)
-        current_api_url = get_openrouter_base_url() or ""
+        current_service = get_current_service()
+        current_api_url = get_base_url_for_service(current_service) or ""
         self.api_url_input.setText(current_api_url)
         api_url_layout.addWidget(self.api_url_label)
         api_url_layout.addWidget(self.api_url_input, 1)
@@ -731,28 +755,58 @@ class ThemeCustomizationDialog(QDialog):
     def update_api_key(self):
         self.result_theme["api_key"] = self.api_key_input.toPlainText().strip()
 
+    def update_service(self):
+        service_map = {"OpenRouter": "openrouter", "Google GenAI": "google", "Local API": "local"}
+        new_service = service_map.get(self.service_dropdown.currentText(), "openrouter")
+        from config import update_config
+        update_config("current_service", new_service)
+        self.refresh_api_fields()
+    
+    def refresh_api_fields(self):
+        current_service = get_current_service()
+        current_api_key = get_api_key_for_service(current_service) or ""
+        current_api_url = get_base_url_for_service(current_service) or ""
+        
+        if current_api_key:
+            self.api_key_input.setText("*" * len(current_api_key))
+        else:
+            self.api_key_input.setText("")
+            
+        self.api_url_input.setText(current_api_url)
+    
     def update_api_url(self):
         self.result_theme["api_url"] = self.api_url_input.toPlainText().strip()
 
     def _handle_api_key_focus(self):
-        current_api_key = get_openrouter_api_key() or ""
+        current_service = get_current_service()
+        current_api_key = get_api_key_for_service(current_service) or ""
         if current_api_key and self.api_key_input.toPlainText().strip() == "*" * len(current_api_key):
             self.api_key_input.setText(current_api_key)
             self.api_key_input.setStyleSheet("QTextEdit { color: #000000; }")
+        self.original_api_key = current_api_key
 
     def _handle_api_key_blur(self):
         api_key = self.api_key_input.toPlainText().strip()
         if api_key and not api_key.startswith("*"):
+            if api_key != self.original_api_key:
+                self.api_key_modified = True
+                self.modified_api_key = api_key
             self.api_key_input.setText("*" * len(api_key))
             self.api_key_input.setStyleSheet("QTextEdit { color: #666666; }")
 
     def _accept_with_sound(self):
         api_key = self.api_key_input.toPlainText().strip()
         api_url = self.api_url_input.toPlainText().strip()
+        current_service = get_current_service()
+        
         if api_key or api_url:
             from config import update_config
-            if api_key:
-                update_config("openrouter_api_key", api_key)
             if api_url:
-                update_config("openrouter_base_url", api_url)
+                update_config(f"{current_service}_base_url", api_url)
+            
+            if self.api_key_modified and hasattr(self, 'modified_api_key'):
+                update_config(f"{current_service}_api_key", self.modified_api_key)
+            elif api_key and not api_key.startswith("*"):
+                update_config(f"{current_service}_api_key", api_key)
+        
         self.accept()
