@@ -1,8 +1,10 @@
 import os
 import json
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel, QHBoxLayout, QPushButton, QScrollArea, QFrame
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTextEdit, QLabel, QHBoxLayout, 
+                             QPushButton, QScrollArea, QFrame, QComboBox, QLineEdit,
+                             QMessageBox, QMenu, QAction, QSizePolicy)
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QCursor
 
 class NotesManagerWidget(QWidget):
     notes_saved = pyqtSignal(str)
@@ -12,12 +14,14 @@ class NotesManagerWidget(QWidget):
         self.theme_colors = theme_colors
         self.tab_settings_file = tab_settings_file
         self.setObjectName("NotesManagerContainer")
-        self._init_ui()
+        self.world_field_instances = {}
+        self.world_field_order = []
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
         self._save_timer.timeout.connect(self.save_notes)
         self._notes_changed_since_last_save = False
         self.current_layout = "Notes"
+        self._init_ui()
         self.load_notes()
 
     def _init_ui(self):
@@ -25,7 +29,6 @@ class NotesManagerWidget(QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(0)
         
-        # Add toggle buttons for different note layouts
         self.layout_buttons_container = QWidget()
         layout_buttons_layout = QHBoxLayout(self.layout_buttons_container)
         layout_buttons_layout.setContentsMargins(0, 0, 0, 0)
@@ -35,7 +38,6 @@ class NotesManagerWidget(QWidget):
         self.system_button = QPushButton("System") 
         self.general_button = QPushButton("Notes")
         
-        # Set button properties
         for button in [self.world_button, self.system_button, self.general_button]:
             button.setObjectName("NotesLayoutButton")
             button.setFont(QFont('Consolas', 10))
@@ -43,18 +45,15 @@ class NotesManagerWidget(QWidget):
             button.setCheckable(True)
             layout_buttons_layout.addWidget(button)
         
-        # Set World as default active
         self.world_button.setChecked(True)
         self.current_layout = "World"
         
-        # Connect button signals
         self.world_button.clicked.connect(lambda: self.switch_layout("World"))
         self.system_button.clicked.connect(lambda: self.switch_layout("System"))
         self.general_button.clicked.connect(lambda: self.switch_layout("Notes"))
         
         layout.addWidget(self.layout_buttons_container)
-        
-        # Create separate editors for each layout
+
         self.notes_editor = QTextEdit()
         self.notes_editor.setObjectName("NotesEditor")
         self.notes_editor.setFont(QFont('Consolas', 11))
@@ -62,78 +61,51 @@ class NotesManagerWidget(QWidget):
         self.notes_editor.textChanged.connect(self._on_notes_changed)
         self.notes_editor.setOverwriteMode(False)
         self.notes_editor.setCursorWidth(4)
-        
-        # Create World layout with multiple text fields
+
         self.world_scroll_area = QScrollArea()
         self.world_scroll_area.setWidgetResizable(True)
         self.world_scroll_area.setObjectName("WorldScrollArea")
-        
         self.world_content_widget = QWidget()
         self.world_layout = QVBoxLayout(self.world_content_widget)
         self.world_layout.setContentsMargins(5, 5, 5, 5)
         self.world_layout.setSpacing(10)
         
-        # Create world building text fields based on template
-        self.world_fields = {}
-        world_sections = [
-            ("core_concept", "1. Core Concept", "World Name\n\nTagline or Theme (e.g. \"A world shrinking under the weight of its own magic\")\n\nGenre & Tone (grimdark, fairy tale, surreal, etc.)\n\nFoundational Premise (What makes this world unique?)\n\nWhat conflicts shape this world?\n\nWhat kind of stories does this world want to tell?"),
-            ("peoples_cultures", "2. Peoples & Cultures", "Dominant peoples/races\n\nMinorities, subcultures, hybrids\n\nCultural values and taboos\n\nClass structures and social mobility\n\nGender roles and family structures\n\nImportant cultural rituals or practices\n\nOutsider perspectives / xenophobia / multiculturalism"),
-            ("biology_ecology", "3. Biology & Ecology", "Biosphere (plants, beasts, weather, ecology)\n\nIntelligent species – how do they evolve/survive?\n\nUnique evolutionary adaptations\n\nDiseases, poisons, and afflictions\n\nSymbiotic or hostile species relations\n\nHow do people interact with nature?"),
-            ("civilization_infrastructure", "4. Civilization & Infrastructure", "City design & architecture\n\nTransportation methods\n\nFood systems & agriculture\n\nTrade & travel routes\n\nCommunication methods (magical or mundane)\n\nWaste management & water\n\nWhat luxuries exist? Who has access?"),
-            ("power_government", "5. Power & Government", "Forms of government (monarchy, republic, tribal council, etc.)\n\nWho holds real power?\n\nLaws and punishments\n\nSurveillance, propaganda, policing\n\nCivil rights, freedoms, and censorship\n\nRebellion and revolution: who resists?\n\nInternational relations & diplomacy"),
-            ("magic_science_technology", "6. Magic, Science & Technology", "Sources of power (arcane, divine, scientific, natural)\n\nHow is magic accessed or restricted?\n\nCost, risk, or consequence of using magic\n\nMagical or technological artifacts\n\nOverlap between science and magic\n\nPublic trust in magic/science\n\nForbidden or lost knowledge"),
-            ("spirituality_myth", "7. Spirituality & Myth", "Religions, cults, and philosophies\n\nPantheon(s), saints, spirits, or voids\n\nCreation myth and eschatology (end times)\n\nRituals, festivals, sacrifices\n\nRole of religious figures in society\n\nHeresy, orthodoxy, and religious wars"),
-            ("knowledge_education", "8. Knowledge & Education", "How is knowledge preserved and passed down?\n\nWho has access to education?\n\nAre books, magic scrolls, or data crystals used?\n\nWhat taboos exist around knowledge?\n\nHow do people learn: apprenticeship, formal schools, oral lore?"),
-            ("daily_life", "9. Daily Life", "Clothing, fashion, and materials\n\nFood, drink, and mealtime rituals\n\nRecreation, games, and sports\n\nArts (music, painting, theater, tattoos, etc.)\n\nSexuality, romance, and courtship\n\nCustoms around birth, coming-of-age, marriage, and death\n\nHow people greet each other, say goodbye, insult, curse"),
-            ("conflict_warfare", "10. Conflict & Warfare", "Who fights and why?\n\nHow are armies organized?\n\nWeapons and armor (traditional or magical)\n\nBattlegrounds: where do wars take place?\n\nHow do people view war—honor or horror?\n\nSecret wars, shadow wars, or civil strife\n\nHeroes, mercenaries, or rebels"),
-            ("geography_environment", "11. Geography & Environment", "Continents, regions, and biomes\n\nImportant landmarks and wonder-locations\n\nWhere do borders naturally occur? (mountains, rivers, Mist)\n\nHow does geography affect culture and survival?\n\nClimate patterns and natural disasters\n\nAre there hidden or shifting places (e.g. the Mist)?"),
-            ("history_time", "12. History & Time", "Mythic history (what people believe happened)\n\nDocumented history (what actually happened)\n\nMajor historical events (wars, disasters, discoveries)\n\nCycles: Ages, Eras, or repeating calamities\n\nCalendars and timekeeping systems"),
-            ("mystery_unknown", "13. Mystery & the Unknown", "What can't be explained?\n\nWhat secrets do people whisper about?\n\nWhat lies beyond the Mist, sea, sky, stars?\n\nAre the gods real or imagined?\n\nWho is hiding the truth, and why?"),
-            ("story_specific", "14. Story-Specific Elements (Optional)", "What part of the world will your story focus on?\n\nWho are the key factions in your narrative?\n\nWhat moral or theme do you want to explore?\n\nHow does the protagonist fit into this world?\n\nWhat questions about the world will your story ask (or answer)?")
-        ]
+        self.world_field_templates = {
+            "core_concept": ("Core Concept", "World Name\n\nTagline or Theme (e.g. \"A world shrinking under the weight of its own magic\")\n\nGenre & Tone (grimdark, fairy tale, surreal, etc.)\n\nFoundational Premise (What makes this world unique?)\n\nWhat conflicts shape this world?\n\nWhat kind of stories does this world want to tell?"),
+            "peoples_cultures": ("Peoples & Cultures", "Dominant peoples/races\n\nMinorities, subcultures, hybrids\n\nCultural values and taboos\n\nClass structures and social mobility\n\nGender roles and family structures\n\nImportant cultural rituals or practices\n\nOutsider perspectives / xenophobia / multiculturalism"),
+            "biology_ecology": ("Biology & Ecology", "Biosphere (plants, beasts, weather, ecology)\n\nIntelligent species – how do they evolve/survive?\n\nUnique evolutionary adaptations\n\nDiseases, poisons, and afflictions\n\nSymbiotic or hostile species relations\n\nHow do people interact with nature?"),
+            "civilization_infrastructure": ("Civilization & Infrastructure", "City design & architecture\n\nTransportation methods\n\nFood systems & agriculture\n\nTrade & travel routes\n\nCommunication methods (magical or mundane)\n\nWaste management & water\n\nWhat luxuries exist? Who has access?"),
+            "power_government": ("Power & Government", "Forms of government (monarchy, republic, tribal council, etc.)\n\nWho holds real power?\n\nLaws and punishments\n\nSurveillance, propaganda, policing\n\nCivil rights, freedoms, and censorship\n\nRebellion and revolution: who resists?\n\nInternational relations & diplomacy"),
+            "magic_science_technology": ("Magic, Science & Technology", "Sources of power (arcane, divine, scientific, natural)\n\nHow is magic accessed or restricted?\n\nCost, risk, or consequence of using magic\n\nMagical or technological artifacts\n\nOverlap between science and magic\n\nPublic trust in magic/science\n\nForbidden or lost knowledge"),
+            "spirituality_myth": ("Spirituality & Myth", "Religions, cults, and philosophies\n\nPantheon(s), saints, spirits, or voids\n\nCreation myth and eschatology (end times)\n\nRituals, festivals, sacrifices\n\nRole of religious figures in society\n\nHeresy, orthodoxy, and religious wars"),
+            "knowledge_education": ("Knowledge & Education", "How is knowledge preserved and passed down?\n\nWho has access to education?\n\nAre books, magic scrolls, or data crystals used?\n\nWhat taboos exist around knowledge?\n\nHow do people learn: apprenticeship, formal schools, oral lore?"),
+            "daily_life": ("Daily Life", "Clothing, fashion, and materials\n\nFood, drink, and mealtime rituals\n\nRecreation, games, and sports\n\nArts (music, painting, theater, tattoos, etc.)\n\nSexuality, romance, and courtship\n\nCustoms around birth, coming-of-age, marriage, and death\n\nHow people greet each other, say goodbye, insult, curse"),
+            "conflict_warfare": ("Conflict & Warfare", "Who fights and why?\n\nHow are armies organized?\n\nWeapons and armor (traditional or magical)\n\nBattlegrounds: where do wars take place?\n\nHow do people view war—honor or horror?\n\nSecret wars, shadow wars, or civil strife\n\nHeroes, mercenaries, or rebels"),
+            "geography_environment": ("Geography & Environment", "Continents, regions, and biomes\n\nImportant landmarks and wonder-locations\n\nWhere do borders naturally occur? (mountains, rivers, Mist)\n\nHow does geography affect culture and survival?\n\nClimate patterns and natural disasters\n\nAre there hidden or shifting places (e.g. the Mist)?"),
+            "history_time": ("History & Time", "Mythic history (what people believe happened)\n\nDocumented history (what actually happened)\n\nMajor historical events (wars, disasters, discoveries)\n\nCycles: Ages, Eras, or repeating calamities\n\nCalendars and timekeeping systems"),
+            "mystery_unknown": ("Mystery & the Unknown", "What can't be explained?\n\nWhat secrets do people whisper about?\n\nWhat lies beyond the Mist, sea, sky, stars?\n\nAre the gods real or imagined?\n\nWho is hiding the truth, and why?"),
+            "story_specific": ("Story-Specific Elements", "What part of the world will your story focus on?\n\nWho are the key factions in your narrative?\n\nWhat moral or theme do you want to explore?\n\nHow does the protagonist fit into this world?\n\nWhat questions about the world will your story ask (or answer)?")
+        }
         
-        for field_key, title, placeholder in world_sections:
-            # Create section frame
-            section_frame = QFrame()
-            section_frame.setObjectName("WorldSectionFrame")
-            section_layout = QVBoxLayout(section_frame)
-            section_layout.setContentsMargins(10, 10, 10, 10)
-            section_layout.setSpacing(5)
-            
-            # Section title
-            title_label = QLabel(title)
-            title_label.setObjectName("WorldSectionTitle")
-            title_label.setFont(QFont('Consolas', 12, QFont.Bold))
-            section_layout.addWidget(title_label)
-            
-            # Text field
-            text_field = QTextEdit()
-            text_field.setObjectName(f"WorldField_{field_key}")
-            text_field.setFont(QFont('Consolas', 10))
-            text_field.setPlaceholderText(placeholder)
-            text_field.setMaximumHeight(200)
-            text_field.setMinimumHeight(100)
-            text_field.textChanged.connect(self._on_world_field_changed)
-            text_field.setCursorWidth(4)
-            section_layout.addWidget(text_field)
-            
-            self.world_fields[field_key] = text_field
-            self.world_layout.addWidget(section_frame)
+        self.world_fields_container = QWidget()
+        self.world_fields_layout = QVBoxLayout(self.world_fields_container)
+        self.world_fields_layout.setContentsMargins(0, 0, 0, 0)
+        self.world_fields_layout.setSpacing(10)
         
+        self.world_layout.addWidget(self.world_fields_container)
         self.world_scroll_area.setWidget(self.world_content_widget)
         
-        # Create System layout with multiple text fields
+        self._setup_default_world_fields()
+
         self.system_scroll_area = QScrollArea()
         self.system_scroll_area.setWidgetResizable(True)
         self.system_scroll_area.setObjectName("SystemScrollArea")
-        
         self.system_content_widget = QWidget()
         self.system_layout = QVBoxLayout(self.system_content_widget)
         self.system_layout.setContentsMargins(5, 5, 5, 5)
         self.system_layout.setSpacing(10)
-        
-        # Create system design text fields based on template
         self.system_fields = {}
+        
         system_sections = [
             ("combat_conflict", "1. Combat & Conflict Resolution", "How is combat resolved? (turn-based, real-time, narrative)\n\nWhat determines success/failure? (dice, cards, resource management)\n\nWhat are the stakes of combat? (death, injury, resources, reputation)\n\nHow do characters improve in combat?\n\nWhat role does equipment/gear play?\n\nAre there different types of combat? (melee, ranged, social, magical)\n\nHow do multiple characters interact in combat?"),
             ("survival_resources", "2. Survival & Resource Management", "Is there a food/drink system? How does it work?\n\nWhat other resources matter? (health, stamina, money, materials)\n\nHow do characters acquire and manage resources?\n\nWhat happens when resources run out?\n\nAre there crafting/gathering systems?\n\nHow do environmental factors affect survival?\n\nWhat role does time play in resource management?"),
@@ -152,20 +124,17 @@ class NotesManagerWidget(QWidget):
         ]
         
         for field_key, title, placeholder in system_sections:
-            # Create section frame
             section_frame = QFrame()
             section_frame.setObjectName("SystemSectionFrame")
             section_layout = QVBoxLayout(section_frame)
             section_layout.setContentsMargins(10, 10, 10, 10)
             section_layout.setSpacing(5)
             
-            # Section title
             title_label = QLabel(title)
             title_label.setObjectName("SystemSectionTitle")
             title_label.setFont(QFont('Consolas', 12, QFont.Bold))
             section_layout.addWidget(title_label)
             
-            # Text field
             text_field = QTextEdit()
             text_field.setObjectName(f"SystemField_{field_key}")
             text_field.setFont(QFont('Consolas', 10))
@@ -181,7 +150,6 @@ class NotesManagerWidget(QWidget):
         
         self.system_scroll_area.setWidget(self.system_content_widget)
         
-        # Stack the editors
         self.editor_stack = QWidget()
         self.editor_layout = QVBoxLayout(self.editor_stack)
         self.editor_layout.setContentsMargins(0, 0, 0, 0)
@@ -189,7 +157,6 @@ class NotesManagerWidget(QWidget):
         self.editor_layout.addWidget(self.world_scroll_area)
         self.editor_layout.addWidget(self.system_scroll_area)
         
-        # Show only the world editor initially
         self.notes_editor.setVisible(False)
         self.system_scroll_area.setVisible(False)
         
@@ -198,20 +165,217 @@ class NotesManagerWidget(QWidget):
         self.setMinimumHeight(0)
         self.update_theme(self.theme_colors)
 
+    def _setup_default_world_fields(self):
+        default_fields = [
+            "core_concept", "peoples_cultures", "biology_ecology", "civilization_infrastructure",
+            "power_government", "magic_science_technology", "spirituality_myth", "knowledge_education",
+            "daily_life", "conflict_warfare", "geography_environment", "history_time",
+            "mystery_unknown", "story_specific"
+        ]
+        
+        for field_key in default_fields:
+            if field_key not in self.world_field_order:
+                self.world_field_order.append(field_key)
+                if field_key not in self.world_field_instances:
+                    self.world_field_instances[field_key] = {}
+                    self.add_field_instance(field_key, None)
+
+
+
+    def add_field_instance(self, field_type, custom_name=None):
+        if field_type not in self.world_field_instances:
+            self.world_field_instances[field_type] = {}
+        
+        instances = self.world_field_instances[field_type]
+        instance_id = len(instances)
+        
+        instance_data = {
+            'custom_name': custom_name,
+            'content': ''
+        }
+        
+        instances[instance_id] = instance_data
+        self.rebuild_world_ui()
+        self._on_world_field_changed()
+
+    def remove_field_instance(self, field_type, instance_id):
+        if field_type in self.world_field_instances and instance_id in self.world_field_instances[field_type]:
+            if len(self.world_field_instances[field_type]) > 1:
+                del self.world_field_instances[field_type][instance_id]
+                self.rebuild_world_ui()
+                self._on_world_field_changed()
+
+    def move_field_up(self, field_type):
+        if field_type in self.world_field_order:
+            current_index = self.world_field_order.index(field_type)
+            if current_index > 0:
+                self.world_field_order[current_index], self.world_field_order[current_index - 1] = \
+                    self.world_field_order[current_index - 1], self.world_field_order[current_index]
+                self.rebuild_world_ui()
+                self._on_world_field_changed()
+
+    def move_field_down(self, field_type):
+        if field_type in self.world_field_order:
+            current_index = self.world_field_order.index(field_type)
+            if current_index < len(self.world_field_order) - 1:
+                self.world_field_order[current_index], self.world_field_order[current_index + 1] = \
+                    self.world_field_order[current_index + 1], self.world_field_order[current_index]
+                self.rebuild_world_ui()
+                self._on_world_field_changed()
+
+    def move_instance_left(self, field_type, instance_id):
+        if field_type in self.world_field_instances:
+            instances = self.world_field_instances[field_type]
+            instance_ids = sorted(instances.keys())
+            
+            if instance_id in instance_ids:
+                current_index = instance_ids.index(instance_id)
+                if current_index > 0:
+                    left_id = instance_ids[current_index - 1]
+                    instances[instance_id], instances[left_id] = instances[left_id], instances[instance_id]
+                    self.rebuild_world_ui()
+                    self._on_world_field_changed()
+
+    def move_instance_right(self, field_type, instance_id):
+        if field_type in self.world_field_instances:
+            instances = self.world_field_instances[field_type]
+            instance_ids = sorted(instances.keys())
+            
+            if instance_id in instance_ids:
+                current_index = instance_ids.index(instance_id)
+                if current_index < len(instance_ids) - 1:
+                    right_id = instance_ids[current_index + 1]
+                    instances[instance_id], instances[right_id] = instances[right_id], instances[instance_id]
+                    self.rebuild_world_ui()
+                    self._on_world_field_changed()
+
+    def rebuild_world_ui(self):
+        for i in reversed(range(self.world_fields_layout.count())):
+            child = self.world_fields_layout.takeAt(i)
+            if child.widget():
+                child.widget().setParent(None)
+        
+        for field_type in self.world_field_order:
+            if field_type in self.world_field_instances:
+                self.create_field_section(field_type)
+
+    def create_field_section(self, field_type):
+        instances = self.world_field_instances[field_type]
+        if not instances:
+            return
+        
+        section_frame = QFrame()
+        section_frame.setObjectName("WorldSectionFrame")
+        section_layout = QVBoxLayout(section_frame)
+        section_layout.setContentsMargins(10, 10, 10, 10)
+        section_layout.setSpacing(5)
+        title_text = self.world_field_templates[field_type][0]
+        title_label = QLabel(title_text)
+        title_label.setObjectName("WorldSectionTitle")
+        title_label.setFont(QFont('Consolas', 12, QFont.Bold))
+        section_layout.addWidget(title_label)
+        horizontal_scroll = QScrollArea()
+        horizontal_scroll.setObjectName("HorizontalFieldScroll")
+        horizontal_scroll.setWidgetResizable(True)
+        horizontal_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        horizontal_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        horizontal_scroll.setFixedHeight(250)
+        horizontal_widget = QWidget()
+        horizontal_layout = QHBoxLayout(horizontal_widget)
+        horizontal_layout.setContentsMargins(5, 5, 5, 5)
+        horizontal_layout.setSpacing(10)
+        sorted_instances = sorted(instances.items(), key=lambda x: x[0])
+        
+        for instance_id, instance_data in sorted_instances:
+            instance_frame = QFrame()
+            instance_frame.setObjectName("FieldInstanceFrame")
+            instance_frame.setMinimumWidth(320)
+            instance_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            instance_frame.setFixedHeight(230)
+            instance_layout = QVBoxLayout(instance_frame)
+            instance_layout.setContentsMargins(8, 8, 8, 8)
+            instance_layout.setSpacing(5)
+            instance_header = QHBoxLayout()
+            instance_header.setContentsMargins(0, 0, 0, 0)
+            custom_name = instance_data.get('custom_name')
+            if custom_name:
+                name_label = QLabel(custom_name)
+                name_label.setObjectName("InstanceNameLabel")
+                name_label.setFont(QFont('Consolas', 9, QFont.Bold))
+                instance_header.addWidget(name_label)
+            instance_header.addStretch()
+            button_layout = QHBoxLayout()
+            button_layout.setSpacing(2)
+            
+            if len(instances) > 1:
+                left_button = QPushButton("←")
+                left_button.setObjectName("InstanceMoveButton")
+                left_button.setFont(QFont('Consolas', 8))
+                left_button.setFixedSize(18, 18)
+                left_button.setToolTip("Move left")
+                left_button.clicked.connect(lambda checked, ft=field_type, iid=instance_id: self.move_instance_left(ft, iid))
+                button_layout.addWidget(left_button)
+                right_button = QPushButton("→")
+                right_button.setObjectName("InstanceMoveButton")
+                right_button.setFont(QFont('Consolas', 8))
+                right_button.setFixedSize(18, 18)
+                right_button.setToolTip("Move right")
+                right_button.clicked.connect(lambda checked, ft=field_type, iid=instance_id: self.move_instance_right(ft, iid))
+                button_layout.addWidget(right_button)
+            
+            add_button = QPushButton("+")
+            add_button.setObjectName("InstanceAddButton")
+            add_button.setFont(QFont('Consolas', 8))
+            add_button.setFixedSize(18, 18)
+            add_button.setToolTip("Add instance")
+            add_button.clicked.connect(lambda checked, ft=field_type: self.add_field_instance(ft))
+            button_layout.addWidget(add_button)
+            
+            remove_button = QPushButton("×")
+            remove_button.setObjectName("InstanceRemoveButton")
+            remove_button.setFont(QFont('Consolas', 8))
+            remove_button.setFixedSize(18, 18)
+            remove_button.setToolTip("Remove instance")
+            remove_button.clicked.connect(lambda checked, ft=field_type, iid=instance_id: self.remove_field_instance(ft, iid))
+            remove_button.setEnabled(len(instances) > 1)
+            button_layout.addWidget(remove_button)
+            
+            instance_header.addLayout(button_layout)
+            instance_layout.addLayout(instance_header)
+            
+            text_field = QTextEdit()
+            text_field.setObjectName(f"WorldField_{field_type}_{instance_id}")
+            text_field.setFont(QFont('Consolas', 10))
+            text_field.setPlaceholderText(self.world_field_templates[field_type][1])
+            text_field.setPlainText(instance_data.get('content', ''))
+            text_field.textChanged.connect(lambda ft=field_type, iid=instance_id: self.on_instance_text_changed(ft, iid))
+            text_field.setCursorWidth(4)
+            
+            instance_layout.addWidget(text_field)
+            horizontal_layout.addWidget(instance_frame)
+        
+        horizontal_scroll.setWidget(horizontal_widget)
+        section_layout.addWidget(horizontal_scroll)
+        
+        self.world_fields_layout.addWidget(section_frame)
+
+    def on_instance_text_changed(self, field_type, instance_id):
+        sender = self.sender()
+        if sender and field_type in self.world_field_instances and instance_id in self.world_field_instances[field_type]:
+            self.world_field_instances[field_type][instance_id]['content'] = sender.toPlainText()
+            self._on_world_field_changed()
+
     def _on_notes_changed(self):
-        # Only save when in the Notes layout
         if self.current_layout == "Notes":
             self._notes_changed_since_last_save = True
             self._save_timer.start(1500)
 
     def _on_world_field_changed(self):
-        # Save when in the World layout
         if self.current_layout == "World":
             self._notes_changed_since_last_save = True
             self._save_timer.start(1500)
 
     def _on_system_field_changed(self):
-        # Save when in the System layout
         if self.current_layout == "System":
             self._notes_changed_since_last_save = True
             self._save_timer.start(1500)
@@ -231,11 +395,9 @@ class NotesManagerWidget(QWidget):
                     notes_text = self.notes_editor.toPlainText()
                     tab_settings['dev_notes'] = notes_text
                 elif self.current_layout == "World":
-                    # Save all world fields
-                    for field_key, text_field in self.world_fields.items():
-                        tab_settings[f'world_{field_key}'] = text_field.toPlainText()
+                    tab_settings['world_field_instances'] = self.world_field_instances
+                    tab_settings['world_field_order'] = self.world_field_order
                 elif self.current_layout == "System":
-                    # Save all system fields
                     for field_key, text_field in self.system_fields.items():
                         tab_settings[f'system_{field_key}'] = text_field.toPlainText()
                 
@@ -243,10 +405,13 @@ class NotesManagerWidget(QWidget):
                     json.dump(tab_settings, f, indent=2, ensure_ascii=False)
                 
                 self._notes_changed_since_last_save = False
+                
                 if self.current_layout == "Notes":
                     self.notes_saved.emit(self.notes_editor.toPlainText())
+                    
             except Exception as e:
                 print(f"Error saving notes to {self.tab_settings_file}: {e}")
+        
         self._save_timer.stop()
 
     def load_notes(self):
@@ -256,7 +421,6 @@ class NotesManagerWidget(QWidget):
                     tab_settings = json.load(f)
                 
                 if isinstance(tab_settings, dict):
-                    # Load notes
                     if 'dev_notes' in tab_settings:
                         notes = tab_settings['dev_notes']
                         if hasattr(self, 'notes_editor'):
@@ -264,15 +428,15 @@ class NotesManagerWidget(QWidget):
                             self.notes_editor.setPlainText(notes)
                             self.notes_editor.blockSignals(False)
                     
-                    # Load world fields
-                    for field_key, text_field in self.world_fields.items():
-                        world_key = f'world_{field_key}'
-                        if world_key in tab_settings:
-                            text_field.blockSignals(True)
-                            text_field.setPlainText(tab_settings[world_key])
-                            text_field.blockSignals(False)
+                    if 'world_field_instances' in tab_settings:
+                        self.world_field_instances = tab_settings['world_field_instances']
                     
-                    # Load system fields
+                    if 'world_field_order' in tab_settings:
+                        self.world_field_order = tab_settings['world_field_order']
+                    
+                    if hasattr(self, 'world_fields_layout'):
+                        self.rebuild_world_ui()
+                    
                     for field_key, text_field in self.system_fields.items():
                         system_key = f'system_{field_key}'
                         if system_key in tab_settings:
@@ -281,82 +445,139 @@ class NotesManagerWidget(QWidget):
                             text_field.blockSignals(False)
                 
                 self._notes_changed_since_last_save = False
+                
             except Exception as e:
                 print(f"Error loading notes from {self.tab_settings_file}: {e}")
 
     def update_theme(self, new_theme):
         self.theme_colors = new_theme.copy()
         base_color = self.theme_colors.get("base_color", "#FFFFFF")
-        editor_text_color = base_color 
+        bg_color = self.theme_colors.get("bg_color", "#2A2A2A")
+        darker_bg = self.theme_colors.get("darker_bg", "#1A1A1A")
+        highlight = self.theme_colors.get("highlight", "#4A4A4A")
         
         editor_style = f"""
             QTextEdit {{
-                background-color: #0A0A0A;
-                color: {editor_text_color};
+                background-color: {darker_bg};
+                color: {base_color};
                 border: 1px solid {base_color};
-                border-radius: 4px;
+                border-radius: 3px;
                 padding: 5px;
                 font-family: Consolas;
+                font-size: 10pt;
+                selection-background-color: {highlight};
+                selection-color: white;
+            }}
+            QTextEdit:focus {{
+                border: 1px solid {base_color};
+                outline: none;
             }}
         """
         
         self.notes_editor.setStyleSheet(editor_style)
-        self.system_scroll_area.setStyleSheet(editor_style) # Changed from system_editor to system_scroll_area
+        self.system_scroll_area.setStyleSheet(editor_style)
         
-        # Style world fields
-        for text_field in self.world_fields.values():
-            text_field.setStyleSheet(editor_style)
-        
-        # Style system fields
         for text_field in self.system_fields.values():
             text_field.setStyleSheet(editor_style)
         
         self.setStyleSheet(f"""
             QWidget#NotesManagerContainer {{
-                background-color: #0A0A0A;
+                background-color: {bg_color};
             }}
             QPushButton#NotesLayoutButton {{
-                background-color: #1A1A1A;
+                background-color: {bg_color};
                 color: {base_color};
                 border: 1px solid {base_color};
-                border-radius: 0px;
+                border-radius: 3px;
                 padding: 4px 12px;
-                font-family: Consolas;
-                margin: 0px;
+                font: 10pt "Consolas";
             }}
             QPushButton#NotesLayoutButton:hover {{
-                background-color: #2A2A2A;
+                background-color: {highlight};
+                color: white;
             }}
             QPushButton#NotesLayoutButton:checked {{
                 background-color: {base_color};
-                color: #1A1A1A;
+                color: {bg_color};
             }}
             QFrame#WorldSectionFrame, QFrame#SystemSectionFrame {{
-                background-color: #111111;
+                background-color: {bg_color};
                 border: 1px solid {base_color};
-                border-radius: 4px;
+                border-radius: 3px;
+            }}
+            QFrame#FieldInstanceFrame {{
+                background-color: {darker_bg};
+                border: 1px solid {base_color};
+                border-radius: 3px;
+                margin: 2px;
             }}
             QLabel#WorldSectionTitle, QLabel#SystemSectionTitle {{
                 color: {base_color};
                 background-color: transparent;
                 border: none;
+                font: 12pt "Consolas";
             }}
-            QScrollArea#WorldScrollArea, QScrollArea#SystemScrollArea {{
-                background-color: #0A0A0A;
+            QLabel#InstanceNameLabel {{
+                color: {base_color};
+                background-color: transparent;
+                border: none;
+                font: 9pt "Consolas";
+            }}
+            QScrollArea#WorldScrollArea, QScrollArea#SystemScrollArea, QScrollArea#HorizontalFieldScroll {{
+                background-color: {bg_color};
                 border: none;
             }}
+            QTextEdit[objectName^="WorldField_"] {{
+                background-color: {darker_bg};
+                color: {base_color};
+                border: 1px solid {base_color};
+                border-radius: 3px;
+                padding: 5px;
+                font: 10pt "Consolas";
+                selection-background-color: {highlight};
+                selection-color: white;
+            }}
+            QTextEdit[objectName^="WorldField_"]:focus {{
+                border: 1px solid {base_color};
+                outline: none;
+            }}
+            QPushButton#InstanceAddButton, QPushButton#InstanceMoveButton {{
+                background-color: {darker_bg};
+                color: {base_color};
+                border: 1px solid {base_color};
+                border-radius: 2px;
+                font: 8pt "Consolas";
+            }}
+            QPushButton#InstanceAddButton:hover, QPushButton#InstanceMoveButton:hover {{
+                background-color: {highlight};
+                color: white;
+            }}
+            QPushButton#InstanceRemoveButton {{
+                background-color: {darker_bg};
+                color: {base_color};
+                border: 1px solid {base_color};
+                border-radius: 2px;
+                font: 8pt "Consolas";
+            }}
+            QPushButton#InstanceRemoveButton:hover {{
+                background-color: {highlight};
+                color: white;
+            }}
+            QPushButton#InstanceRemoveButton:disabled {{
+                background-color: {darker_bg};
+                color: #666666;
+                border: 1px solid #666666;
+            }}
             QWidget {{
-                background-color: #0A0A0A;
+                background-color: {bg_color};
             }}
         """)
 
     def switch_layout(self, layout_name):
-        # Uncheck all buttons
         self.world_button.setChecked(False)
         self.system_button.setChecked(False)
         self.general_button.setChecked(False)
         
-        # Check the selected button
         if layout_name == "World":
             self.world_button.setChecked(True)
         elif layout_name == "System":
@@ -366,16 +587,14 @@ class NotesManagerWidget(QWidget):
         
         self.current_layout = layout_name
         
-        # Hide all editors
         self.notes_editor.setVisible(False)
         self.world_scroll_area.setVisible(False)
-        self.system_scroll_area.setVisible(False) # Changed from system_editor to system_scroll_area
+        self.system_scroll_area.setVisible(False)
         
-        # Show the selected editor
         if layout_name == "World":
             self.world_scroll_area.setVisible(True)
         elif layout_name == "System":
-            self.system_scroll_area.setVisible(True) # Changed from system_editor to system_scroll_area
+            self.system_scroll_area.setVisible(True)
         elif layout_name == "Notes":
             self.notes_editor.setVisible(True)
 
