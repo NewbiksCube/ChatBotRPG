@@ -5,6 +5,7 @@ import copy
 import pygame
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel, QPushButton, QMessageBox, QRadioButton, QLineEdit, QSpinBox, QComboBox, QCheckBox
 from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QApplication # Added for application-level update blocking
 
 def is_valid_widget(widget):
     if not widget:
@@ -581,13 +582,10 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                             except RuntimeError:
                                                 action_obj["brightness"] = "1.0"
                                     elif action_type == "Skip Post":
-                                        # Skip Post has no additional fields
                                         pass
                                     elif action_type == "Exit Rule Processing":
-                                        # Exit Rule Processing has no additional fields
                                         pass
                                     elif action_type == "Game Over":
-                                        # Game Over action handling
                                         game_over_message_input = action_row_widget.findChild(QTextEdit, "GameOverMessageInput")
                                         if game_over_message_input:
                                             try:
@@ -596,18 +594,73 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                                 action_obj["game_over_message"] = ""
                                         else:
                                             action_obj["game_over_message"] = ""
+                                    elif action_type == "Post Visibility":
+                                        current_post_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityCurrentPostRadio")
+                                        player_post_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityPlayerPostRadio")
+                                        visible_only_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityVisibleOnlyRadio")
+                                        not_visible_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityNotVisibleRadio")
+                                        name_match_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityNameMatchRadio")
+                                        variable_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityVariableRadio")
+                                        if current_post_radio and current_post_radio.isChecked():
+                                            action_obj["applies_to"] = "Current Post"
+                                        elif player_post_radio and player_post_radio.isChecked():
+                                            action_obj["applies_to"] = "Player Post"
+                                        else:
+                                            action_obj["applies_to"] = "Current Post"
+                                        if visible_only_radio and visible_only_radio.isChecked():
+                                            action_obj["visibility_mode"] = "Visible Only To"
+                                        elif not_visible_radio and not_visible_radio.isChecked():
+                                            action_obj["visibility_mode"] = "Not Visible To"
+                                        else:
+                                            action_obj["visibility_mode"] = "Visible Only To"
+                                        if name_match_radio and name_match_radio.isChecked():
+                                            action_obj["condition_type"] = "Name Match"
+                                        elif variable_radio and variable_radio.isChecked():
+                                            action_obj["condition_type"] = "Variable"
+                                        else:
+                                            action_obj["condition_type"] = "Name Match"
+                                        conditions = []
+                                        conditions_container = action_row_widget.findChild(QWidget, "PostVisibilityConditionsContainer")
+                                        if conditions_container and conditions_container.layout():
+                                            for i in range(conditions_container.layout().count()):
+                                                condition_widget = conditions_container.layout().itemAt(i).widget()
+                                                if condition_widget and condition_widget.objectName() == "PostVisibilityConditionRow":
+                                                    name_input = condition_widget.findChild(QLineEdit, "PostVisibilityNameInput")
+                                                    if name_input and name_input.isVisible():
+                                                        name_value = name_input.text().strip()
+                                                        if name_value:
+                                                            name_condition_data = {
+                                                                "type": "Name Match",
+                                                                "name": name_value
+                                                            }
+                                                            conditions.append(name_condition_data)
+                                                    var_name_input = condition_widget.findChild(QLineEdit, "PostVisibilityVarNameInput")
+                                                    operator_combo = condition_widget.findChild(QComboBox, "PostVisibilityOperatorCombo")
+                                                    var_value_input = condition_widget.findChild(QLineEdit, "PostVisibilityVarValueInput")
+                                                    
+                                                    if var_name_input and var_name_input.isVisible():
+                                                        var_name = var_name_input.text().strip()
+                                                        operator = operator_combo.currentText() if operator_combo else "equals"
+                                                        var_value = var_value_input.text().strip() if var_value_input else ""
+                                                        
+                                                        if var_name:
+                                                            var_condition_data = {
+                                                                "type": "Variable",
+                                                                "variable_name": var_name,
+                                                                "operator": operator,
+                                                                "value": var_value
+                                                            }
+                                                            conditions.append(var_condition_data)
+                                        
+                                        action_obj["conditions"] = conditions
                                     elif action_type == "New Scene":
-                                        # New Scene has no additional fields
                                         pass
                                     elif action_type == "System Message":
-                                        # System Message uses the value_editor for its content
                                         if value_editor:
                                             try:
                                                 action_obj["value"] = value_editor.toPlainText().strip()
                                             except RuntimeError:
                                                 action_obj["value"] = ""
-                                        
-                                        # Handle System Message position radio buttons
                                         action_prepend_radio = action_row_widget.findChild(QRadioButton, "ActionPrependRadio")
                                         action_append_radio = action_row_widget.findChild(QRadioButton, "ActionAppendRadio")
                                         action_replace_radio = action_row_widget.findChild(QRadioButton, "ActionReplaceRadio")
@@ -619,9 +672,7 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                         elif action_replace_radio and action_replace_radio.isChecked():
                                             action_obj["position"] = "replace"
                                         else:
-                                            action_obj["position"] = "prepend"  # Default
-                                        
-                                        # Handle System Message position within system messages
+                                            action_obj["position"] = "prepend"
                                         action_first_sysmsg_radio = action_row_widget.findChild(QRadioButton, "ActionFirstSysMsgRadio")
                                         action_last_sysmsg_radio = action_row_widget.findChild(QRadioButton, "ActionLastSysMsgRadio")
                                         
@@ -630,9 +681,7 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                         elif action_last_sysmsg_radio and action_last_sysmsg_radio.isChecked():
                                             action_obj["system_message_position"] = "last"
                                         else:
-                                            action_obj["system_message_position"] = "first"  # Default
-                                    
-                                    # Always add the action
+                                            action_obj["system_message_position"] = "first"
                                     actions.append(action_obj)
                             try:
                                 tag = tag_editor.toPlainText().strip()
@@ -773,6 +822,16 @@ def _load_selected_rule(self, tab_index, rules_list):
     if self._is_loading_rule:
         return
     self._is_loading_rule = True
+    app = QApplication.instance()
+    main_window = None
+    if app:
+        for widget in app.topLevelWidgets():
+            if hasattr(widget, 'windowTitle') and 'ChatBot' in widget.windowTitle():
+                main_window = widget
+                break
+    if main_window:
+        main_window.setUpdatesEnabled(False)
+    
     try:
         if tab_index < 0 or tab_index >= len(self.tabs_data):
             print(f"Error: Invalid tab index {tab_index} for _load_selected_rule")
@@ -797,61 +856,69 @@ def _load_selected_rule(self, tab_index, rules_list):
             print("Error: Tab content widget not found")
             return
         tab_content_widget = tab_data['widget']
-        widget_cache = {
-            'rule_id_editor': tab_content_widget.findChild(QLineEdit, "RuleIdEditor"),
-            'description_editor': tab_content_widget.findChild(QLineEdit, "RuleDescriptionEditor"),
-            'condition_editor': tab_content_widget.findChild(QTextEdit, "ConditionEditor"),
-            'model_editor': tab_content_widget.findChild(QLineEdit, "ModelEditor"),
-            'last_exchange_radio': tab_content_widget.findChild(QRadioButton, "LastExchangeRadio"),
-            'full_convo_radio': tab_content_widget.findChild(QRadioButton, "FullConversationRadio"),
-            'user_message_radio': tab_content_widget.findChild(QRadioButton, "UserMessageRadio"),
-            'llm_reply_radio': tab_content_widget.findChild(QRadioButton, "LLMReplyRadio"),
-            'convo_llm_reply_radio': tab_content_widget.findChild(QRadioButton, "ConvoLLMReplyRadio"),
-            'applies_to_narrator_radio': tab_content_widget.findChild(QRadioButton, "AppliesToNarratorRadio"),
-            'applies_to_character_radio': tab_content_widget.findChild(QRadioButton, "AppliesToCharacterRadio"),
-            'add_update_button': tab_content_widget.findChild(QPushButton, f"add_rule_button_{tab_index}"),
-            'conditions_container': tab_content_widget.findChild(QWidget, "ConditionsContainer"),
-            'operator_combo': tab_content_widget.findChild(QComboBox, "ConditionsOperatorCombo"),
-            'pairs_container': tab_content_widget.findChild(QWidget, "PairsContainer")
-        }
-        if widget_cache['rule_id_editor']: 
-            widget_cache['rule_id_editor'].setText(rule_id)
-        if widget_cache['description_editor']: 
-            widget_cache['description_editor'].setText(rule_data.get('description', ''))
-        if widget_cache['condition_editor']: 
-            widget_cache['condition_editor'].setPlainText(rule_data.get('condition', ''))
-        if widget_cache['model_editor']: 
-            widget_cache['model_editor'].setText(rule_data.get('model', ''))
-        applies_to = rule_data.get('applies_to', 'Narrator')
-        character_name = rule_data.get('character_name', '')
-        if widget_cache['applies_to_narrator_radio'] and widget_cache['applies_to_character_radio']:
-            widget_cache['applies_to_narrator_radio'].setChecked(applies_to == 'Narrator')
-            widget_cache['applies_to_character_radio'].setChecked(applies_to == 'Character')
-            applies_to_end_of_round_radio = tab_content_widget.findChild(QRadioButton, "AppliesToEndOfRoundRadio")
-            if applies_to_end_of_round_radio:
-                applies_to_end_of_round_radio.setChecked(applies_to == 'End of Round')
-            character_name_input = tab_content_widget.findChild(QLineEdit, "CharacterNameInput")
-            if character_name_input:
-                character_name_input.setText(character_name if character_name else "")
-        scope = rule_data.get('scope', 'user_message')
-        scope_radios = [
-            (widget_cache['last_exchange_radio'], 'last_exchange'),
-            (widget_cache['full_convo_radio'], 'full_conversation'),
-            (widget_cache['user_message_radio'], 'user_message'),
-            (widget_cache['llm_reply_radio'], 'llm_reply'),
-            (widget_cache['convo_llm_reply_radio'], 'convo_llm_reply')
-        ]
-        for radio, scope_value in scope_radios:
-            if radio:
-                radio.setChecked(scope == scope_value)
+        tab_content_widget.setUpdatesEnabled(False)
         
-        _load_conditions_optimized(self, widget_cache, rule_data, tab_data)
-        _load_tag_action_pairs_optimized(self, widget_cache, rule_data, tab_data)
-        if widget_cache['add_update_button'] and is_valid_widget(widget_cache['add_update_button']):
-            widget_cache['add_update_button'].setText("Update ↑")
-            widget_cache['add_update_button'].setProperty("editing_rule_index", current_row_index)
-        
+        try:
+            widget_cache = {
+                'rule_id_editor': tab_content_widget.findChild(QLineEdit, "RuleIdEditor"),
+                'description_editor': tab_content_widget.findChild(QLineEdit, "RuleDescriptionEditor"),
+                'condition_editor': tab_content_widget.findChild(QTextEdit, "ConditionEditor"),
+                'model_editor': tab_content_widget.findChild(QLineEdit, "ModelEditor"),
+                'last_exchange_radio': tab_content_widget.findChild(QRadioButton, "LastExchangeRadio"),
+                'full_convo_radio': tab_content_widget.findChild(QRadioButton, "FullConversationRadio"),
+                'user_message_radio': tab_content_widget.findChild(QRadioButton, "UserMessageRadio"),
+                'llm_reply_radio': tab_content_widget.findChild(QRadioButton, "LLMReplyRadio"),
+                'convo_llm_reply_radio': tab_content_widget.findChild(QRadioButton, "ConvoLLMReplyRadio"),
+                'applies_to_narrator_radio': tab_content_widget.findChild(QRadioButton, "AppliesToNarratorRadio"),
+                'applies_to_character_radio': tab_content_widget.findChild(QRadioButton, "AppliesToCharacterRadio"),
+                'add_update_button': tab_content_widget.findChild(QPushButton, f"add_rule_button_{tab_index}"),
+                'conditions_container': tab_content_widget.findChild(QWidget, "ConditionsContainer"),
+                'operator_combo': tab_content_widget.findChild(QComboBox, "ConditionsOperatorCombo"),
+                'pairs_container': tab_content_widget.findChild(QWidget, "PairsContainer")
+            }
+            if widget_cache['rule_id_editor']: 
+                widget_cache['rule_id_editor'].setText(rule_id)
+            if widget_cache['description_editor']: 
+                widget_cache['description_editor'].setText(rule_data.get('description', ''))
+            if widget_cache['condition_editor']: 
+                widget_cache['condition_editor'].setPlainText(rule_data.get('condition', ''))
+            if widget_cache['model_editor']: 
+                widget_cache['model_editor'].setText(rule_data.get('model', ''))
+            applies_to = rule_data.get('applies_to', 'Narrator')
+            character_name = rule_data.get('character_name', '')
+            if widget_cache['applies_to_narrator_radio'] and widget_cache['applies_to_character_radio']:
+                widget_cache['applies_to_narrator_radio'].setChecked(applies_to == 'Narrator')
+                widget_cache['applies_to_character_radio'].setChecked(applies_to == 'Character')
+                applies_to_end_of_round_radio = tab_content_widget.findChild(QRadioButton, "AppliesToEndOfRoundRadio")
+                if applies_to_end_of_round_radio:
+                    applies_to_end_of_round_radio.setChecked(applies_to == 'End of Round')
+                character_name_input = tab_content_widget.findChild(QLineEdit, "CharacterNameInput")
+                if character_name_input:
+                    character_name_input.setText(character_name if character_name else "")
+            scope = rule_data.get('scope', 'user_message')
+            scope_radios = [
+                (widget_cache['last_exchange_radio'], 'last_exchange'),
+                (widget_cache['full_convo_radio'], 'full_conversation'),
+                (widget_cache['user_message_radio'], 'user_message'),
+                (widget_cache['llm_reply_radio'], 'llm_reply'),
+                (widget_cache['convo_llm_reply_radio'], 'convo_llm_reply')
+            ]
+            for radio, scope_value in scope_radios:
+                if radio:
+                    radio.setChecked(scope == scope_value)
+            
+            _load_conditions_optimized(self, widget_cache, rule_data, tab_data)
+            _load_tag_action_pairs_optimized(self, widget_cache, rule_data, tab_data)
+            if widget_cache['add_update_button'] and is_valid_widget(widget_cache['add_update_button']):
+                widget_cache['add_update_button'].setText("Update ↑")
+                widget_cache['add_update_button'].setProperty("editing_rule_index", current_row_index)
+            
+        finally:
+            tab_content_widget.setUpdatesEnabled(True)
+            
     finally:
+        if main_window:
+            main_window.setUpdatesEnabled(True)
         self._is_loading_rule = False
 
 def _load_conditions_optimized(self, widget_cache, rule_data, tab_data):
@@ -968,7 +1035,6 @@ def _populate_condition_row(self, row_widget, cond_data):
         print(f"Error populating condition row: {e}")
 
 def _load_tag_action_pairs_optimized(self, widget_cache, rule_data, tab_data):
-    # Try to get pairs_container from tab_data first (preferred), then fallback to widget search
     pairs_container = tab_data.get('pairs_container') or widget_cache['pairs_container']
     if not is_valid_widget(pairs_container):
         QMessageBox.critical(self, "UI Error", "Failed to find the Tag/Action Pairs UI component. Please reload the tab.")
@@ -981,6 +1047,8 @@ def _load_tag_action_pairs_optimized(self, widget_cache, rule_data, tab_data):
     if pairs_container is None or main_layout is None:
         QMessageBox.critical(self, "UI Error", "Failed to create the Tag/Action Pairs container. Please reload the tab.")
         return
+    pairs_container.setUpdatesEnabled(False)
+    
     try:
         add_new_pair_func = tab_data.get('add_new_pair')
         if not add_new_pair_func:
@@ -996,8 +1064,6 @@ def _load_tag_action_pairs_optimized(self, widget_cache, rule_data, tab_data):
             pair_info = add_new_pair_func(tab_data, main_layout, False)
             if not pair_info or not pair_info.get('widget'):
                 QMessageBox.critical(self, "Rule Load Error", "Failed to create default UI for Tag/Action Pairs.\nNo widget returned.")
-            else:
-                pairs_container.update()
         else:
             for pair_data_saved in saved_pairs:
                 pair_info = add_new_pair_func(tab_data, main_layout, False)
@@ -1018,11 +1084,13 @@ def _load_tag_action_pairs_optimized(self, widget_cache, rule_data, tab_data):
                     print(f"ERROR: No pair info runtime found for pair widget")
         if 'workflow_data_dir' in tab_data:
             _update_workflow_dropdowns(self, tab_data)
-        pairs_container.update()
     except Exception as e:
         import traceback
         traceback.print_exc()
         QMessageBox.critical(self, "Rule Load Error", f"An unexpected error occurred while loading Tag/Action Pairs.\nError: {e}")
+    finally:
+        pairs_container.setUpdatesEnabled(True)
+        pairs_container.update()
 
 def _load_pair_actions_optimized(self, pair_widget, pair_info_runtime, pair_data_saved, tab_data):
     pair_actions_container = pair_widget.findChild(QWidget, "PairActionsContainerWidget")
@@ -1041,19 +1109,26 @@ def _load_pair_actions_optimized(self, pair_widget, pair_info_runtime, pair_data
             item.widget().deleteLater()
     if 'pair_action_rows' in pair_info_runtime:
         pair_info_runtime['pair_action_rows'].clear()
-    if saved_actions:
-        print(f"  Loading {len(saved_actions)} actions...")
-        for action_idx, action_data in enumerate(saved_actions):
-            try:
-                action_row = add_pair_action_row_func(action_data, tab_data.get('workflow_data_dir'))
-            except Exception as e:
-                print(f"    Error adding/populating action row {action_idx + 1}: {e}")
+    pair_actions_container.setUpdatesEnabled(False)
+    pair_widget.setUpdatesEnabled(False)
+    
     try:
-        add_btn = pair_actions_container.findChild(QPushButton, "AddActionButton")
-        if not add_btn:
-            add_pair_action_row_func(None, tab_data.get('workflow_data_dir'))
-    except Exception as e:
-        print(f"  Error ensuring add action button: {e}")
+        if saved_actions:
+            print(f"  Loading {len(saved_actions)} actions...")
+            for action_idx, action_data in enumerate(saved_actions):
+                try:
+                    action_row = add_pair_action_row_func(action_data, tab_data.get('workflow_data_dir'))
+                except Exception as e:
+                    print(f"    Error adding/populating action row {action_idx + 1}: {e}")
+        try:
+            add_btn = pair_actions_container.findChild(QPushButton, "AddActionButton")
+            if not add_btn:
+                add_pair_action_row_func(None, tab_data.get('workflow_data_dir'))
+        except Exception as e:
+            print(f"  Error ensuring add action button: {e}")
+    finally:
+        pair_actions_container.setUpdatesEnabled(True)
+        pair_widget.setUpdatesEnabled(True)
 
 def _update_workflow_dropdowns(self, tab_data):
     workflow_dir = tab_data['workflow_data_dir']
