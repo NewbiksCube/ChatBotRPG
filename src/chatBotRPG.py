@@ -1183,6 +1183,9 @@ class ChatbotUI(QWidget):
             user_msg_obj["metadata"]["turn"] = current_turn_for_metadata
             if location:
                 user_msg_obj["metadata"]["location"] = location
+            
+
+            
             current_context.append(user_msg_obj)
             self._save_context_for_tab(self.current_tab_index)
             self._last_user_msg_for_post_rules = user_message
@@ -1254,6 +1257,7 @@ class ChatbotUI(QWidget):
                                 force_narrator_details['active'] = False
                                 if not force_narrator_details.get('system_message'):
                                     tab_data.pop('force_narrator', None)
+            
             if self.inference_thread and self.inference_thread.isRunning():
                 return
             output_widget = self.get_current_output_widget()
@@ -1262,6 +1266,25 @@ class ChatbotUI(QWidget):
             if output_widget is None or current_context is None or tab_data is None:
                 print("Error: No active tab selected or tab data missing for _complete_message_processing.")
                 return
+            
+            # Apply post visibility metadata to the user message after rules are evaluated
+            if tab_data and current_context and hasattr(self, '_player_post_visibility_queue') and self._player_post_visibility_queue:
+                # Find the last user message in the context
+                for i in range(len(current_context) - 1, -1, -1):
+                    msg = current_context[i]
+                    if msg.get('role') == 'user' and msg.get('content') == user_message:
+                        # Apply post visibility metadata from the queue if any "Player Post" visibility rules exist
+                        for queue_item in self._player_post_visibility_queue:
+                            post_visibility_data = queue_item['data']
+                            if 'metadata' not in msg:
+                                msg['metadata'] = {}
+                            msg['metadata']['post_visibility'] = post_visibility_data
+                            print(f"[DEBUG] Applied queued post visibility to user message: {post_visibility_data}")
+                        
+                        # Clear the queue after applying
+                        self._player_post_visibility_queue.clear()
+                        break
+
             if is_timer_triggered_action and "INTERNAL_TIMER_NARRATOR_ACTION" in user_message:
                 self.character_name = "Narrator"
             context_for_llm = []
@@ -1371,7 +1394,7 @@ class ChatbotUI(QWidget):
                         print(f"[NPC NOTES] Error injecting notes for {acting_character_for_memory} in main inference: {e}")
             if workflow_data_dir:
                 try:
-                    player_name = _get_player_character_name(self, workflow_data_dir)
+                    player_name = _get_player_character_name(workflow_data_dir)
                     current_setting_name = _get_player_current_setting_name(workflow_data_dir)
                     setting_info_msg_content = None
                     setting_file_path = None
@@ -1407,7 +1430,14 @@ class ChatbotUI(QWidget):
             history_to_add = []
             current_scene = tab_data.get('scene_number', 1)
             print(f"  Filtering history for {self.character_name}. Keeping messages from scene {current_scene}.")
-            for msg in current_context:
+            
+            # Filter conversation history by visibility for the current character
+            from core.utils import _filter_conversation_history_by_visibility
+            filtered_context = _filter_conversation_history_by_visibility(
+                current_context, self.character_name, workflow_data_dir, tab_data
+            )
+            
+            for msg in filtered_context:
                 if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene:
                     content = msg['content']
                     if is_timer_triggered_action and "INTERNAL_TIMER_" in content and msg['role'] == 'user':
@@ -1695,6 +1725,10 @@ class ChatbotUI(QWidget):
             meta["turn"] = current_turn_for_metadata
             if narrator_post_effects:
                 meta["post_effects"] = narrator_post_effects
+                # Add Post Visibility metadata if present
+                if 'post_visibility' in narrator_post_effects:
+                    meta["post_visibility"] = narrator_post_effects['post_visibility']
+
             if meta:
                 message_obj["metadata"] = meta
             current_scene = tab_data.get('scene_number', 1) if tab_data else 1
@@ -1906,6 +1940,7 @@ class ChatbotUI(QWidget):
         rules = tab_data['thought_rules']
         post_inference_scopes = ['llm_reply', 'convo_llm_reply']
         pre_rules = [rule for rule in rules if rule.get('scope') not in post_inference_scopes and rule.get('applies_to') != 'End of Round']
+
         if not pre_rules:
             if hasattr(self, '_cot_next_step') and self._cot_next_step:
                 QTimer.singleShot(0, self._cot_next_step)
@@ -2111,43 +2146,7 @@ class ChatbotUI(QWidget):
             print(f"Quick utility check error: {e}")
             return "no"
 
-    def save_system_context(self, tab_index, event=None):
-        if not (0 <= tab_index < len(self.tabs_data) and self.tabs_data[tab_index] is not None):
-            print(f"Error: Cannot save system context for invalid tab index {tab_index}")
-            if event:
-                editor = self.tabs_data[tab_index].get('system_context_editor')
-                if editor and hasattr(editor, 'focusOutEvent'):
-                    QTextEdit.focusOutEvent(editor, event)
-            return
-        tab_data = self.tabs_data[tab_index]
-        system_context_editor = tab_data.get('system_context_editor')
-        system_context_file = tab_data.get('system_context_file')
-        if not system_context_editor and 'start_conditions_manager_widget' in tab_data:
-            system_context_editor = tab_data['start_conditions_manager_widget']
-        if not system_context_editor or not system_context_file:
-            print(f"Error: Missing system context editor or file path for tab {tab_index}")
-            if event:
-                if hasattr(system_context_editor, 'focusOutEvent'):
-                    QTextEdit.focusOutEvent(system_context_editor, event)
-            return
-        try:
-            context_dir = os.path.dirname(system_context_file)
-            if context_dir and not os.path.exists(context_dir):
-                os.makedirs(context_dir)
-            if hasattr(system_context_editor, '_save_system_prompt'):
-                system_context_editor._save_system_prompt()
-            elif hasattr(system_context_editor, 'toPlainText'):
-                system_context = system_context_editor.toPlainText()
-                with open(system_context_file, 'w', encoding='utf-8') as f:
-                    f.write(system_context)
-            else:
-                print(f"Error: system_context_editor has no recognized save method.")
-            print(f"System context saved for tab {tab_index} to {system_context_file}")
-        except Exception as e:
-            print(f"Error saving system context: {e}")
-        if event:
-            if hasattr(system_context_editor, 'focusOutEvent'):
-                QTextEdit.focusOutEvent(system_context_editor, event)
+
 
     def get_system_context(self, tab_index=None):
         if tab_index is None:
@@ -2738,8 +2737,6 @@ p, li { white-space: pre-wrap; }
             if tab_data:
                 if 'notes_manager_widget' in tab_data and tab_data['notes_manager_widget']:
                     tab_data['notes_manager_widget'].force_save()
-                if 'system_context_editor' in tab_data:
-                    self.save_system_context(i)
                 self._save_tab_settings(i)
         print("Attempting to delete deferred items...")
         if hasattr(self, 'files_to_delete_on_exit') and self.files_to_delete_on_exit:
@@ -2790,7 +2787,7 @@ p, li { white-space: pre-wrap; }
             workflow_dir = tab_data.get('workflow_data_dir')
             if not workflow_dir:
                 return False
-            player_name = _get_player_character_name(self, workflow_dir)
+            player_name = _get_player_character_name(workflow_dir)
             if not player_name:
                 return False
             actor_data, actor_file_path = _get_or_create_actor_data(self, workflow_dir, player_name)
@@ -3358,7 +3355,7 @@ p, li { white-space: pre-wrap; }
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if not workflow_data_dir:
             return []
-        player_character_name = _get_player_character_name(self, workflow_data_dir)
+        player_character_name = _get_player_character_name(workflow_data_dir)
         current_setting_name = _get_player_current_setting_name(workflow_data_dir)
         if not current_setting_name or current_setting_name == "Unknown Setting":
             return []
@@ -3480,7 +3477,7 @@ p, li { white-space: pre-wrap; }
             workflow_data_dir = tab_data.get('workflow_data_dir') if tab_data else None
             if workflow_data_dir:
                 from core.utils import _get_player_character_name
-                player_name = _get_player_character_name(self, workflow_data_dir)
+                player_name = _get_player_character_name(workflow_data_dir)
                 if player_name:
                     result_text = result_text.replace('(player)', player_name)
         if '(setting)' in result_text:
@@ -3505,7 +3502,7 @@ p, li { white-space: pre-wrap; }
                 return value
             if not workflow_data_dir: return ""
             if scope == "player":
-                player_name = _get_player_character_name(self, workflow_data_dir)
+                player_name = _get_player_character_name(workflow_data_dir)
                 if player_name:
                     actor_data, _ = _get_or_create_actor_data(self, workflow_data_dir, player_name)
                     return actor_data.get('variables', {}).get(var_name, "")
@@ -3554,7 +3551,7 @@ p, li { white-space: pre-wrap; }
                     tab_data = self.get_current_tab_data()
                     if tab_data:
                         from core.utils import _get_player_character_name
-                        player_name = _get_player_character_name(self, workflow_data_dir)
+                        player_name = _get_player_character_name(workflow_data_dir)
                         player_name = player_name if player_name else "Player"
                     else:
                         player_name = "Player"
@@ -3626,7 +3623,7 @@ Brief note from {character_name}'s perspective:"""
         player_name = ""
         setting_name = ""
         if workflow_data_dir:
-            player_name = _get_player_character_name(self, workflow_data_dir) or ""
+            player_name = _get_player_character_name(workflow_data_dir) or ""
             setting_name = _get_player_current_setting_name(workflow_data_dir) or ""
         character_name_to_use = rule_character_context_name or ""
         def replace_placeholder(match):
@@ -3673,7 +3670,14 @@ Brief note from {character_name}'s perspective:"""
                         setup_complete = True
                     elif not setup_complete or msg.get('role') == 'system':
                         new_context.append(msg)
-                for msg in full_history_context:
+                # Filter conversation history by visibility for the current character
+                from core.utils import _filter_conversation_history_by_visibility
+                workflow_data_dir = tab_data.get('workflow_data_dir')
+                filtered_context = _filter_conversation_history_by_visibility(
+                    full_history_context, character_name, workflow_data_dir, tab_data
+                )
+                
+                for msg in filtered_context:
                     if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene:
                         content = msg['content']
                         if (msg.get('role') == 'assistant' and 
