@@ -253,7 +253,7 @@ def _process_specific_rule(self, rule, current_user_msg, prev_assistant_msg, rul
                 
             print(f"    Rule '{rule_id}' evaluating text condition (Scope: {scope}) for '{condition[:50]}...'...")
 
-            player_name = _get_player_character_name(self, tab_data.get('workflow_data_dir'))
+            player_name = _get_player_character_name(tab_data.get('workflow_data_dir'))
             prepared_condition_text = _prepare_condition_text(self, condition, player_name, 
                                                              character_name, 
                                                              tab_data, scope, 
@@ -494,7 +494,6 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                             actor_context_for_substitution = character_name_for_rule_context
                         min_str_substituted = self._substitute_variables_in_string(str(min_str), tab_data, actor_context_for_substitution)
                         max_str_substituted = self._substitute_variables_in_string(str(max_str), tab_data, actor_context_for_substitution)
-                        
                         def parse_numeric_value(value_str, field_name):
                             try:
                                 return int(value_str)
@@ -559,8 +558,18 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                     context_str = None
                     if gen_context_type == 'Full Conversation':
                         current_scene_number = tab_data.get('scene_number', 1)
-                        current_scene_messages = [msg for msg in tab_data.get('context', [])
-                                                if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene_number]
+                        workflow_data_dir = tab_data.get('workflow_data_dir')
+                        if character_name_override and workflow_data_dir:
+                            from core.utils import _filter_conversation_history_by_visibility
+                            full_context = tab_data.get('context', [])
+                            filtered_context = _filter_conversation_history_by_visibility(
+                                full_context, character_name_override, workflow_data_dir, tab_data
+                            )
+                            current_scene_messages = [msg for msg in filtered_context
+                                                    if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene_number]
+                        else:
+                            current_scene_messages = [msg for msg in tab_data.get('context', [])
+                                                    if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene_number]
                         formatted_history = [f"{msg.get('role', 'unknown').capitalize()}: {msg.get('content', '')}"
                                             for msg in current_scene_messages]
                         context_str = "\n".join(formatted_history)
@@ -721,6 +730,84 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                     self._narrator_post_effects['brightness'] = brightness_float
             except (ValueError, TypeError):
                 print(f"  >> Rule '{rule_id}' Action: Invalid brightness value '{brightness_value}', skipping")
+        
+        elif action_type == 'Post Visibility':
+            # Store Post Visibility data for metadata attachment when the post is saved
+            applies_to = action_obj.get('applies_to', 'Current Post')
+            mode = action_obj.get('visibility_mode', 'Visible Only To')
+            condition_type = action_obj.get('condition_type', 'Name Match')
+            conditions = action_obj.get('conditions', [])
+            
+            # Convert our UI conditions format to the backend format
+            actor_names = []
+            variable_conditions = []
+            
+            for condition in conditions:
+                if condition.get('type') == 'Name Match':
+                    actor_names.append(condition.get('name', ''))
+                elif condition.get('type') == 'Variable':
+                    var_name = condition.get('variable_name', '')
+                    operator = condition.get('operator', 'equals')
+                    value = condition.get('value', '')
+                    if var_name:
+                        # Convert UI operators to backend operators
+                        operator_mapping = {
+                            'equals': '==',
+                            'not equals': '!=',
+                            'contains': 'contains',
+                            'greater than': '>',
+                            'less than': '<',
+                            'greater than or equal': '>=',
+                            'less than or equal': '<='
+                        }
+                        backend_operator = operator_mapping.get(operator, '==')
+                        variable_conditions.append(f"{var_name} {backend_operator} {value}")
+            
+            post_visibility_data = {
+                'applies_to': applies_to,
+                'mode': mode,
+                'condition_type': condition_type,
+                'actor_names': actor_names,
+                'variable_conditions': variable_conditions
+            }
+            
+            applies_to_rule = rule.get('applies_to', 'Narrator')
+            
+            if applies_to == 'Player Post':
+                # For Player Post visibility, store it separately to be applied to the last user message
+                if not hasattr(self, '_player_post_visibility_queue'):
+                    self._player_post_visibility_queue = []
+                
+                if applies_to_rule == 'Character':
+                    character_name_for_visibility = character_name_for_rule_context or character_name_override
+                    if character_name_for_visibility:
+                        self._player_post_visibility_queue.append({
+                            'character': character_name_for_visibility,
+                            'data': post_visibility_data
+                        })
+                else:
+                    self._player_post_visibility_queue.append({
+                        'character': 'Narrator',
+                        'data': post_visibility_data
+                    })
+                
+                print(f"  >> Rule '{rule_id}' Action: Player Post Visibility queued ({mode}, {condition_type})")
+            else:
+                # For Current Post visibility, store in post effects as before
+                if applies_to_rule == 'Character':
+                    character_name_for_visibility = character_name_for_rule_context or character_name_override
+                    if character_name_for_visibility:
+                        if not hasattr(self, '_character_post_effects'):
+                            self._character_post_effects = {}
+                        if character_name_for_visibility not in self._character_post_effects:
+                            self._character_post_effects[character_name_for_visibility] = {}
+                        self._character_post_effects[character_name_for_visibility]['post_visibility'] = post_visibility_data
+                else:
+                    if not hasattr(self, '_narrator_post_effects'):
+                        self._narrator_post_effects = {}
+                    self._narrator_post_effects['post_visibility'] = post_visibility_data
+                
+                print(f"  >> Rule '{rule_id}' Action: Current Post Visibility set ({mode}, {condition_type})")
         elif action_type == 'New Scene':
             if tab_data:
                 current_scene = tab_data.get('scene_number', 1)
@@ -1074,7 +1161,7 @@ def _perform_change_actor_location(self, tab_data, actor_string, mode, target_se
     workflow_data_dir = tab_data.get('workflow_data_dir')
     if not workflow_data_dir:
         return False
-    player_name = _get_player_character_name(self, workflow_data_dir)
+    player_name = _get_player_character_name(workflow_data_dir)
     current_player_setting = _get_player_current_setting_name(workflow_data_dir)
     actors_to_move = []
     raw_actor_names = [name.strip() for name in actor_string.split(',') if name.strip()]
@@ -1209,7 +1296,7 @@ def _retry_rule_with_fallback(self, rule, rule_id, rule_index, current_user_msg,
         return
     tags_for_prompt = ", ".join([f"[{t}]" for t in tags])
     scope = rule.get('scope', 'user_message')
-    player_name = _get_player_character_name(self, tab_data.get('workflow_data_dir'))
+    player_name = _get_player_character_name(tab_data.get('workflow_data_dir'))
     prepared_condition_text = _prepare_condition_text(self, condition, player_name, 
                                                      character_name_for_rule_context, 
                                                      tab_data, scope, 
