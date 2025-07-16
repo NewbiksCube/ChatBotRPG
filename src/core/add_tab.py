@@ -154,16 +154,24 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
     final_tab_settings_file = os.path.join(tab_dir, "tab_settings.json")
     tab_settings = DEFAULT_TAB_SETTINGS.copy()
     tab_settings['dev_notes'] = ''
+    
+    existing_system_data = {}
     if os.path.exists(final_tab_settings_file):
         try:
             with open(final_tab_settings_file, 'r', encoding='utf-8') as f:
                 loaded_settings = json.load(f)
                 for key, value in loaded_settings.items():
                     if value is not None:
-                         tab_settings[key] = value
+                        if key.startswith('system_'):
+                            existing_system_data[key] = value
+                        else:
+                            tab_settings[key] = value
         except (json.JSONDecodeError, IOError) as e:
             print(f"Error loading settings from {final_tab_settings_file}: {e}. Using defaults.")
-    else:
+    
+    tab_settings.update(existing_system_data)
+    
+    if not os.path.exists(final_tab_settings_file):
         try:
             with open(final_tab_settings_file, 'w', encoding='utf-8') as f:
                 json.dump(tab_settings, f, indent=4)
