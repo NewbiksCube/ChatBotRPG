@@ -208,7 +208,11 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
         except Exception as e:
             traceback.print_exc()
         history_to_add = []
-        for msg in full_history_context:
+        from core.utils import _filter_conversation_history_by_visibility
+        filtered_context = _filter_conversation_history_by_visibility(
+            full_history_context, character_name, workflow_data_dir, tab_data
+        )
+        for msg in filtered_context:
             if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene:
                 content = msg['content']
                 if content and "Sorry, API error" in content:
@@ -356,13 +360,14 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
                     else:
                         npc_context_for_llm.insert(0, {"role": "system", "content": content})
         if is_timer_triggered:
-            print(f"[TIMER DEBUG] Character post for {character_name}: is_timer_triggered={is_timer_triggered}, timer_system_modifications={timer_system_modifications}")
             if timer_system_modifications:
                 for i, timer_mod in enumerate(timer_system_modifications):
                     position = timer_mod.get('position', 'prepend')
                     content = timer_mod.get('action', '')
                     sys_msg_position = timer_mod.get('system_message_position', 'first')
                     if content:
+                        if hasattr(self, '_substitute_variables_in_string'):
+                            content = self._substitute_variables_in_string(content, tab_data, character_name)
                         if sys_msg_position == 'first':
                             if position == 'prepend':
                                 npc_context_for_llm.insert(1, {"role": "system", "content": content})
@@ -375,7 +380,6 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
                                     npc_context_for_llm.insert(0, {"role": "system", "content": content})
                         else:
                             npc_context_for_llm.append({"role": "user", "content": content})
-
         if system_message_override:
             npc_context_for_llm.append({"role": "system", "content": system_message_override})
         npc_context_for_llm.append({
@@ -401,6 +405,8 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
             if hasattr(self, '_character_post_effects') and character_name in self._character_post_effects:
                 character_post_effects = self._character_post_effects[character_name].copy()
                 metadata_obj["post_effects"] = character_post_effects
+                if 'post_visibility' in character_post_effects:
+                    metadata_obj["post_visibility"] = character_post_effects['post_visibility']
             self.display_message('assistant', result_text, text_tag=tag_for_this_npc, character_name=character_name, post_effects=character_post_effects)
             if hasattr(self, 'return3_sound') and self.return3_sound:
                 self.return3_sound.play()
