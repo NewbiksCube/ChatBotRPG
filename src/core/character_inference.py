@@ -15,7 +15,7 @@ def _get_player_name_for_context(workflow_data_dir):
         class DummyUI:
             pass
         dummy_ui = DummyUI()
-        player_name = _get_player_character_name(dummy_ui, workflow_data_dir)
+        player_name = _get_player_character_name(workflow_data_dir)
         return player_name if player_name else "Player"
     except Exception:
         return "Player"
@@ -127,7 +127,7 @@ def _start_npc_inference_threads(self):
         tab_data['npc_mode_sequential'] = (system2 == 'sequential')
         all_rules = tab_data.get('thought_rules', [])
         workflow_data_dir = tab_data.get('workflow_data_dir')
-        player_name = _get_player_character_name(self, workflow_data_dir) if workflow_data_dir else None
+        player_name = _get_player_character_name(workflow_data_dir) if workflow_data_dir else None
         npcs_in_scene = []
         current_setting_file = None
         setting_data = None
@@ -290,8 +290,15 @@ def _start_npc_inference_threads(self):
                 )
             full_history_context = self.get_current_context()
             current_scene = tab_data.get('scene_number', 1)
+            
+            # Filter conversation history by visibility for the current character
+            from core.utils import _filter_conversation_history_by_visibility
+            filtered_context = _filter_conversation_history_by_visibility(
+                full_history_context, char, workflow_data_dir, tab_data
+            )
+            
             history_to_add = []
-            for msg in full_history_context:
+            for msg in filtered_context:
                 if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene:
                     content = msg['content']
                     if content and "Sorry, API error" in content:
@@ -353,8 +360,8 @@ def _start_npc_inference_threads(self):
                             prepared_condition_text = _prepare_condition_text(
                                 self, text_condition, player_name, current_char_name=char, tab_data=tab_data, scope=rule_scope
                             )
-                            last_user_msg = full_history_context[-1]['content'] if full_history_context and full_history_context[-1]['role'] == 'user' else ""
-                            last_asst_msg = full_history_context[-2]['content'] if len(full_history_context) > 1 and full_history_context[-2]['role'] == 'assistant' else ""
+                            last_user_msg = filtered_context[-1]['content'] if filtered_context and filtered_context[-1]['role'] == 'user' else ""
+                            last_asst_msg = filtered_context[-2]['content'] if len(filtered_context) > 1 and filtered_context[-2]['role'] == 'assistant' else ""
                             target_msg_for_llm = ""
                             is_scope_valid = True
                             if rule_scope == 'llm_reply':
@@ -363,7 +370,7 @@ def _start_npc_inference_threads(self):
                                 is_scope_valid = False
                             elif rule_scope == 'full_conversation':
                                 current_scene = tab_data.get('scene_number', 1)
-                                current_scene_messages = [m for m in full_history_context 
+                                current_scene_messages = [m for m in filtered_context 
                                                          if m.get('role') != 'system' and m.get('scene', 1) == current_scene]
                                 formatted_history = [f"{m.get('role','u').capitalize()}: {m.get('content','')}"
                                                     for m in current_scene_messages]
@@ -438,6 +445,8 @@ def _start_npc_inference_threads(self):
                                 value = action_obj.get('value', '')
                                 position = action_obj.get('position', 'prepend')
                                 if value:
+                                    if hasattr(self, '_substitute_variables_in_string'):
+                                        value = self._substitute_variables_in_string(value, tab_data, char)
                                     context_modifications.append({'role': 'system', 'content': value, 'position': position})
                                     print(f"        [Action] Queued system message for '{char}' context ({position})")
                     if matched_pair_data:
@@ -447,8 +456,6 @@ def _start_npc_inference_threads(self):
                         if returned_tag:
                             tag_for_this_npc = returned_tag
                             print(f"    -> Captured tag '{tag_for_this_npc}' for NPC '{char}' from rule '{rule_id}'")
-                        
-                        # Check for exit rule processing immediately after action processing
                         if char in tab_data.get('_characters_to_exit_rules', set()):
                             print(f"[EXIT RULE PROCESSING] Character '{char}' marked to exit rule processing - stopping further rules for this character")
                             break
@@ -480,7 +487,7 @@ def _start_npc_inference_threads(self):
                 scene_chars_list = self.get_character_names_in_scene_for_timers(tab_data)
                 chars_in_scene.update(s for s in scene_chars_list if s != char)
             try:
-                mem_summary = _get_follower_memories_for_context(self, workflow_data_dir, char, list(chars_in_scene), full_history_context, scenes_to_recall=scenes_to_recall)
+                mem_summary = _get_follower_memories_for_context(self, workflow_data_dir, char, list(chars_in_scene), filtered_context, scenes_to_recall=scenes_to_recall)
                 if mem_summary:
                     npc_context_for_llm.append({"role": "user", "content": mem_summary})
             except Exception as e:
@@ -513,14 +520,22 @@ def _start_npc_inference_threads(self):
                 npc_context_for_llm.append(item)
             for mod in context_modifications:
                 if mod.get('role') == 'system' and mod.get('position') == 'prepend':
-                    npc_context_for_llm.insert(1, {"role": "system", "content": mod['content']})
+                    # Apply variable substitution to system message content
+                    content = mod['content']
+                    if hasattr(self, '_substitute_variables_in_string'):
+                        content = self._substitute_variables_in_string(content, tab_data, char)
+                    npc_context_for_llm.insert(1, {"role": "system", "content": content})
             npc_context_for_llm.append({
                 "role": "user", 
                 "content": f"(You are playing as: {char}. It is now {char}'s turn. What does {char} do or say next?)"
             })
             for mod in context_modifications:
                 if mod.get('role') == 'system' and mod.get('position') == 'append':
-                    npc_context_for_llm.append({"role": "system", "content": mod['content']})
+                    # Apply variable substitution to system message content
+                    content = mod['content']
+                    if hasattr(self, '_substitute_variables_in_string'):
+                        content = self._substitute_variables_in_string(content, tab_data, char)
+                    npc_context_for_llm.append({"role": "system", "content": content})
             for mod in context_modifications:
                 if mod.get('switch_model'):
                     model_to_use = mod['switch_model']
@@ -898,6 +913,9 @@ def _display_next_npc_message(self):
             save_npc_message_obj["metadata"]["text_tag"] = text_tag_local
         if post_effects_local is not None:
             save_npc_message_obj["metadata"]["post_effects"] = post_effects_local
+            # Add Post Visibility metadata if present
+            if 'post_visibility' in post_effects_local:
+                save_npc_message_obj["metadata"]["post_visibility"] = post_effects_local['post_visibility']
         workflow_data_dir = tab_data_check.get('workflow_data_dir')
         if workflow_data_dir:
             location = _get_player_current_setting_name(workflow_data_dir)
