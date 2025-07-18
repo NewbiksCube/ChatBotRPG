@@ -12,9 +12,6 @@ from core.process_keywords import inject_keywords_into_context, get_location_inf
 def _get_player_name_for_context(workflow_data_dir):
     try:
         from core.utils import _get_player_character_name
-        class DummyUI:
-            pass
-        dummy_ui = DummyUI()
         player_name = _get_player_character_name(workflow_data_dir)
         return player_name if player_name else "Player"
     except Exception:
