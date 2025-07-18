@@ -127,7 +127,7 @@ def substitute_player_name_in_message(ui_instance, tab_index, message_text):
         return message_text
     try:
         from core.utils import _get_player_character_name
-        player_name = _get_player_character_name(ui_instance, workflow_data_dir)
+        player_name = _get_player_character_name(workflow_data_dir)
         if player_name:
             return message_text.replace('(player)', player_name)
         else:
