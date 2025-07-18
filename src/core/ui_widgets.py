@@ -1168,6 +1168,7 @@ class ChatMessageWidget(QFrame):
             if not workflow_data_dir:
                 return None
             game_actors_dir = os.path.join(workflow_data_dir, 'game', 'actors')
+            player_candidates = []
             if os.path.exists(game_actors_dir):
                 for filename in os.listdir(game_actors_dir):
                     if filename.endswith('.json'):
@@ -1176,21 +1177,33 @@ class ChatMessageWidget(QFrame):
                             with open(file_path, 'r', encoding='utf-8') as f:
                                 actor_data = json.load(f)
                             if actor_data.get('isPlayer', False) or actor_data.get('variables', {}).get('is_player', False):
-                                return actor_data.get('name', 'Player')
+                                player_name = actor_data.get('name')
+                                if player_name:
+                                    player_candidates.append((filename, player_name))
                         except Exception:
                             continue
-            resources_actors_dir = os.path.join(workflow_data_dir, 'resources', 'data files', 'actors')
-            if os.path.exists(resources_actors_dir):
-                for filename in os.listdir(resources_actors_dir):
-                    if filename.endswith('.json'):
-                        file_path = os.path.join(resources_actors_dir, filename)
-                        try:
-                            with open(file_path, 'r', encoding='utf-8') as f:
-                                actor_data = json.load(f)
-                            if actor_data.get('isPlayer', False) or actor_data.get('variables', {}).get('is_player', False):
-                                return actor_data.get('name', 'Player')
-                        except Exception:
-                            continue
+            if not player_candidates:
+                resources_actors_dir = os.path.join(workflow_data_dir, 'resources', 'data files', 'actors')
+                if os.path.exists(resources_actors_dir):
+                    for filename in os.listdir(resources_actors_dir):
+                        if filename.endswith('.json'):
+                            file_path = os.path.join(resources_actors_dir, filename)
+                            try:
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    actor_data = json.load(f)
+                                if actor_data.get('isPlayer', False) or actor_data.get('variables', {}).get('is_player', False):
+                                    player_name = actor_data.get('name')
+                                    if player_name:
+                                        player_candidates.append((filename, player_name))
+                            except Exception:
+                                continue
+            if player_candidates:
+                for filename, player_name in player_candidates:
+                    if filename.lower() != 'player.json':
+                        return player_name
+                for filename, player_name in player_candidates:
+                    if filename.lower() == 'player.json':
+                        return player_name
             return None
         except Exception as e:
             print(f"Error getting player character name: {e}")
