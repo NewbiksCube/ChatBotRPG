@@ -21,6 +21,9 @@ class StartConditionsManagerWidget(QWidget):
         self._load_character_system_prompt()
         self._load_origin()
         self._load_starting_datetime()
+        self.datetime_edit.dateTimeChanged.connect(self._save_starting_datetime)
+        self.advancement_group.buttonClicked.connect(self._save_advancement_mode)
+        self.time_multiplier_spin.valueChanged.connect(self._save_time_multiplier)
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -90,16 +93,13 @@ class StartConditionsManagerWidget(QWidget):
         self.origin_lineedit.setPlaceholderText("Default Setting")
         layout.addWidget(self.origin_lineedit)
         self.origin_lineedit.editingFinished.connect(self._save_origin)
-        
         self.starting_datetime_label = QLabel("Starting Date/Time:")
         self.starting_datetime_label.setFont(QFont('Consolas', 11, QFont.Bold))
         layout.addWidget(self.starting_datetime_label)
-        
         datetime_input_layout = QHBoxLayout()
         datetime_label = QLabel("Initial Date/Time:")
         datetime_label.setFont(QFont('Consolas', 11))
         datetime_input_layout.addWidget(datetime_label)
-        
         self.datetime_edit = QDateTimeEdit()
         self.datetime_edit.setObjectName("StartingDateTimeEdit")
         self.datetime_edit.setFont(QFont('Consolas', 11))
@@ -110,36 +110,30 @@ class StartConditionsManagerWidget(QWidget):
         self.datetime_edit.setMinimumDateTime(min_date)
         self.datetime_edit.setMaximumDateTime(max_date)
         datetime_input_layout.addWidget(self.datetime_edit)
-        
         self.format_hint = QLabel("YYYY-MM-DD HH:MM (24h)")
         self.format_hint.setFont(QFont('Consolas', 11))
         self.format_hint.setStyleSheet(f"color: {self.theme_colors['base_color']}; margin-left: 8px;")
         datetime_input_layout.addWidget(self.format_hint)
         datetime_input_layout.addStretch()
         layout.addLayout(datetime_input_layout)
-        
         advancement_layout = QHBoxLayout()
         advancement_label = QLabel("Mode:")
         advancement_label.setFont(QFont('Consolas', 11))
         advancement_layout.addWidget(advancement_label)
-        
         self.advancement_group = QButtonGroup(self)
         self.static_radio = QRadioButton("Static")
         self.static_radio.setFont(QFont('Consolas', 11))
         self.static_radio.setChecked(True)
         self.advancement_group.addButton(self.static_radio, 0)
         advancement_layout.addWidget(self.static_radio)
-        
         self.realtime_radio = QRadioButton("Realtime")
         self.realtime_radio.setFont(QFont('Consolas', 11))
         self.advancement_group.addButton(self.realtime_radio, 1)
         advancement_layout.addWidget(self.realtime_radio)
-        
         advancement_layout.addSpacing(20)
         multiplier_label = QLabel("Multiplier:")
         multiplier_label.setFont(QFont('Consolas', 11))
         advancement_layout.addWidget(multiplier_label)
-        
         self.time_multiplier_spin = QDoubleSpinBox()
         self.time_multiplier_spin.setRange(0.0, 100.0)
         self.time_multiplier_spin.setSingleStep(0.1)
@@ -152,11 +146,6 @@ class StartConditionsManagerWidget(QWidget):
         advancement_layout.addWidget(self.time_multiplier_spin)
         advancement_layout.addStretch()
         layout.addLayout(advancement_layout)
-        
-        self.datetime_edit.dateTimeChanged.connect(self._save_starting_datetime)
-        self.advancement_group.buttonClicked.connect(self._save_advancement_mode)
-        self.time_multiplier_spin.valueChanged.connect(self._save_time_multiplier)
-        
         self.sys_label = QLabel("Base System Prompt:")
         self.sys_label.setFont(QFont('Consolas', 12, QFont.Bold))
         layout.addWidget(self.sys_label)
@@ -166,7 +155,6 @@ class StartConditionsManagerWidget(QWidget):
         self.system_prompt_editor.setPlaceholderText("Enter system instructions for the AI here.\nThis message will be sent as a system prompt with each interaction.")
         layout.addWidget(self.system_prompt_editor)
         self.system_prompt_editor.textChanged.connect(self._save_system_prompt)
-        
         self.char_sys_label = QLabel("Character System Prompt:")
         self.char_sys_label.setFont(QFont('Consolas', 12, QFont.Bold))
         layout.addWidget(self.char_sys_label)
@@ -176,12 +164,10 @@ class StartConditionsManagerWidget(QWidget):
         self.character_system_prompt_editor.setPlaceholderText("Enter system instructions for character AI here.\nThis message will be sent as a system prompt for character interactions.")
         layout.addWidget(self.character_system_prompt_editor)
         self.character_system_prompt_editor.textChanged.connect(self._save_character_system_prompt)
-        
         layout.addStretch(1)
         self.intro_checkbox.stateChanged.connect(self._on_intro_changed)
         self.scroll_area.setWidget(self.scroll_content)
         main_layout.addWidget(self.scroll_area)
-        
         self._apply_theme_styles()
 
     def _apply_theme_styles(self):
@@ -650,10 +636,8 @@ class StartConditionsManagerWidget(QWidget):
                 widget = item['widget']
                 is_last_item = (i == total_items - 1)
                 if item['type'] == 'message':
-                    # For message items, find buttons within the container widget
                     if hasattr(widget, 'layout') and widget.layout():
                         layout = widget.layout()
-                        # Layout should have: editor(0), up(1), down(2), plus(3), minus(4)
                         up_btn = layout.itemAt(1).widget() if layout.count() > 1 else None
                         down_btn = layout.itemAt(2).widget() if layout.count() > 2 else None
                         plus_btn = layout.itemAt(3).widget() if layout.count() > 3 else None
@@ -672,7 +656,7 @@ class StartConditionsManagerWidget(QWidget):
                     if hasattr(widget, 'layout') and widget.layout():
                         main_layout = widget.layout()
                         if main_layout.count() > 0:
-                            controls_item = main_layout.itemAt(0)  # First item should be controls row
+                            controls_item = main_layout.itemAt(0)
                             if controls_item and hasattr(controls_item, 'layout'):
                                 controls_layout = controls_item.layout()
                                 up_btn = controls_layout.itemAt(2).widget() if controls_layout.count() > 2 else None
@@ -710,7 +694,6 @@ class StartConditionsManagerWidget(QWidget):
                 break
 
     def _move_intro_item_up(self, widget):
-        """Move any intro item (message or player_gen) up in the list."""
         current_index = -1
         for i, item in enumerate(self.intro_items):
             if item['widget'] == widget:
@@ -732,7 +715,6 @@ class StartConditionsManagerWidget(QWidget):
                 main_ui.sort_sound.play()
             except Exception:
                 main_ui.sort_sound = None
-        
         self._update_intro_message_buttons()
         self._save_intro_state()
 
@@ -758,7 +740,6 @@ class StartConditionsManagerWidget(QWidget):
                 main_ui.sort_sound.play()
             except Exception:
                 main_ui.sort_sound = None
-        
         self._update_intro_message_buttons()
         self._save_intro_state()
 
@@ -961,19 +942,15 @@ class StartConditionsManagerWidget(QWidget):
                         gamestate = json.load(f)
                 else:
                     gamestate = {}
-                
                 if 'system_prompts' not in gamestate:
                     gamestate['system_prompts'] = {}
-                
                 gamestate['system_prompts']['character'] = self.character_system_prompt_editor.toPlainText()
-                
                 with open(gamestate_path, 'w', encoding='utf-8') as f:
                     json.dump(gamestate, f, indent=2, ensure_ascii=False)
             except Exception as e:
                 print(f"[StartConditionsManager] Error saving character system prompt: {e}") 
 
     def _get_main_ui(self):
-        """Get the main UI instance to access sound effects."""
         parent = self.parentWidget()
         while parent:
             if hasattr(parent, 'add_rule_sound'):
@@ -987,26 +964,21 @@ class StartConditionsManagerWidget(QWidget):
         try:
             with open(self.variables_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
             starting_datetime = data.get('starting_datetime', '2024-01-01 12:00:00')
             advancement_mode = data.get('advancement_mode', 'Static')
             time_multiplier = data.get('time_multiplier', 1.0)
-            
             self.datetime_edit.blockSignals(True)
             self.datetime_edit.setDateTime(QDateTime.fromString(starting_datetime, "yyyy-MM-dd hh:mm"))
             self.datetime_edit.blockSignals(False)
-            
             self.advancement_group.blockSignals(True)
             if advancement_mode == 'Realtime':
                 self.realtime_radio.setChecked(True)
             else:
                 self.static_radio.setChecked(True)
             self.advancement_group.blockSignals(False)
-            
             self.time_multiplier_spin.blockSignals(True)
             self.time_multiplier_spin.setValue(time_multiplier)
             self.time_multiplier_spin.blockSignals(False)
-            
         except Exception as e:
             print(f"[StartConditionsManager] Error loading starting datetime: {e}")
     
@@ -1019,9 +991,7 @@ class StartConditionsManagerWidget(QWidget):
                     data = json.load(f)
             else:
                 data = {}
-            
             data['starting_datetime'] = self.datetime_edit.dateTime().toString("yyyy-MM-dd hh:mm")
-            
             with open(self.variables_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
