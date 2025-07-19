@@ -2,7 +2,7 @@ from PyQt5.QtCore import QTimer
 import json
 import os
 import random
-from core.utils import _get_player_current_setting_name, _get_or_create_actor_data, _find_player_character_file, _load_json_safely, _find_setting_file_prioritizing_game_dir
+from core.utils import _get_player_current_setting_name, _get_or_create_actor_data, _find_player_character_file, _load_json_safely, _find_setting_file_prioritizing_game_dir, _get_player_character_name, _find_actor_file_path
 
 def _apply_string_operation_mode(prev_value, new_value, set_var_mode, delimiter="/"):
     if isinstance(prev_value, (int, float)) and isinstance(new_value, (int, float)):
@@ -909,6 +909,107 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 print(f"WARNING: Cannot set variable '{var_name}'. Scope is '{variable_scope}', but required context (e.g., character_name for 'Character' scope) might be missing or scope is unhandled.")
         else:
             print(f"ERROR: Cannot set variable - var_name is empty.")
+    
+    elif obj_type == 'Add Item':
+        item_name = obj.get('item_name', '')
+        quantity = obj.get('quantity', '1')
+        target_type = obj.get('target_type', 'Setting')
+        target_name = obj.get('target_name', '')
+        generate = obj.get('generate', False)
+        
+        workflow_data_dir = tab_data.get('workflow_data_dir')
+        if not workflow_data_dir:
+            print(f"ERROR: Cannot process Add Item - workflow_data_dir not found")
+            return
+        
+        target_file_path = None
+        if target_type == 'Setting':
+            target_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, target_name)
+            if isinstance(target_file_path, tuple):
+                target_file_path = target_file_path[0]
+        elif target_type == 'Character':
+            class DummySelf:
+                pass
+            dummy_self = DummySelf()
+            target_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, target_name)
+        
+        rule_id = rule.get('id', 'Unknown') if rule else 'Unknown'
+        print(f"  >> Rule '{rule_id}' Action: Add Item called - Item: '{item_name}', Quantity: {quantity}, Target Type: {target_type}, Target Name: '{target_name}' ({target_file_path}), Generate: {generate}")
+    
+    elif obj_type == 'Remove Item':
+        item_name = obj.get('item_name', '')
+        quantity = obj.get('quantity', '1')
+        target_type = obj.get('target_type', 'Setting')
+        target_name = obj.get('target_name', '')
+        
+        workflow_data_dir = tab_data.get('workflow_data_dir')
+        if not workflow_data_dir:
+            print(f"ERROR: Cannot process Remove Item - workflow_data_dir not found")
+            return
+        
+        target_file_path = None
+        if target_type == 'Setting':
+            target_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, target_name)
+            if isinstance(target_file_path, tuple):
+                target_file_path = target_file_path[0]
+        elif target_type == 'Character':
+            class DummySelf:
+                pass
+            dummy_self = DummySelf()
+            target_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, target_name)
+        
+        rule_id = rule.get('id', 'Unknown') if rule else 'Unknown'
+        print(f"  >> Rule '{rule_id}' Action: Remove Item called - Item: '{item_name}', Quantity: {quantity}, Target Type: {target_type}, Target Name: '{target_name}' ({target_file_path})")
+    
+    elif obj_type == 'Move Item':
+        item_name = obj.get('item_name', '')
+        quantity = obj.get('quantity', 1)
+        from_type = obj.get('from_type', '')
+        from_name = obj.get('from_name', '')
+        to_type = obj.get('to_type', '')
+        to_name = obj.get('to_name', '')
+        
+        workflow_data_dir = tab_data.get('workflow_data_dir')
+        if not workflow_data_dir:
+            print(f"ERROR: Cannot process Move Item - workflow_data_dir not found")
+            return
+        
+        player_name = _get_player_character_name(workflow_data_dir)
+        current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+        if from_name == "(Player)" and player_name:
+            from_name = player_name
+        elif not from_name and current_setting_name:
+            from_name = current_setting_name
+        if to_name == "(Player)" and player_name:
+            to_name = player_name
+        elif not to_name and current_setting_name:
+            to_name = current_setting_name
+        
+        from_file_path = None
+        to_file_path = None
+        
+        if from_type == 'Setting':
+            from_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, from_name)
+            if isinstance(from_file_path, tuple):
+                from_file_path = from_file_path[0]
+        elif from_type == 'Character':
+            class DummySelf:
+                pass
+            dummy_self = DummySelf()
+            from_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, from_name)
+        
+        if to_type == 'Setting':
+            to_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, to_name)
+            if isinstance(to_file_path, tuple):
+                to_file_path = to_file_path[0]
+        elif to_type == 'Character':
+            class DummySelf:
+                pass
+            dummy_self = DummySelf()
+            to_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, to_name)
+        
+        rule_id = rule.get('id', 'Unknown') if rule else 'Unknown'
+        print(f"  >> Rule '{rule_id}' Action: Move Item called - Item: '{item_name}', Quantity: {quantity}, From: {from_type} '{from_name}' ({from_file_path}), To: {to_type} '{to_name}' ({to_file_path})")
     
     elif obj_type == 'Game Over':
         game_over_message = obj.get('game_over_message', 'Game Over')
