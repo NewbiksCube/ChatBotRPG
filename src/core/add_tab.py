@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QLabe
                              QTextEdit, QLineEdit, QListWidget, QPushButton,
                              QRadioButton, QButtonGroup, QScrollArea, QComboBox,
                              QSpinBox, QMessageBox, QApplication, QAbstractItemView,
-                             QStackedWidget, QSizePolicy, QInputDialog)
+                             QStackedWidget, QSizePolicy, QInputDialog, QFrame)
 from PyQt5.QtCore import Qt, QTimer, QRectF
 from PyQt5.QtGui import QFont, QColor, QPainter, QPainterPath
 from core.memory import AgentMemory
@@ -419,6 +419,16 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
     applies_to_narrator_radio.toggled.connect(update_character_name_visibility)
     applies_to_character_radio.toggled.connect(update_character_name_visibility)
     applies_to_end_of_round_radio.toggled.connect(update_character_name_visibility)
+    conditions_divider = QFrame()
+    conditions_divider.setFrameShape(QFrame.HLine)
+    conditions_divider.setFrameShadow(QFrame.Sunken)
+    conditions_divider.setStyleSheet(f"QFrame {{ background-color: {tab_settings.get('base_color', '#00FF66')}; border: none; }}")
+    conditions_divider.setMaximumHeight(2)
+    rule_details_layout.addWidget(conditions_divider)
+    conditions_label = QLabel("Conditions (at least one):")
+    conditions_label.setObjectName("ConditionsLabel")
+    conditions_label.setFont(QFont('Consolas', 10, QFont.Bold))
+    rule_details_layout.addWidget(conditions_label)
     operator_layout = QHBoxLayout()
     operator_label = QLabel("If there are multiple conditions:")
     operator_label.setObjectName("ConditionsOperatorLabel")
@@ -728,6 +738,17 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         update_all_condition_buttons()
     add_condition_row()
     rule_details_layout.addWidget(conditions_container)
+    
+    question_scope_divider = QFrame()
+    question_scope_divider.setFrameShape(QFrame.HLine)
+    question_scope_divider.setFrameShadow(QFrame.Sunken)
+    question_scope_divider.setStyleSheet(f"QFrame {{ background-color: {tab_settings.get('base_color', '#00FF66')}; border: none; }}")
+    question_scope_divider.setMaximumHeight(2)
+    rule_details_layout.addWidget(question_scope_divider)
+    question_scope_label = QLabel("Condition question (optional):")
+    question_scope_label.setObjectName("QuestionScopeLabel")
+    question_scope_label.setFont(QFont('Consolas', 10, QFont.Bold))
+    rule_details_layout.addWidget(question_scope_label)
     scope_layout = QHBoxLayout()
     scope_label = QLabel("Scope:")
     scope_label.setObjectName("ScopeLabel")
@@ -877,7 +898,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
     center_stack.addWidget(rules_toggle_manager)
     keyword_manager_widget = KeywordManagerWidget(theme_colors=tab_settings, workflow_data_dir=tab_dir)
     center_stack.addWidget(keyword_manager_widget)
-    inventory_manager_widget = InventoryManagerWidget(workflow_data_dir=tab_dir)
+    inventory_manager_widget = InventoryManagerWidget(workflow_data_dir=tab_dir, theme_colors=tab_settings)
     center_stack.addWidget(inventory_manager_widget)
     random_generators_widget = RandomGeneratorsWidget(workflow_data_dir=tab_dir, theme_settings=tab_settings)
     center_stack.addWidget(random_generators_widget)
