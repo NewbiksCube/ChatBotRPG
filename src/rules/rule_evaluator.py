@@ -749,6 +749,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                     var_name = condition.get('variable_name', '')
                     operator = condition.get('operator', 'equals')
                     value = condition.get('value', '')
+                    var_scope = condition.get('variable_scope', 'Global')
                     if var_name:
                         # Convert UI operators to backend operators
                         operator_mapping = {
@@ -761,7 +762,12 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                             'less than or equal': '<='
                         }
                         backend_operator = operator_mapping.get(operator, '==')
-                        variable_conditions.append(f"{var_name} {backend_operator} {value}")
+                        variable_conditions.append({
+                            'var_name': var_name,
+                            'operator': backend_operator,
+                            'value': value,
+                            'variable_scope': var_scope
+                        })
             
             post_visibility_data = {
                 'applies_to': applies_to,
@@ -952,6 +958,12 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                 else:
                     tab_data['_narrator_to_exit_rules_after_current'] = True
                     print(f"  >> Rule '{rule_id}' Action: Exit Rule Processing for Narrator. Further rules will be skipped after this rule completes.")
+        elif action_type == 'Add Item':
+            _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
+        elif action_type == 'Remove Item':
+            _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
+        elif action_type == 'Move Item':
+            _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
         elif action_type == 'Game Over':
             _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
             return None
