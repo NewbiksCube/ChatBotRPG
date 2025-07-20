@@ -48,7 +48,6 @@ class RightSplitterWidget(QWidget):
         self._apply_button_theme()
         self.stacked_widget.setCurrentIndex(2)
         self.setLayout(main_layout)
-        self.setMaximumWidth(300)
 
     @property
     def workflow_data_dir(self):
