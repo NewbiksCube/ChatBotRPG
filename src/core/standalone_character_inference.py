@@ -8,10 +8,7 @@ from rules.rule_evaluator import _evaluate_conditions, _apply_rule_actions_and_c
 def _get_player_name_for_context(workflow_data_dir):
     try:
         from core.utils import _get_player_character_name
-        class DummyUI:
-            pass
-        dummy_ui = DummyUI()
-        player_name = _get_player_character_name(dummy_ui, workflow_data_dir)
+        player_name = _get_player_character_name(workflow_data_dir)
         return player_name if player_name else "Player"
     except Exception:
         return "Player"
@@ -132,8 +129,9 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
                              trigger_type="manual", skip_rules=False, return_result=False, timer_system_modifications=None):
     if not character_name:
         return None
-    from editor_panel.time_manager import update_time
-    update_time(self, tab_data)
+    time_manager_widget = tab_data.get('time_manager_widget')
+    if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
+        time_manager_widget.update_time(self, tab_data)
     
     is_timer_triggered = trigger_type == "timer" or (tab_data and bool(
         tab_data.get('_timer_final_instruction') or 
