@@ -546,65 +546,36 @@ def _get_player_character_name(workflow_data_dir):
                     player_name = data.get('name')
                     if player_name:
                         player_candidates.append((filename, player_name))
-    # Prefer any player that is not named 'player.json'
     for filename, player_name in player_candidates:
         if filename.lower() != 'player.json':
             return player_name
-    # Otherwise, return the 'player.json' one if it exists
     for filename, player_name in player_candidates:
         if filename.lower() == 'player.json':
             return player_name
     return None
 
 def _filter_conversation_history_by_visibility(conversation_history, target_character_name, workflow_data_dir, tab_data):
-    """
-    Filter conversation history based on post visibility metadata.
-    
-    Args:
-        conversation_history: List of message objects from conversation context
-        target_character_name: Name of the character receiving the context
-        workflow_data_dir: Path to workflow data directory
-        tab_data: Current tab data for variable access
-    
-    Returns:
-        Filtered conversation history with visibility-restricted posts removed
-    """
     if not conversation_history:
         return conversation_history
-    
-    # Get actual player character name for "Player" resolution
     actual_player_name = _get_player_character_name(workflow_data_dir)
-    
     filtered_history = []
-    
     for msg in conversation_history:
-        # Skip system messages (they don't have visibility restrictions)
         if msg.get('role') == 'system':
             filtered_history.append(msg)
             continue
-        
-        # Check if message has visibility metadata
         metadata = msg.get('metadata', {})
         visibility_data = metadata.get('post_visibility')
-        
         if not visibility_data:
-            # No visibility restrictions, include the message
             filtered_history.append(msg)
             continue
-        
-        # Parse visibility data
         mode = visibility_data.get('mode', 'Visible Only To')
         condition_type = visibility_data.get('condition_type', 'Name Match')
-        
-        # Determine if this message should be visible to the target character
         should_show = _evaluate_post_visibility(
             mode, condition_type, visibility_data, 
             target_character_name, actual_player_name, workflow_data_dir, tab_data
         )
-        
         if should_show:
             filtered_history.append(msg)
-    
     return filtered_history
 
 def _evaluate_post_visibility(mode, condition_type, visibility_data, target_character_name, actual_player_name, workflow_data_dir, tab_data):
@@ -629,16 +600,14 @@ def _evaluate_post_visibility(mode, condition_type, visibility_data, target_char
         else:
             result = not target_in_list
         return result
-    
     elif condition_type == "Variable":
         variable_conditions = visibility_data.get('variable_conditions', [])
         if not variable_conditions:
             return True if is_inclusionary else False
         conditions_met = []
-        for condition_str in variable_conditions:
+        for cond in variable_conditions:
             condition_met = _evaluate_variable_condition(
-                condition_str, target_character_name, actual_player_name, 
-                workflow_data_dir, tab_data
+                cond, target_character_name, actual_player_name, workflow_data_dir, tab_data
             )
             conditions_met.append(condition_met)
         all_conditions_met = all(conditions_met)
@@ -648,54 +617,138 @@ def _evaluate_post_visibility(mode, condition_type, visibility_data, target_char
             return not all_conditions_met
     return True
 
-def _evaluate_variable_condition(condition_str, target_character_name, actual_player_name, workflow_data_dir, tab_data):
+def _evaluate_variable_condition(condition, target_character_name, actual_player_name, workflow_data_dir, tab_data):
     try:
-        parts = condition_str.strip().split()
-        if len(parts) < 2:
+        if isinstance(condition, dict):
+            var_name = condition.get('var_name')
+            operator = condition.get('operator')
+            value = condition.get('value')
+            var_scope = condition.get('variable_scope', 'Global')
+            var_value = None
+            if var_scope == 'Global':
+                if tab_data and 'variables' in tab_data:
+                    global_vars = tab_data['variables']
+                    if var_name in global_vars:
+                        var_value = global_vars[var_name]
+            elif var_scope == 'Character':
+                if target_character_name and workflow_data_dir:
+                    from core.utils import _find_actor_file_path, _load_json_safely
+                    class DummySelf:
+                        pass
+                    dummy_self = DummySelf()
+                    actor_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, target_character_name)
+                    if actor_file_path:
+                        actor_data = _load_json_safely(actor_file_path)
+                        if actor_data and 'variables' in actor_data:
+                            char_vars = actor_data['variables']
+                            if var_name in char_vars:
+                                var_value = char_vars[var_name]
+            elif var_scope == 'Player':
+                if actual_player_name and workflow_data_dir:
+                    from core.utils import _find_actor_file_path, _load_json_safely
+                    class DummySelf:
+                        pass
+                    dummy_self = DummySelf()
+                    player_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, actual_player_name)
+                    if player_file_path:
+                        player_data = _load_json_safely(player_file_path)
+                        if player_data and 'variables' in player_data:
+                            player_vars = player_data['variables']
+                            if var_name in player_vars:
+                                var_value = player_vars[var_name]
+            elif var_scope == 'Setting':
+                if workflow_data_dir:
+                    from core.utils import _get_player_current_setting_name, _find_setting_file_prioritizing_game_dir, _load_json_safely
+                    current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+                    if current_setting_name and current_setting_name != "Unknown Setting":
+                        class DummySelf:
+                            pass
+                        dummy_self = DummySelf()
+                        setting_file_path, _ = _find_setting_file_prioritizing_game_dir(dummy_self, workflow_data_dir, current_setting_name)
+                        if setting_file_path:
+                            setting_data = _load_json_safely(setting_file_path)
+                            if setting_data and 'variables' in setting_data:
+                                setting_vars = setting_data['variables']
+                                if var_name in setting_vars:
+                                    var_value = setting_vars[var_name]
+            if operator == "==":
+                return str(var_value) == str(value)
+            elif operator == "!=":
+                return str(var_value) != str(value)
+            elif operator == ">":
+                try:
+                    return float(var_value) > float(value)
+                except (ValueError, TypeError):
+                    return False
+            elif operator == "<":
+                try:
+                    return float(var_value) < float(value)
+                except (ValueError, TypeError):
+                    return False
+            elif operator == ">=":
+                try:
+                    return float(var_value) >= float(value)
+                except (ValueError, TypeError):
+                    return False
+            elif operator == "<=":
+                try:
+                    return float(var_value) <= float(value)
+                except (ValueError, TypeError):
+                    return False
+            elif operator == "contains":
+                return str(value) in str(var_value)
+            elif operator == "not contains":
+                return str(value) not in str(var_value)
+            elif operator == "exists":
+                return var_value is not None and var_value != ""
+            elif operator == "not exists":
+                return var_value is None or var_value == ""
             return False
-        var_name = parts[0]
-        operator = parts[1]
-        value = " ".join(parts[2:]) if len(parts) > 2 else None
-        if operator in ["exists", "not exists"]:
-            value = None
-        var_value = _get_variable_value_for_visibility(var_name, target_character_name, actual_player_name, workflow_data_dir, tab_data)
-        if operator == "==":
-            return str(var_value) == str(value)
-        elif operator == "!=":
-            return str(var_value) != str(value)
-        elif operator == ">":
-            try:
-                return float(var_value) > float(value)
-            except (ValueError, TypeError):
+        else:
+            parts = condition.strip().split()
+            if len(parts) < 2:
                 return False
-        elif operator == "<":
-            try:
-                return float(var_value) < float(value)
-            except (ValueError, TypeError):
-                return False
-        elif operator == ">=":
-            try:
-                return float(var_value) >= float(value)
-            except (ValueError, TypeError):
-                return False
-        elif operator == "<=":
-            try:
-                return float(var_value) <= float(value)
-            except (ValueError, TypeError):
-                return False
-        elif operator == "contains":
-            return str(value) in str(var_value)
-        elif operator == "not contains":
-            return str(value) not in str(var_value)
-        elif operator == "exists":
-            return var_value is not None and var_value != ""
-        elif operator == "not exists":
-            return var_value is None or var_value == ""
-        
-        return False
-        
+            var_name = parts[0]
+            operator = parts[1]
+            value = " ".join(parts[2:]) if len(parts) > 2 else None
+            if operator in ["exists", "not exists"]:
+                value = None
+            var_value = _get_variable_value_for_visibility(var_name, target_character_name, actual_player_name, workflow_data_dir, tab_data)
+            if operator == "==":
+                return str(var_value) == str(value)
+            elif operator == "!=":
+                return str(var_value) != str(value)
+            elif operator == ">":
+                try:
+                    return float(var_value) > float(value)
+                except (ValueError, TypeError):
+                    return False
+            elif operator == "<":
+                try:
+                    return float(var_value) < float(value)
+                except (ValueError, TypeError):
+                    return False
+            elif operator == ">=":
+                try:
+                    return float(var_value) >= float(value)
+                except (ValueError, TypeError):
+                    return False
+            elif operator == "<=":
+                try:
+                    return float(var_value) <= float(value)
+                except (ValueError, TypeError):
+                    return False
+            elif operator == "contains":
+                return str(value) in str(var_value)
+            elif operator == "not contains":
+                return str(value) not in str(var_value)
+            elif operator == "exists":
+                return var_value is not None and var_value != ""
+            elif operator == "not exists":
+                return var_value is None or var_value == ""
+            return False
     except Exception as e:
-        print(f"Error evaluating variable condition '{condition_str}': {e}")
+        print(f"Error evaluating variable condition '{condition}': {e}")
         return False
 
 def _get_variable_value_for_visibility(var_name, target_character_name, actual_player_name, workflow_data_dir, tab_data):
@@ -706,7 +759,10 @@ def _get_variable_value_for_visibility(var_name, target_character_name, actual_p
     if target_character_name and workflow_data_dir:
         try:
             from core.utils import _find_actor_file_path, _load_json_safely
-            actor_file_path = _find_actor_file_path(None, workflow_data_dir, target_character_name)
+            class DummySelf:
+                pass
+            dummy_self = DummySelf()
+            actor_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, target_character_name)
             if actor_file_path:
                 actor_data = _load_json_safely(actor_file_path)
                 if actor_data and 'variables' in actor_data:
@@ -718,7 +774,10 @@ def _get_variable_value_for_visibility(var_name, target_character_name, actual_p
     if actual_player_name and workflow_data_dir:
         try:
             from core.utils import _find_actor_file_path, _load_json_safely
-            player_file_path = _find_actor_file_path(None, workflow_data_dir, actual_player_name)
+            class DummySelf:
+                pass
+            dummy_self = DummySelf()
+            player_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, actual_player_name)
             if player_file_path:
                 player_data = _load_json_safely(player_file_path)
                 if player_data and 'variables' in player_data:
@@ -732,7 +791,10 @@ def _get_variable_value_for_visibility(var_name, target_character_name, actual_p
             from core.utils import _get_player_current_setting_name, _find_setting_file_prioritizing_game_dir, _load_json_safely
             current_setting_name = _get_player_current_setting_name(workflow_data_dir)
             if current_setting_name and current_setting_name != "Unknown Setting":
-                setting_file_path, _ = _find_setting_file_prioritizing_game_dir(None, workflow_data_dir, current_setting_name)
+                class DummySelf:
+                    pass
+                dummy_self = DummySelf()
+                setting_file_path, _ = _find_setting_file_prioritizing_game_dir(dummy_self, workflow_data_dir, current_setting_name)
                 if setting_file_path:
                     setting_data = _load_json_safely(setting_file_path)
                     if setting_data and 'variables' in setting_data:
