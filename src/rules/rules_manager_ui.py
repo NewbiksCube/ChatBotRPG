@@ -247,13 +247,23 @@ def create_pair_widget(tab_data):
         type_selector = QComboBox()
         type_selector.setObjectName("PairActionTypeSelector")
         type_selector.setFont(QFont('Consolas', 10))
-        type_selector.addItems([
+        type_selector.setFocusPolicy(Qt.NoFocus)
+        action_items = [
             "System Message", "Next Rule", "Switch Model", "Set Var",
-            "Rewrite Post", "Generate Story", "Generate Setting",
+            "Rewrite Post", "Generate Setting",
             "Generate Character", "Generate Random List",
             "Text Tag", "New Scene", "Change Actor Location", "Force Narrator", "Set Screen Effect", "Skip Post", "Change Brightness", "Exit Rule Processing", "Game Over",
             "Post Visibility", "Add Item", "Remove Item", "Move Item", "Post Streaming", "Advance Time", "Change Time Passage"
-        ])
+        ]
+        type_selector.addItems(action_items)
+        
+        font_metrics = type_selector.fontMetrics()
+        max_width = 0
+        for item in action_items:
+            width = font_metrics.horizontalAdvance(item)
+            max_width = max(max_width, width)
+        
+        type_selector.setMinimumWidth(max_width + 80)
         top_h_layout.addWidget(type_selector)
         value_editor = QTextEdit()
         value_editor.setObjectName("PairActionValueEditor")
@@ -1814,7 +1824,7 @@ def create_pair_widget(tab_data):
             is_sys_msg = (t == "System Message")
             is_set_var = (t == "Set Var")
             is_rewrite = (t == "Rewrite Post")
-            is_generate_story = (t == "Generate Story")
+
             is_generate_setting = (t == "Generate Setting")
             is_generate_character = (t == "Generate Character")
             is_generate_random_list = (t == "Generate Random List")
@@ -1852,7 +1862,7 @@ def create_pair_widget(tab_data):
                  parent = parent.parentWidget()
                  loop_count += 1
             value_editor_visible = not any([
-                is_set_var, is_generate_setting, is_generate_story,
+                is_set_var, is_generate_setting,
                 is_generate_character, is_change_location, is_force_narrator,
                 is_screen_effect, is_generate_random_list, is_change_brightness, is_exit_rule_processing, is_game_over, is_post_visibility,
                 is_add_item, is_remove_item, is_move_item, is_advance_time, is_change_time_passage
