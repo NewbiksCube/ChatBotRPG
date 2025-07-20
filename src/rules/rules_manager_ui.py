@@ -644,6 +644,37 @@ def create_pair_widget(tab_data):
         item_details_layout.addWidget(generate_checkbox)
         item_details_layout.addStretch()
         add_item_layout.addLayout(item_details_layout)
+        
+        add_item_metadata_layout = QHBoxLayout()
+        add_owner_label = QLabel("Owner:")
+        add_owner_label.setFont(QFont('Consolas', 9))
+        add_owner_input = QLineEdit()
+        add_owner_input.setObjectName("AddItemOwnerInput")
+        add_owner_input.setFont(QFont('Consolas', 9))
+        add_owner_input.setPlaceholderText("Item owner (optional)")
+        add_owner_input.setMinimumWidth(120)
+        add_description_label = QLabel("Description:")
+        add_description_label.setFont(QFont('Consolas', 9))
+        add_description_input = QLineEdit()
+        add_description_input.setObjectName("AddItemDescriptionInput")
+        add_description_input.setFont(QFont('Consolas', 9))
+        add_description_input.setPlaceholderText("Item description (optional)")
+        add_description_input.setMinimumWidth(150)
+        add_location_label = QLabel("Location:")
+        add_location_label.setFont(QFont('Consolas', 9))
+        add_location_input = QLineEdit()
+        add_location_input.setObjectName("AddItemLocationInput")
+        add_location_input.setFont(QFont('Consolas', 9))
+        add_location_input.setPlaceholderText("Item location (optional)")
+        add_location_input.setMinimumWidth(120)
+        add_item_metadata_layout.addWidget(add_owner_label)
+        add_item_metadata_layout.addWidget(add_owner_input)
+        add_item_metadata_layout.addWidget(add_description_label)
+        add_item_metadata_layout.addWidget(add_description_input)
+        add_item_metadata_layout.addWidget(add_location_label)
+        add_item_metadata_layout.addWidget(add_location_input)
+        add_item_metadata_layout.addStretch()
+        add_item_layout.addLayout(add_item_metadata_layout)
         target_layout = QHBoxLayout()
         target_label = QLabel("Target:")
         target_label.setFont(QFont('Consolas', 9))
@@ -676,6 +707,15 @@ def create_pair_widget(tab_data):
         target_layout.addStretch()
         add_item_layout.addLayout(target_layout)
         target_container_layout = QHBoxLayout()
+        target_item_name_label = QLabel("Item Name:")
+        target_item_name_label.setFont(QFont('Consolas', 9))
+        target_item_name_input = QLineEdit()
+        target_item_name_input.setObjectName("AddItemTargetItemNameInput")
+        target_item_name_input.setFont(QFont('Consolas', 9))
+        target_item_name_input.setPlaceholderText("Enter item name that has the container")
+        target_item_name_input.setMinimumWidth(150)
+        target_item_name_input.setVisible(False)
+        target_item_name_label.setVisible(False)
         target_container_name_label = QLabel("Container Name:")
         target_container_name_label.setFont(QFont('Consolas', 9))
         target_container_name_input = QLineEdit()
@@ -685,6 +725,8 @@ def create_pair_widget(tab_data):
         target_container_name_input.setMinimumWidth(150)
         target_container_name_input.setVisible(False)
         target_container_name_label.setVisible(False)
+        target_container_layout.addWidget(target_item_name_label)
+        target_container_layout.addWidget(target_item_name_input)
         target_container_layout.addWidget(target_container_name_label)
         target_container_layout.addWidget(target_container_name_input)
         target_container_layout.addStretch()
@@ -692,6 +734,8 @@ def create_pair_widget(tab_data):
         
         def update_target_container_visibility():
             is_visible = target_container_checkbox.isChecked()
+            target_item_name_label.setVisible(is_visible)
+            target_item_name_input.setVisible(is_visible)
             target_container_name_label.setVisible(is_visible)
             target_container_name_input.setVisible(is_visible)
         
@@ -766,6 +810,15 @@ def create_pair_widget(tab_data):
         remove_item_layout.addLayout(remove_target_layout)
         
         remove_target_container_layout = QHBoxLayout()
+        remove_target_item_name_label = QLabel("Item Name:")
+        remove_target_item_name_label.setFont(QFont('Consolas', 9))
+        remove_target_item_name_input = QLineEdit()
+        remove_target_item_name_input.setObjectName("RemoveItemTargetItemNameInput")
+        remove_target_item_name_input.setFont(QFont('Consolas', 9))
+        remove_target_item_name_input.setPlaceholderText("Enter item name that has the container")
+        remove_target_item_name_input.setMinimumWidth(150)
+        remove_target_item_name_input.setVisible(False)
+        remove_target_item_name_label.setVisible(False)
         remove_target_container_name_label = QLabel("Container Name:")
         remove_target_container_name_label.setFont(QFont('Consolas', 9))
         remove_target_container_name_input = QLineEdit()
@@ -776,6 +829,8 @@ def create_pair_widget(tab_data):
         remove_target_container_name_input.setVisible(False)
         remove_target_container_name_label.setVisible(False)
         
+        remove_target_container_layout.addWidget(remove_target_item_name_label)
+        remove_target_container_layout.addWidget(remove_target_item_name_input)
         remove_target_container_layout.addWidget(remove_target_container_name_label)
         remove_target_container_layout.addWidget(remove_target_container_name_input)
         remove_target_container_layout.addStretch()
@@ -783,6 +838,8 @@ def create_pair_widget(tab_data):
         
         def update_remove_target_container_visibility():
             is_visible = remove_target_container_checkbox.isChecked()
+            remove_target_item_name_label.setVisible(is_visible)
+            remove_target_item_name_input.setVisible(is_visible)
             remove_target_container_name_label.setVisible(is_visible)
             remove_target_container_name_input.setVisible(is_visible)
         
@@ -857,6 +914,15 @@ def create_pair_widget(tab_data):
         move_item_layout.addLayout(move_from_layout)
         
         move_from_container_layout = QHBoxLayout()
+        move_from_item_name_label = QLabel("Item Name:")
+        move_from_item_name_label.setFont(QFont('Consolas', 9))
+        move_from_item_name_input = QLineEdit()
+        move_from_item_name_input.setObjectName("MoveItemFromItemNameInput")
+        move_from_item_name_input.setFont(QFont('Consolas', 9))
+        move_from_item_name_input.setPlaceholderText("Enter item name that has the container")
+        move_from_item_name_input.setMinimumWidth(150)
+        move_from_item_name_input.setVisible(False)
+        move_from_item_name_label.setVisible(False)
         move_from_container_name_label = QLabel("Container Name:")
         move_from_container_name_label.setFont(QFont('Consolas', 9))
         move_from_container_name_input = QLineEdit()
@@ -867,6 +933,8 @@ def create_pair_widget(tab_data):
         move_from_container_name_input.setVisible(False)
         move_from_container_name_label.setVisible(False)
         
+        move_from_container_layout.addWidget(move_from_item_name_label)
+        move_from_container_layout.addWidget(move_from_item_name_input)
         move_from_container_layout.addWidget(move_from_container_name_label)
         move_from_container_layout.addWidget(move_from_container_name_input)
         move_from_container_layout.addStretch()
@@ -874,6 +942,8 @@ def create_pair_widget(tab_data):
         
         def update_move_from_container_visibility():
             is_visible = move_from_container_checkbox.isChecked()
+            move_from_item_name_label.setVisible(is_visible)
+            move_from_item_name_input.setVisible(is_visible)
             move_from_container_name_label.setVisible(is_visible)
             move_from_container_name_input.setVisible(is_visible)
         
@@ -915,6 +985,15 @@ def create_pair_widget(tab_data):
         move_item_layout.addLayout(move_to_layout)
         
         move_to_container_layout = QHBoxLayout()
+        move_to_item_name_label = QLabel("Item Name:")
+        move_to_item_name_label.setFont(QFont('Consolas', 9))
+        move_to_item_name_input = QLineEdit()
+        move_to_item_name_input.setObjectName("MoveItemToItemNameInput")
+        move_to_item_name_input.setFont(QFont('Consolas', 9))
+        move_to_item_name_input.setPlaceholderText("Enter item name that has the container")
+        move_to_item_name_input.setMinimumWidth(150)
+        move_to_item_name_input.setVisible(False)
+        move_to_item_name_label.setVisible(False)
         move_to_container_name_label = QLabel("Container Name:")
         move_to_container_name_label.setFont(QFont('Consolas', 9))
         move_to_container_name_input = QLineEdit()
@@ -925,6 +1004,8 @@ def create_pair_widget(tab_data):
         move_to_container_name_input.setVisible(False)
         move_to_container_name_label.setVisible(False)
         
+        move_to_container_layout.addWidget(move_to_item_name_label)
+        move_to_container_layout.addWidget(move_to_item_name_input)
         move_to_container_layout.addWidget(move_to_container_name_label)
         move_to_container_layout.addWidget(move_to_container_name_input)
         move_to_container_layout.addStretch()
@@ -932,6 +1013,8 @@ def create_pair_widget(tab_data):
         
         def update_move_to_container_visibility():
             is_visible = move_to_container_checkbox.isChecked()
+            move_to_item_name_label.setVisible(is_visible)
+            move_to_item_name_input.setVisible(is_visible)
             move_to_container_name_label.setVisible(is_visible)
             move_to_container_name_input.setVisible(is_visible)
         
@@ -2141,10 +2224,14 @@ def create_pair_widget(tab_data):
             'add_item_name_input': item_name_input,
             'add_item_quantity_input': quantity_input,
             'add_item_generate_checkbox': generate_checkbox,
+            'add_item_owner_input': add_owner_input,
+            'add_item_description_input': add_description_input,
+            'add_item_location_input': add_location_input,
             'add_item_target_setting_radio': target_setting_radio,
             'add_item_target_character_radio': target_character_radio,
             'add_item_target_name_input': target_name_input,
             'add_item_target_container_checkbox': target_container_checkbox,
+            'add_item_target_item_name_input': target_item_name_input,
             'add_item_target_container_name_input': target_container_name_input,
             'remove_item_widget': remove_item_widget,
             'remove_item_name_input': remove_item_name_input,
@@ -2153,6 +2240,7 @@ def create_pair_widget(tab_data):
             'remove_item_target_character_radio': remove_target_character_radio,
             'remove_item_target_name_input': remove_target_name_input,
             'remove_item_target_container_checkbox': remove_target_container_checkbox,
+            'remove_item_target_item_name_input': remove_target_item_name_input,
             'remove_item_target_container_name_input': remove_target_container_name_input,
             'move_item_widget': move_item_widget,
             'move_item_name_input': move_item_name_input,
@@ -2164,8 +2252,10 @@ def create_pair_widget(tab_data):
             'move_item_to_character_radio': move_to_character_radio,
             'move_item_to_name_input': move_to_name_input,
             'move_item_from_container_checkbox': move_from_container_checkbox,
+            'move_item_from_item_name_input': move_from_item_name_input,
             'move_item_from_container_name_input': move_from_container_name_input,
             'move_item_to_container_checkbox': move_to_container_checkbox,
+            'move_item_to_item_name_input': move_to_item_name_input,
             'move_item_to_container_name_input': move_to_container_name_input,
             'advance_time_widget': advance_time_widget,
             'advance_time_input': advance_time_input,
@@ -2757,34 +2847,62 @@ def create_pair_widget(tab_data):
     def populate_add_item(data, row):
         item_name = data.get('item_name', '')
         quantity = data.get('quantity', '1')
+        owner = data.get('owner', '')
+        description = data.get('description', '')
+        location = data.get('location', '')
         target_type = data.get('target_type', 'Setting')
         target_name = data.get('target_name', '')
         generate = data.get('generate', False)
+        target_container_enabled = data.get('target_container_enabled', False)
+        target_item_name = data.get('target_item_name', '')
+        target_container_name = data.get('target_container_name', '')
+        
         item_name_input = row.get('add_item_name_input')
         if item_name_input and is_valid_widget(item_name_input):
             item_name_input.setText(item_name)
         quantity_input = row.get('add_item_quantity_input')
         if quantity_input and is_valid_widget(quantity_input):
-            quantity_input.setText(quantity)
+            quantity_input.setText(str(quantity))
+        owner_input = row.get('add_item_owner_input')
+        if owner_input and is_valid_widget(owner_input):
+            owner_input.setText(owner)
+        description_input = row.get('add_item_description_input')
+        if description_input and is_valid_widget(description_input):
+            description_input.setText(description)
+        location_input = row.get('add_item_location_input')
+        if location_input and is_valid_widget(location_input):
+            location_input.setText(location)
         generate_checkbox = row.get('add_item_generate_checkbox')
         if generate_checkbox and is_valid_widget(generate_checkbox):
             generate_checkbox.setChecked(generate)
         target_setting_radio = row.get('add_item_target_setting_radio')
+        if target_setting_radio and is_valid_widget(target_setting_radio):
+            target_setting_radio.setChecked(target_type == 'Setting')
         target_character_radio = row.get('add_item_target_character_radio')
-        if target_setting_radio and target_character_radio:
-            if target_type == 'Setting':
-                target_setting_radio.setChecked(True)
-            else:
-                target_character_radio.setChecked(True)
+        if target_character_radio and is_valid_widget(target_character_radio):
+            target_character_radio.setChecked(target_type == 'Character')
         target_name_input = row.get('add_item_target_name_input')
         if target_name_input and is_valid_widget(target_name_input):
             target_name_input.setText(target_name)
+        target_container_checkbox = row.get('add_item_target_container_checkbox')
+        if target_container_checkbox and is_valid_widget(target_container_checkbox):
+            target_container_checkbox.setChecked(target_container_enabled)
+        target_item_name_input = row.get('add_item_target_item_name_input')
+        if target_item_name_input and is_valid_widget(target_item_name_input):
+            target_item_name_input.setText(target_item_name)
+        target_container_name_input = row.get('add_item_target_container_name_input')
+        if target_container_name_input and is_valid_widget(target_container_name_input):
+            target_container_name_input.setText(target_container_name)
 
     def populate_remove_item(data, row):
         item_name = data.get('item_name', '')
         quantity = data.get('quantity', '1')
         target_type = data.get('target_type', 'Setting')
         target_name = data.get('target_name', '')
+        target_container_enabled = data.get('target_container_enabled', False)
+        target_item_name = data.get('target_item_name', '')
+        target_container_name = data.get('target_container_name', '')
+        
         item_name_input = row.get('remove_item_name_input')
         if item_name_input and is_valid_widget(item_name_input):
             item_name_input.setText(item_name)
@@ -2801,6 +2919,17 @@ def create_pair_widget(tab_data):
         target_name_input = row.get('remove_item_target_name_input')
         if target_name_input and is_valid_widget(target_name_input):
             target_name_input.setText(target_name)
+        
+        target_container_checkbox = row.get('remove_item_target_container_checkbox')
+        target_item_name_input = row.get('remove_item_target_item_name_input')
+        target_container_name_input = row.get('remove_item_target_container_name_input')
+        
+        if target_container_checkbox and is_valid_widget(target_container_checkbox):
+            target_container_checkbox.setChecked(target_container_enabled)
+        if target_item_name_input and is_valid_widget(target_item_name_input):
+            target_item_name_input.setText(target_item_name)
+        if target_container_name_input and is_valid_widget(target_container_name_input):
+            target_container_name_input.setText(target_container_name)
 
     def populate_move_item(data, row):
         item_name = data.get('item_name', '')
@@ -2809,6 +2938,13 @@ def create_pair_widget(tab_data):
         from_name = data.get('from_name', '')
         to_type = data.get('to_type', 'Setting')
         to_name = data.get('to_name', '')
+        from_container_enabled = data.get('from_container_enabled', False)
+        from_item_name = data.get('from_item_name', '')
+        from_container_name = data.get('from_container_name', '')
+        to_container_enabled = data.get('to_container_enabled', False)
+        to_item_name = data.get('to_item_name', '')
+        to_container_name = data.get('to_container_name', '')
+        
         item_name_input = row.get('move_item_name_input')
         if item_name_input and is_valid_widget(item_name_input):
             item_name_input.setText(item_name)
@@ -2835,6 +2971,28 @@ def create_pair_widget(tab_data):
         to_name_input = row.get('move_item_to_name_input')
         if to_name_input and is_valid_widget(to_name_input):
             to_name_input.setText(to_name)
+        
+        from_container_checkbox = row.get('move_item_from_container_checkbox')
+        from_item_name_input = row.get('move_item_from_item_name_input')
+        from_container_name_input = row.get('move_item_from_container_name_input')
+        
+        if from_container_checkbox and is_valid_widget(from_container_checkbox):
+            from_container_checkbox.setChecked(from_container_enabled)
+        if from_item_name_input and is_valid_widget(from_item_name_input):
+            from_item_name_input.setText(from_item_name)
+        if from_container_name_input and is_valid_widget(from_container_name_input):
+            from_container_name_input.setText(from_container_name)
+        
+        to_container_checkbox = row.get('move_item_to_container_checkbox')
+        to_item_name_input = row.get('move_item_to_item_name_input')
+        to_container_name_input = row.get('move_item_to_container_name_input')
+        
+        if to_container_checkbox and is_valid_widget(to_container_checkbox):
+            to_container_checkbox.setChecked(to_container_enabled)
+        if to_item_name_input and is_valid_widget(to_item_name_input):
+            to_item_name_input.setText(to_item_name)
+        if to_container_name_input and is_valid_widget(to_container_name_input):
+            to_container_name_input.setText(to_container_name)
 
     def populate_screen_effect(data, row):
         effect_type = data.get('effect_type', 'Blur')
