@@ -26,28 +26,16 @@ class TimeManager(QWidget):
         self.tab_data = tab_data
 
     def save_state_on_shutdown(self):
-        """Save the current time state when the application is shutting down to prevent data loss."""
         if not self.main_ui or not self.tab_data:
             return
-        
         try:
-            # Get the current tab index
             tab_index = self.main_ui.tabs_data.index(self.tab_data) if self.tab_data in self.main_ui.tabs_data else -1
             if tab_index < 0:
                 return
-            
-            # Load current variables
             variables = self.main_ui._load_variables(tab_index)
-            
-            # Mark that shutdown was graceful
             variables['_timer_shutdown_graceful'] = True
             variables['_timer_shutdown_time'] = datetime.now().isoformat()
-            
-            # Save variables immediately
             self.main_ui._save_variables(tab_index, variables)
-            
-            print(f"[TIME MANAGER] Saved shutdown state for tab {tab_index}")
-            
         except Exception as e:
             print(f"[TIME MANAGER] Error saving shutdown state: {e}")
 
@@ -55,21 +43,16 @@ class TimeManager(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
-        # Create scroll area for the entire time manager
         scroll_area = QScrollArea()
         scroll_area.setObjectName("TimeManagerScrollArea")
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setFrameShape(QFrame.NoFrame)
-        
-        # Create the main content widget
         content_widget = QWidget()
         layout = QVBoxLayout(content_widget)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
-        
         game_time_mode_label = QLabel("Game Time Mode")
         game_time_mode_label.setObjectName("GameTimeModeLabel")
         game_time_mode_label.setFont(QFont('Consolas', 9, QFont.Bold))
@@ -99,8 +82,6 @@ class TimeManager(QWidget):
         layout.addWidget(separator1)
         self.calendar_editor_widget = self._create_calendar_editor()
         layout.addWidget(self.calendar_editor_widget)
-        self.datetime_config_widget = self._create_datetime_config()
-        layout.addWidget(self.datetime_config_widget)
         separator2 = QFrame()
         separator2.setFrameShape(QFrame.HLine)
         separator2.setFrameShadow(QFrame.Sunken)
@@ -109,11 +90,8 @@ class TimeManager(QWidget):
         self.time_triggers_widget = self._create_time_triggers_section()
         layout.addWidget(self.time_triggers_widget)
         layout.addStretch()
-        
-        # Set the content widget to the scroll area
         scroll_area.setWidget(content_widget)
         main_layout.addWidget(scroll_area)
-        
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._apply_styling()
         self._update_section_visibility()
@@ -140,7 +118,6 @@ class TimeManager(QWidget):
         months_grid = QGridLayout()
         months_grid.setSpacing(5)
         self.month_inputs = []
-        
         default_months = ["January", "February", "March", "April", "May", "June",
                          "July", "August", "September", "October", "November", "December"]
         
@@ -166,10 +143,8 @@ class TimeManager(QWidget):
         days_layout.addWidget(days_label)
         days_grid = QGridLayout()
         days_grid.setSpacing(5)
-        
         self.day_inputs = []
         default_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        
         for i, day in enumerate(default_days):
             day_label = QLabel(f"{i+1}:")
             day_label.setObjectName("TimeManagerFieldLabel")
@@ -182,83 +157,6 @@ class TimeManager(QWidget):
             days_grid.addWidget(day_input, 1, i)
         days_layout.addLayout(days_grid)
         layout.addWidget(days_group)
-        
-        return widget
-
-    def _create_datetime_config(self):
-        widget = QWidget()
-        widget.setObjectName("DateTimeConfigWidget")
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-        
-        title_label = QLabel("Game Time Configuration")
-        title_label.setObjectName("TimeManagerSectionTitle")
-        title_label.setFont(QFont('Consolas', 9, QFont.Bold))
-        title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
-        
-        datetime_frame = QFrame()
-        datetime_frame.setObjectName("TimeManagerGroup")
-        datetime_layout = QVBoxLayout(datetime_frame)
-        datetime_layout.setContentsMargins(8, 6, 8, 6)
-        
-        starting_datetime_layout = QHBoxLayout()
-        starting_datetime_label = QLabel("Starting DateTime:")
-        starting_datetime_label.setObjectName("TimeManagerFieldLabel")
-        starting_datetime_label.setFont(QFont('Consolas', 8))
-        starting_datetime_layout.addWidget(starting_datetime_label)
-        
-        self.datetime_edit = QDateTimeEdit()
-        self.datetime_edit.setObjectName("TimeManagerDateTimeEdit")
-        self.datetime_edit.setFont(QFont('Consolas', 8))
-        self.datetime_edit.setDisplayFormat("yyyy-MM-dd hh:mm")
-        self.datetime_edit.setDateTime(QDateTime.currentDateTime())
-        starting_datetime_layout.addWidget(self.datetime_edit)
-        starting_datetime_layout.addStretch()
-        datetime_layout.addLayout(starting_datetime_layout)
-        
-        advancement_layout = QHBoxLayout()
-        advancement_label = QLabel("Advancement Mode:")
-        advancement_label.setObjectName("TimeManagerFieldLabel")
-        advancement_label.setFont(QFont('Consolas', 8))
-        advancement_layout.addWidget(advancement_label)
-        
-        self.advancement_group = QButtonGroup(self)
-        self.static_radio = QRadioButton("Static")
-        self.static_radio.setObjectName("TimeManagerAdvancementRadio")
-        self.static_radio.setFont(QFont('Consolas', 8))
-        self.static_radio.setChecked(True)
-        self.advancement_group.addButton(self.static_radio, 0)
-        advancement_layout.addWidget(self.static_radio)
-        
-        self.realtime_radio = QRadioButton("Realtime")
-        self.realtime_radio.setObjectName("TimeManagerAdvancementRadio")
-        self.realtime_radio.setFont(QFont('Consolas', 8))
-        self.advancement_group.addButton(self.realtime_radio, 1)
-        advancement_layout.addWidget(self.realtime_radio)
-        
-        advancement_layout.addSpacing(20)
-        multiplier_label = QLabel("Multiplier:")
-        multiplier_label.setObjectName("TimeManagerFieldLabel")
-        multiplier_label.setFont(QFont('Consolas', 8))
-        advancement_layout.addWidget(multiplier_label)
-        
-        self.time_multiplier_spin = QDoubleSpinBox()
-        self.time_multiplier_spin.setObjectName("TimeManagerDoubleSpinBox")
-        self.time_multiplier_spin.setRange(0.0, 100.0)
-        self.time_multiplier_spin.setSingleStep(0.1)
-        self.time_multiplier_spin.setDecimals(1)
-        self.time_multiplier_spin.setValue(1.0)
-        self.time_multiplier_spin.setSuffix("x")
-        self.time_multiplier_spin.setFont(QFont('Consolas', 8))
-        self.time_multiplier_spin.setSpecialValueText("Static (0.0x)")
-        self.time_multiplier_spin.setToolTip("Game time speed relative to real time\n\n0.0x = Static (no time advancement)\n0.5x = Half speed (1 real hour = 30 game minutes)\n1.0x = Normal speed (1 real hour = 1 game hour)\n2.0x = Double speed (1 real hour = 2 game hours)")
-        advancement_layout.addWidget(self.time_multiplier_spin)
-        advancement_layout.addStretch()
-        datetime_layout.addLayout(advancement_layout)
-        
-        layout.addWidget(datetime_frame)
         return widget
 
     def _create_time_triggers_section(self):
@@ -282,38 +180,29 @@ class TimeManager(QWidget):
         editor_frame.setObjectName("TimeManagerGroup")
         editor_layout = QVBoxLayout(editor_frame)
         editor_layout.setContentsMargins(8, 6, 8, 6)
-        
-        # Add trigger type selection
         trigger_type_label = QLabel("Trigger Type:")
         trigger_type_label.setObjectName("TimeManagerGroupLabel")
         trigger_type_label.setFont(QFont('Consolas', 8, QFont.Bold))
         editor_layout.addWidget(trigger_type_label)
-        
         trigger_type_layout = QHBoxLayout()
         self.trigger_type_group = QButtonGroup(self)
-        
         self.exact_time_radio = QRadioButton("Exact Time")
         self.exact_time_radio.setObjectName("TimeManagerTriggerTypeRadio")
         self.exact_time_radio.setFont(QFont('Consolas', 8))
         self.exact_time_radio.setChecked(True)
         self.trigger_type_group.addButton(self.exact_time_radio, 0)
         trigger_type_layout.addWidget(self.exact_time_radio)
-        
         self.time_range_radio = QRadioButton("Time Range")
         self.time_range_radio.setObjectName("TimeManagerTriggerTypeRadio")
         self.time_range_radio.setFont(QFont('Consolas', 8))
         self.trigger_type_group.addButton(self.time_range_radio, 1)
         trigger_type_layout.addWidget(self.time_range_radio)
-        
         trigger_type_layout.addStretch()
         editor_layout.addLayout(trigger_type_layout)
-        
         condition_label = QLabel("Trigger Condition:")
         condition_label.setObjectName("TimeManagerGroupLabel")
         condition_label.setFont(QFont('Consolas', 8, QFont.Bold))
         editor_layout.addWidget(condition_label)
-        
-        # Exact time conditions (existing)
         self.exact_time_widget = QWidget()
         exact_time_layout = QVBoxLayout(self.exact_time_widget)
         exact_time_layout.setContentsMargins(0, 0, 0, 0)
@@ -375,20 +264,15 @@ class TimeManager(QWidget):
         condition_layout.addWidget(minute_label)
         condition_layout.addWidget(self.minute_spin)
         exact_time_layout.addLayout(condition_layout)
-        
-        # Time range conditions (new)
         self.time_range_widget = QWidget()
         time_range_layout = QVBoxLayout(self.time_range_widget)
         time_range_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # From conditions with proper label alignment
         from_condition_layout = QHBoxLayout()
         from_label = QLabel("From:")
         from_label.setObjectName("TimeManagerFieldLabel")
         from_label.setFont(QFont('Consolas', 8, QFont.Bold))
         from_label.setMinimumWidth(40)
         from_condition_layout.addWidget(from_label)
-        
         from_day_label = QLabel("Day:")
         from_day_label.setObjectName("TimeManagerFieldLabel")
         self.from_day_combo = QComboBox()
@@ -397,7 +281,6 @@ class TimeManager(QWidget):
         self.from_day_combo.setFont(QFont('Consolas', 8))
         from_condition_layout.addWidget(from_day_label)
         from_condition_layout.addWidget(self.from_day_combo)
-        
         from_month_label = QLabel("Month:")
         from_month_label.setObjectName("TimeManagerFieldLabel")
         self.from_month_combo = QComboBox()
@@ -406,7 +289,6 @@ class TimeManager(QWidget):
         self.from_month_combo.setFont(QFont('Consolas', 8))
         from_condition_layout.addWidget(from_month_label)
         from_condition_layout.addWidget(self.from_month_combo)
-        
         from_day_of_month_label = QLabel("Day of Month:")
         from_day_of_month_label.setObjectName("TimeManagerFieldLabel")
         self.from_day_of_month_spin = QSpinBox()
@@ -417,7 +299,6 @@ class TimeManager(QWidget):
         self.from_day_of_month_spin.setFont(QFont('Consolas', 8))
         from_condition_layout.addWidget(from_day_of_month_label)
         from_condition_layout.addWidget(self.from_day_of_month_spin)
-        
         from_year_label = QLabel("Year:")
         from_year_label.setObjectName("TimeManagerFieldLabel")
         self.from_year_spin = QSpinBox()
@@ -428,7 +309,6 @@ class TimeManager(QWidget):
         self.from_year_spin.setFont(QFont('Consolas', 8))
         from_condition_layout.addWidget(from_year_label)
         from_condition_layout.addWidget(self.from_year_spin)
-        
         from_hour_label = QLabel("Hour:")
         from_hour_label.setObjectName("TimeManagerFieldLabel")
         self.from_hour_spin = QSpinBox()
@@ -439,7 +319,6 @@ class TimeManager(QWidget):
         self.from_hour_spin.setFont(QFont('Consolas', 8))
         from_condition_layout.addWidget(from_hour_label)
         from_condition_layout.addWidget(self.from_hour_spin)
-        
         from_minute_label = QLabel("Minute:")
         from_minute_label.setObjectName("TimeManagerFieldLabel")
         self.from_minute_spin = QSpinBox()
@@ -450,17 +329,13 @@ class TimeManager(QWidget):
         self.from_minute_spin.setFont(QFont('Consolas', 8))
         from_condition_layout.addWidget(from_minute_label)
         from_condition_layout.addWidget(self.from_minute_spin)
-        
         time_range_layout.addLayout(from_condition_layout)
-        
-        # To conditions with proper label alignment
         to_condition_layout = QHBoxLayout()
         to_label = QLabel("To:")
         to_label.setObjectName("TimeManagerFieldLabel")
         to_label.setFont(QFont('Consolas', 8, QFont.Bold))
         to_label.setMinimumWidth(40)
         to_condition_layout.addWidget(to_label)
-        
         to_day_label = QLabel("Day:")
         to_day_label.setObjectName("TimeManagerFieldLabel")
         self.to_day_combo = QComboBox()
@@ -469,7 +344,6 @@ class TimeManager(QWidget):
         self.to_day_combo.setFont(QFont('Consolas', 8))
         to_condition_layout.addWidget(to_day_label)
         to_condition_layout.addWidget(self.to_day_combo)
-        
         to_month_label = QLabel("Month:")
         to_month_label.setObjectName("TimeManagerFieldLabel")
         self.to_month_combo = QComboBox()
@@ -478,7 +352,6 @@ class TimeManager(QWidget):
         self.to_month_combo.setFont(QFont('Consolas', 8))
         to_condition_layout.addWidget(to_month_label)
         to_condition_layout.addWidget(self.to_month_combo)
-        
         to_day_of_month_label = QLabel("Day of Month:")
         to_day_of_month_label.setObjectName("TimeManagerFieldLabel")
         self.to_day_of_month_spin = QSpinBox()
@@ -489,7 +362,6 @@ class TimeManager(QWidget):
         self.to_day_of_month_spin.setFont(QFont('Consolas', 8))
         to_condition_layout.addWidget(to_day_of_month_label)
         to_condition_layout.addWidget(self.to_day_of_month_spin)
-        
         to_year_label = QLabel("Year:")
         to_year_label.setObjectName("TimeManagerFieldLabel")
         self.to_year_spin = QSpinBox()
@@ -500,7 +372,6 @@ class TimeManager(QWidget):
         self.to_year_spin.setFont(QFont('Consolas', 8))
         to_condition_layout.addWidget(to_year_label)
         to_condition_layout.addWidget(self.to_year_spin)
-        
         to_hour_label = QLabel("Hour:")
         to_hour_label.setObjectName("TimeManagerFieldLabel")
         self.to_hour_spin = QSpinBox()
@@ -511,7 +382,6 @@ class TimeManager(QWidget):
         self.to_hour_spin.setFont(QFont('Consolas', 8))
         to_condition_layout.addWidget(to_hour_label)
         to_condition_layout.addWidget(self.to_hour_spin)
-        
         to_minute_label = QLabel("Minute:")
         to_minute_label.setObjectName("TimeManagerFieldLabel")
         self.to_minute_spin = QSpinBox()
@@ -522,17 +392,11 @@ class TimeManager(QWidget):
         self.to_minute_spin.setFont(QFont('Consolas', 8))
         to_condition_layout.addWidget(to_minute_label)
         to_condition_layout.addWidget(self.to_minute_spin)
-        
         time_range_layout.addLayout(to_condition_layout)
-        
-        # Add both widgets to layout but set initial visibility
         editor_layout.addWidget(self.exact_time_widget)
         editor_layout.addWidget(self.time_range_widget)
-        
-        # Set initial visibility - only exact time visible by default
         self.exact_time_widget.setVisible(True)
         self.time_range_widget.setVisible(False)
-        
         action_label = QLabel("Variable Action:")
         action_label.setObjectName("TimeManagerGroupLabel")
         action_label.setFont(QFont('Consolas', 8, QFont.Bold))
@@ -554,27 +418,21 @@ class TimeManager(QWidget):
         self.var_value_input.setFont(QFont('Consolas', 8))
         self.var_value_input.setPlaceholderText("Variable value")
         action_layout.addWidget(self.var_value_input)
-        
-        # Add revert option
         revert_layout = QHBoxLayout()
         self.revert_checkbox = QRadioButton("Revert when condition no longer met")
         self.revert_checkbox.setObjectName("TimeManagerRevertCheckbox")
         self.revert_checkbox.setFont(QFont('Consolas', 8))
         self.revert_checkbox.setToolTip("When enabled, the variable will be reverted to its previous value when the time condition is no longer met")
         revert_layout.addWidget(self.revert_checkbox)
-        
         revert_value_label = QLabel("Revert To:")
         revert_value_label.setObjectName("TimeManagerFieldLabel")
         revert_layout.addWidget(revert_value_label)
-        
         self.revert_value_input = QLineEdit()
         self.revert_value_input.setObjectName("TimeManagerInput")
         self.revert_value_input.setFont(QFont('Consolas', 8))
         self.revert_value_input.setPlaceholderText("Value to revert to (leave empty to restore original)")
         revert_layout.addWidget(self.revert_value_input)
-        
         editor_layout.addLayout(revert_layout)
-        
         editor_layout.addLayout(action_layout)
         buttons_layout = QHBoxLayout()
         self.add_trigger_btn = QPushButton("Add Trigger")
@@ -599,10 +457,6 @@ class TimeManager(QWidget):
             month_input.textChanged.connect(self._save_calendar_data)
         for day_input in self.day_inputs:
             day_input.textChanged.connect(self._save_calendar_data)
-        
-        self.datetime_edit.dateTimeChanged.connect(self._save_starting_datetime)
-        self.advancement_group.buttonClicked.connect(self._save_advancement_mode)
-        self.time_multiplier_spin.valueChanged.connect(self._save_time_multiplier)
 
     def _on_time_mode_changed(self):
         self._update_section_visibility()
@@ -618,13 +472,10 @@ class TimeManager(QWidget):
     def _update_section_visibility(self):
         is_game_world = self.game_world_radio.isChecked()
         self.calendar_editor_widget.setVisible(is_game_world)
-        self.datetime_config_widget.setVisible(is_game_world)
         self._update_combo_boxes()
         self._update_time_multiplier_visibility()
     
     def _update_time_multiplier_visibility(self):
-        # This method is no longer relevant as time multiplier is removed.
-        # Keeping it for now to avoid breaking other parts of the code.
         pass
 
     def _update_combo_boxes(self):
@@ -649,7 +500,6 @@ class TimeManager(QWidget):
         self._update_range_combo_boxes()
 
     def _update_range_combo_boxes(self):
-        # Update From combo boxes
         current_from_day = self.from_day_combo.currentText()
         self.from_day_combo.clear()
         self.from_day_combo.addItem("Any Day")
@@ -696,12 +546,8 @@ class TimeManager(QWidget):
         var_value = self.var_value_input.text().strip()
         if not var_name or not var_value:
             return
-        
-        # Check if it's exact time or time range
         is_exact_time = self.exact_time_radio.isChecked()
-        
         if is_exact_time:
-            # Handle exact time triggers
             conditions = []
             if self.day_combo.currentText() != "Any Day":
                 conditions.append(f"Day: {self.day_combo.currentText()}")
@@ -717,7 +563,6 @@ class TimeManager(QWidget):
                 conditions.append(f"Minute: {self.minute_spin.value()}")
             condition_str = ", ".join(conditions) if conditions else "Always"
         else:
-            # Handle time range triggers
             from_conditions = []
             if self.from_day_combo.currentText() != "Any Day":
                 from_conditions.append(f"Day: {self.from_day_combo.currentText()}")
@@ -745,39 +590,33 @@ class TimeManager(QWidget):
                 to_conditions.append(f"Hour: {self.to_hour_spin.value()}")
             if self.to_minute_spin.value() >= 0:
                 to_conditions.append(f"Minute: {self.to_minute_spin.value()}")
-            
             from_str = ", ".join(from_conditions) if from_conditions else "Always"
             to_str = ", ".join(to_conditions) if to_conditions else "Always"
             condition_str = f"From ({from_str}) To ({to_str})"
-        
         trigger_text = f"{condition_str} → Set '{var_name}' = '{var_value}'"
-        
-        # Add revert information if enabled
         if self.revert_checkbox.isChecked():
             revert_value = self.revert_value_input.text().strip()
             if revert_value:
                 trigger_text += f" [Revert to: '{revert_value}']"
             else:
                 trigger_text += " [Revert to original]"
-        
         self.triggers_list.addItem(trigger_text)
         self._clear_trigger_inputs()
         self._save_triggers_data()
+
     def _remove_trigger(self):
         current_row = self.triggers_list.currentRow()
         if current_row >= 0:
             self.triggers_list.takeItem(current_row)
             self._save_triggers_data()
+
     def _clear_trigger_inputs(self):
-        # Clear exact time inputs
         self.day_combo.setCurrentIndex(0)
         self.month_combo.setCurrentIndex(0)
         self.day_of_month_spin.setValue(0)
         self.year_spin.setValue(0)
         self.hour_spin.setValue(-1)
         self.minute_spin.setValue(-1)
-        
-        # Clear time range inputs
         self.from_day_combo.setCurrentIndex(0)
         self.from_month_combo.setCurrentIndex(0)
         self.from_day_of_month_spin.setValue(0)
@@ -790,12 +629,11 @@ class TimeManager(QWidget):
         self.to_year_spin.setValue(0)
         self.to_hour_spin.setValue(-1)
         self.to_minute_spin.setValue(-1)
-        
-        # Clear action inputs
         self.var_name_input.clear()
         self.var_value_input.clear()
         self.revert_checkbox.setChecked(False)
         self.revert_value_input.clear()
+
     def _load_time_passage_data_initial(self):
         if not self.workflow_data_dir:
             return {}
@@ -824,77 +662,24 @@ class TimeManager(QWidget):
     def _apply_loaded_settings(self):
         if not self.workflow_data_dir or not self.time_passage_data:
             return
-        
-        datetime_to_use = None
-        
-        if 'starting_datetime' in self.time_passage_data:
-            try:
-                datetime_str = self.time_passage_data['starting_datetime']
-                datetime_to_use = datetime.fromisoformat(datetime_str)
-            except (ValueError, TypeError):
-                datetime_to_use = datetime.now()
-        else:
-            datetime_to_use = datetime.now()
-        
-        if datetime_to_use:
-            try:
-                timestamp = int(datetime_to_use.timestamp())
-                qdatetime = QDateTime.fromSecsSinceEpoch(timestamp)
-                if qdatetime.isValid():
-                    self.datetime_edit.setDateTime(qdatetime)
-                    if 'starting_datetime' not in self.time_passage_data:
-                        self.time_passage_data['starting_datetime'] = datetime_to_use.isoformat()
-                        self._save_time_passage_data()
-                else:
-                    print(f"Warning: Invalid datetime {datetime_to_use}, using current datetime")
-                    self.datetime_edit.setDateTime(QDateTime.currentDateTime())
-            except (ValueError, OSError) as e:
-                print(f"Error setting datetime: {e}, using current datetime")
-                self.datetime_edit.setDateTime(QDateTime.currentDateTime())
-        
-        advancement_mode = self.time_passage_data.get('advancement_mode', 'static')
-        if advancement_mode == 'realtime':
-            self.realtime_radio.setChecked(True)
-        else:
-            self.static_radio.setChecked(True)
-        
-        time_multiplier = self.time_passage_data.get('time_multiplier', 1.0)
-        self.time_multiplier_spin.setValue(time_multiplier)
     def _save_time_passage_data(self):
         if not self.workflow_data_dir:
-            print(f"[DEBUG] _save_time_passage_data - no workflow_data_dir")
             return
         settings_dir = os.path.join(self.workflow_data_dir, "resources", "data files", "settings")
         os.makedirs(settings_dir, exist_ok=True)
         file_path = os.path.join(settings_dir, "time_passage.json")
-        print(f"[DEBUG] _save_time_passage_data - saving to: {file_path}")
-        print(f"[DEBUG] _save_time_passage_data - data: {self.time_passage_data}")
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.time_passage_data, f, indent=2, ensure_ascii=False)
-            print(f"[DEBUG] _save_time_passage_data - saved successfully")
         except IOError as e:
             print(f"[DEBUG] _save_time_passage_data - IOError: {e}")
         except Exception as e:
             print(f"[DEBUG] _save_time_passage_data - Exception: {e}")
     def _save_time_mode(self):
         time_mode = 'game_world' if self.game_world_radio.isChecked() else 'real_world'
-        print(f"[DEBUG] _save_time_mode called - setting time_mode to: {time_mode}")
         self.time_passage_data['time_mode'] = time_mode
         self._save_time_passage_data()
-    def _save_advancement_mode(self):
-        advancement_mode = 'realtime' if self.realtime_radio.isChecked() else 'static'
-        print(f"[DEBUG] _save_advancement_mode called - setting advancement_mode to: {advancement_mode}")
-        self.time_passage_data['advancement_mode'] = advancement_mode
-        self._save_time_passage_data()
-    
-    def _save_starting_datetime(self):
-        self.time_passage_data['starting_datetime'] = self.datetime_edit.dateTime().toPyDateTime().isoformat()
-        self._save_time_passage_data()
-    
-    def _save_time_multiplier(self):
-        self.time_passage_data['time_multiplier'] = self.time_multiplier_spin.value()
-        self._save_time_passage_data()
+
     def _save_calendar_data(self):
         months = {}
         for i, month_input in enumerate(self.month_inputs):
@@ -916,13 +701,9 @@ class TimeManager(QWidget):
         self._save_time_passage_data()
 
     def _parse_trigger_text(self, trigger_text):
-        """Parse a trigger text string into a structured format."""
         try:
-            # Check for revert information
             revert_enabled = False
             revert_value = None
-            
-            # Look for revert pattern: "[Revert to: 'value']" or "[Revert to original]"
             revert_match = re.search(r'\[Revert to: \'([^\']*)\'\]', trigger_text)
             if revert_match:
                 revert_enabled = True
@@ -930,26 +711,18 @@ class TimeManager(QWidget):
                 trigger_text = trigger_text.replace(revert_match.group(0), '').strip()
             elif '[Revert to original]' in trigger_text:
                 revert_enabled = True
-                revert_value = None  # Will use original value
+                revert_value = None
                 trigger_text = trigger_text.replace('[Revert to original]', '').strip()
-            
-            # Format: "condition_str → Set 'var_name' = 'var_value'"
             parts = trigger_text.split(' → Set ')
             if len(parts) != 2:
                 return None
-            
             condition_str = parts[0].strip()
             action_str = parts[1].strip()
-            
-            # Parse action: "'var_name' = 'var_value'"
             action_match = re.match(r"'([^']+)'\s*=\s*'([^']*)'", action_str)
             if not action_match:
                 return None
-            
             var_name = action_match.group(1)
             var_value = action_match.group(2)
-            
-            # Parse conditions
             conditions = {}
             if condition_str != "Always":
                 for condition_part in condition_str.split(', '):
@@ -970,7 +743,6 @@ class TimeManager(QWidget):
                             conditions['hour'] = int(value)
                         elif key == "Minute":
                             conditions['minute'] = int(value)
-            
             return {
                 'conditions': conditions,
                 'var_name': var_name,
@@ -984,108 +756,65 @@ class TimeManager(QWidget):
             return None
 
     def _check_time_triggers(self):
-        """Check if any time-based triggers should fire and execute them."""
         if not self.main_ui or not self.tab_data:
             return
-        
         try:
-            # Get current tab index
             tab_index = self.main_ui.tabs_data.index(self.tab_data) if self.tab_data in self.main_ui.tabs_data else -1
             if tab_index < 0:
                 return
-            
-            # Load current variables to get game time
             variables = self.main_ui._load_variables(tab_index)
             current_datetime_str = variables.get('datetime')
             if not current_datetime_str:
                 return
-            
             try:
                 current_datetime = datetime.fromisoformat(current_datetime_str)
             except (ValueError, TypeError):
                 return
-            
-            # Get triggers from storage
             triggers = self.time_passage_data.get('triggers', [])
             if not triggers:
                 return
-            
-            # Track which triggers have been executed and their original values
             executed_triggers = variables.get('_executed_time_triggers', [])
             trigger_original_values = variables.get('_trigger_original_values', {})
             newly_executed = []
             reverted_triggers = []
-            
             for trigger_text in triggers:
                 trigger_data = self._parse_trigger_text(trigger_text)
                 if not trigger_data:
                     continue
-                
                 conditions_match = self._trigger_conditions_match(trigger_data['conditions'], current_datetime)
-                
-                # Check if this trigger has already been executed
                 if trigger_text in executed_triggers:
-                    # If conditions no longer match and revert is enabled, revert the variable
                     if not conditions_match and trigger_data.get('revert_enabled', False):
-                        print(f"[TIME TRIGGER] Reverting trigger: {trigger_text}")
-                        
-                        # Get the revert value
                         if trigger_data['revert_value'] is not None:
                             revert_value = trigger_data['revert_value']
                         else:
-                            # Use original value if available
                             revert_value = trigger_original_values.get(trigger_text, {}).get(trigger_data['var_name'])
-                        
                         if revert_value is not None:
                             variables[trigger_data['var_name']] = revert_value
                             reverted_triggers.append(trigger_text)
-                        
-                        # Remove from executed list
                         executed_triggers.remove(trigger_text)
                         if trigger_text in trigger_original_values:
                             del trigger_original_values[trigger_text]
                 else:
-                    # If conditions match, execute the trigger
                     if conditions_match:
-                        print(f"[TIME TRIGGER] Executing trigger: {trigger_text}")
-                        
-                        # Store original value if revert is enabled
                         if trigger_data.get('revert_enabled', False):
                             if trigger_text not in trigger_original_values:
                                 trigger_original_values[trigger_text] = {}
                             trigger_original_values[trigger_text][trigger_data['var_name']] = variables.get(trigger_data['var_name'])
-                        
-                        # Execute the variable change
                         variables[trigger_data['var_name']] = trigger_data['var_value']
-                        
-                        # Mark as executed
                         newly_executed.append(trigger_text)
                         executed_triggers.append(trigger_text)
-            
-            # Save updated variables if any triggers were executed or reverted
             if newly_executed or reverted_triggers:
                 variables['_executed_time_triggers'] = executed_triggers
                 variables['_trigger_original_values'] = trigger_original_values
                 self.main_ui._save_variables(tab_index, variables)
-                
-                if newly_executed:
-                    print(f"[TIME TRIGGER] Executed {len(newly_executed)} time trigger(s)")
-                if reverted_triggers:
-                    print(f"[TIME TRIGGER] Reverted {len(reverted_triggers)} time trigger(s)")
-                
         except Exception as e:
             print(f"[TIME TRIGGER] Error checking time triggers: {e}")
 
     def _trigger_conditions_match(self, conditions, current_datetime):
-        """Check if trigger conditions match the current datetime."""
-        if not conditions:  # "Always" condition
+        if not conditions:
             return True
-        
-        # Check year
         if 'year' in conditions and current_datetime.year != conditions['year']:
             return False
-        
-        # Check month
         if 'month' in conditions:
             month_names = []
             for i in range(12):
@@ -1096,27 +825,18 @@ class TimeManager(QWidget):
                     default_months = ["January", "February", "March", "April", "May", "June",
                                      "July", "August", "September", "October", "November", "December"]
                     month_names.append(default_months[i])
-            
             try:
                 month_index = month_names.index(conditions['month'])
                 if current_datetime.month != month_index + 1:
                     return False
             except ValueError:
                 return False
-        
-        # Check day of month
         if 'day_of_month' in conditions and current_datetime.day != conditions['day_of_month']:
             return False
-        
-        # Check hour
         if 'hour' in conditions and current_datetime.hour != conditions['hour']:
             return False
-        
-        # Check minute
         if 'minute' in conditions and current_datetime.minute != conditions['minute']:
             return False
-        
-        # Check day of week
         if 'day' in conditions:
             day_names = []
             for i in range(7):
@@ -1126,14 +846,12 @@ class TimeManager(QWidget):
                 else:
                     default_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
                     day_names.append(default_days[i])
-            
             try:
                 day_index = day_names.index(conditions['day'])
                 if current_datetime.weekday() != day_index:
                     return False
             except ValueError:
                 return False
-        
         return True
 
     def update_theme(self, new_theme):
@@ -1142,10 +860,9 @@ class TimeManager(QWidget):
         for child in self.findChildren(QFrame):
             if child.frameShape() == QFrame.HLine:
                 child.setStyleSheet(f"background-color: {self.theme_colors.get('base_color', '#00E5E5')}; height: 1px; border: none; margin: 5px 0;")
+                
     def update_time(self, main_ui, tab_data):
-        print(f"[DEBUG] TimeManager.update_time called - tab_data: {tab_data is not None}, workflow_data_dir: {self.workflow_data_dir}")
         if not tab_data or not self.workflow_data_dir:
-            print(f"[DEBUG] TimeManager.update_time - missing tab_data or workflow_data_dir")
             return
         self.time_passage_data = self._load_time_passage_data()
         time_mode = self.time_passage_data.get('time_mode', 'game_world')
@@ -1156,16 +873,13 @@ class TimeManager(QWidget):
         except (ValueError, AttributeError):
             return
         variables = main_ui._load_variables(tab_index)
-        print(f"[DEBUG] Time mode: {time_mode}, advancement_mode: {self.time_passage_data.get('advancement_mode', 'static')}")
         if time_mode == 'real_world':
             current_datetime = datetime.now()
             variables['datetime'] = current_datetime.isoformat()
             variables['timemode'] = 'real_world'
-            print(f"[DEBUG] Real world mode - set datetime to: {variables['datetime']}")
         else:
             advancement_mode = self.time_passage_data.get('advancement_mode', 'static')
             variables['timemode'] = 'game_world'
-            print(f"[DEBUG] Game world mode - advancement_mode: {advancement_mode}")
             if 'datetime' not in variables:
                 starting_dt_str = self.time_passage_data.get('starting_datetime')
                 if starting_dt_str:
@@ -1184,8 +898,6 @@ class TimeManager(QWidget):
                 if advancement_mode == 'realtime':
                     time_multiplier = self.time_passage_data.get('time_multiplier', 1.0)
                     now = datetime.now()
-                    print(f"[DEBUG] Realtime mode - multiplier: {time_multiplier}, current time: {now}")
-                    
                     try:
                         current_game_time = datetime.fromisoformat(variables['datetime'])
                     except (ValueError, TypeError):
@@ -1197,16 +909,13 @@ class TimeManager(QWidget):
                                 current_game_time = datetime.now()
                         else:
                             current_game_time = datetime.now()
-                    
                     last_real_time = variables.get('_last_real_time_update')
                     shutdown_time = variables.get('_timer_shutdown_time')
                     was_shutdown_graceful = variables.get('_timer_shutdown_graceful', False)
-                    
                     if not last_real_time:
                         variables['_last_real_time_update'] = now.isoformat()
                         main_ui._save_variables(tab_index, variables)
                         return
-                    
                     if was_shutdown_graceful and shutdown_time:
                         try:
                             shutdown_dt = datetime.fromisoformat(shutdown_time)
@@ -1216,13 +925,10 @@ class TimeManager(QWidget):
                             variables['datetime'] = new_game_time.isoformat()
                             variables.pop('_timer_shutdown_graceful', None)
                             variables.pop('_timer_shutdown_time', None)
-                            print(f"[DEBUG] Shutdown recovery - delta: {real_time_delta}, new time: {new_game_time}")
                         except (ValueError, TypeError) as e:
                             print(f"[DEBUG] Shutdown recovery error: {e}")
                     else:
-                        # Check if time was manually advanced by a rule action
                         if variables.get('_manual_time_advancement', False):
-                            print(f"[DEBUG] Skipping automatic time advancement - manual advancement detected")
                             variables.pop('_manual_time_advancement', None)
                         elif time_multiplier > 0.0:
                             try:
@@ -1231,23 +937,18 @@ class TimeManager(QWidget):
                                 game_time_delta = real_time_delta * time_multiplier
                                 new_game_time = current_game_time + game_time_delta
                                 variables['datetime'] = new_game_time.isoformat()
-                                print(f"[DEBUG] Normal advancement - delta: {real_time_delta}, new time: {new_game_time}")
                             except (ValueError, TypeError) as e:
                                 print(f"[DEBUG] Normal advancement error: {e}")
-                        else:
-                            print(f"[DEBUG] Time multiplier is 0 or negative: {time_multiplier}")
-                    
                     variables['_last_real_time_update'] = now.isoformat()
                     main_ui._save_variables(tab_index, variables)
         main_ui._save_variables(tab_index, variables)
-        
         self._check_time_triggers()
+
     def _apply_styling(self):
         base_color = self.theme_colors.get('base_color', '#00FF66')
         bg_value = int(80 * self.theme_colors.get("contrast", 0.5))
         bg_color = f"#{bg_value:02x}{bg_value:02x}{bg_value:02x}"
         darker_bg = f"#{max(bg_value-10, 0):02x}{max(bg_value-10, 0):02x}{max(bg_value-10, 0):02x}"
-        
         self.setStyleSheet(f"""
             QWidget#TimeManagerWidget {{
                 background-color: {darker_bg};
