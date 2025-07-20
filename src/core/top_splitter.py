@@ -1,6 +1,12 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
 from PyQt5.QtCore import Qt
 
+def get_display_name_from_setting(setting_name):
+    if not setting_name or setting_name == "--":
+        return "--"
+    parts = setting_name.split(',')
+    return parts[-1].strip() if parts else setting_name
+
 class TopSplitterWidget(QWidget):
     def __init__(self, theme_colors, parent=None):
         super().__init__(parent)
@@ -24,7 +30,8 @@ class TopSplitterWidget(QWidget):
 
     def set_location_text(self, text):
         if hasattr(self, 'location_label') and self.location_label:
-            self.location_label.setText(text)
+            display_name = get_display_name_from_setting(text)
+            self.location_label.setText(display_name)
 
     def update_theme(self, new_theme):
         self.theme_colors = new_theme.copy()
