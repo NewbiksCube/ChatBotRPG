@@ -3,7 +3,7 @@ import os
 import re
 import copy
 import pygame
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel, QPushButton, QMessageBox, QRadioButton, QLineEdit, QSpinBox, QComboBox, QCheckBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel, QPushButton, QMessageBox, QRadioButton, QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QCheckBox
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QApplication # Added for application-level update blocking
 
@@ -68,16 +68,7 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
             try:
                 condition_type = selector.currentText()
                 condition_data = {"type": condition_type}
-                if condition_type == "Turn":
-                    turn_spinner = condition_widget.findChild(QSpinBox, "ConditionTurnSpinner")
-                    op_selector = condition_widget.findChild(QComboBox, "TurnCondOpSelector")
-                    if turn_spinner and op_selector:
-                        try:
-                            condition_data["turn"] = turn_spinner.value()
-                            condition_data["operator"] = op_selector.currentText()
-                        except RuntimeError:
-                            pass
-                elif condition_type in ["Setting", "Location", "Region", "World"]:
+                if condition_type in ["Setting", "Location", "Region", "World"]:
                     geography_editor = condition_widget.findChild(QLineEdit, "GeographyNameEditor")
                     if geography_editor:
                         try:
@@ -124,6 +115,17 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                     if op_selector and value_spinner:
                         try:
                             condition_data["operator"] = op_selector.currentText()
+                            condition_data["value"] = value_spinner.value()
+                        except RuntimeError:
+                            pass
+                elif condition_type == "Game Time":
+                    op_selector = condition_widget.findChild(QComboBox, "GameTimeCondOpSelector")
+                    type_selector = condition_widget.findChild(QComboBox, "GameTimeTypeSelector")
+                    value_spinner = condition_widget.findChild(QSpinBox, "GameTimeValueSpinner")
+                    if op_selector and type_selector and value_spinner:
+                        try:
+                            condition_data["operator"] = op_selector.currentText()
+                            condition_data["time_type"] = type_selector.currentText()
                             condition_data["value"] = value_spinner.value()
                         except RuntimeError:
                             pass
@@ -201,6 +203,13 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                             action_obj["advance_time"] = advance_time_checkbox.isChecked()
                                         else:
                                             action_obj["advance_time"] = True  # Default to True
+                                        
+                                        # Save the speed multiplier spinner value
+                                        speed_multiplier_spinner = action_row_widget.findChild(QDoubleSpinBox, "ChangeLocationSpeedMultiplierSpinner")
+                                        if speed_multiplier_spinner:
+                                            action_obj["speed_multiplier"] = speed_multiplier_spinner.value()
+                                        else:
+                                            action_obj["speed_multiplier"] = 1.0  # Default to 1.0
                                     elif action_type == "Set Var":
                                         if var_name_editor and var_value_editor:
                                             try:
@@ -594,6 +603,138 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                                 action_obj["game_over_message"] = ""
                                         else:
                                             action_obj["game_over_message"] = ""
+                                    elif action_type == "Move Item":
+                                        move_item_name_input = action_row_widget.findChild(QLineEdit, "MoveItemNameInput")
+                                        move_item_quantity_input = action_row_widget.findChild(QLineEdit, "MoveItemQuantityInput")
+                                        move_item_from_setting_radio = action_row_widget.findChild(QRadioButton, "MoveItemFromSettingRadio")
+                                        move_item_from_character_radio = action_row_widget.findChild(QRadioButton, "MoveItemFromCharacterRadio")
+                                        move_item_from_name_input = action_row_widget.findChild(QLineEdit, "MoveItemFromNameInput")
+                                        move_item_to_setting_radio = action_row_widget.findChild(QRadioButton, "MoveItemToSettingRadio")
+                                        move_item_to_character_radio = action_row_widget.findChild(QRadioButton, "MoveItemToCharacterRadio")
+                                        move_item_to_name_input = action_row_widget.findChild(QLineEdit, "MoveItemToNameInput")
+                                        if move_item_name_input:
+                                            try:
+                                                action_obj["item_name"] = move_item_name_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["item_name"] = ""
+                                        if move_item_quantity_input:
+                                            try:
+                                                action_obj["quantity"] = move_item_quantity_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["quantity"] = "1"
+                                        else:
+                                            action_obj["quantity"] = "1"
+                                        from_type = "Setting"
+                                        if move_item_from_setting_radio and move_item_from_character_radio:
+                                            try:
+                                                if move_item_from_character_radio.isChecked():
+                                                    from_type = "Character"
+                                            except RuntimeError:
+                                                from_type = "Setting"
+                                        action_obj["from_type"] = from_type
+                                        if move_item_from_name_input:
+                                            try:
+                                                action_obj["from_name"] = move_item_from_name_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["from_name"] = ""
+                                        else:
+                                            action_obj["from_name"] = ""
+                                        to_type = "Setting"
+                                        if move_item_to_setting_radio and move_item_to_character_radio:
+                                            try:
+                                                if move_item_to_character_radio.isChecked():
+                                                    to_type = "Character"
+                                            except RuntimeError:
+                                                to_type = "Setting"
+                                        action_obj["to_type"] = to_type
+                                        if move_item_to_name_input:
+                                            try:
+                                                action_obj["to_name"] = move_item_to_name_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["to_name"] = ""
+                                        else:
+                                            action_obj["to_name"] = ""
+                                    elif action_type == "Add Item":
+                                        add_item_name_input = action_row_widget.findChild(QLineEdit, "AddItemNameInput")
+                                        add_item_quantity_input = action_row_widget.findChild(QLineEdit, "AddItemQuantityInput")
+                                        add_item_generate_checkbox = action_row_widget.findChild(QCheckBox, "AddItemGenerateCheckbox")
+                                        add_item_target_setting_radio = action_row_widget.findChild(QRadioButton, "AddItemTargetSettingRadio")
+                                        add_item_target_character_radio = action_row_widget.findChild(QRadioButton, "AddItemTargetCharacterRadio")
+                                        add_item_target_name_input = action_row_widget.findChild(QLineEdit, "AddItemTargetNameInput")
+                                        
+                                        if add_item_name_input:
+                                            try:
+                                                action_obj["item_name"] = add_item_name_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["item_name"] = ""
+                                        if add_item_quantity_input:
+                                            try:
+                                                action_obj["quantity"] = add_item_quantity_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["quantity"] = "1"
+                                        else:
+                                            action_obj["quantity"] = "1"
+                                        
+                                        if add_item_generate_checkbox:
+                                            try:
+                                                action_obj["generate"] = add_item_generate_checkbox.isChecked()
+                                            except RuntimeError:
+                                                action_obj["generate"] = False
+                                        else:
+                                            action_obj["generate"] = False
+                                        
+                                        target_type = "Setting"
+                                        if add_item_target_setting_radio and add_item_target_character_radio:
+                                            try:
+                                                if add_item_target_character_radio.isChecked():
+                                                    target_type = "Character"
+                                            except RuntimeError:
+                                                target_type = "Setting"
+                                        action_obj["target_type"] = target_type
+                                        
+                                        if add_item_target_name_input:
+                                            try:
+                                                action_obj["target_name"] = add_item_target_name_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["target_name"] = ""
+                                        else:
+                                            action_obj["target_name"] = ""
+                                    elif action_type == "Remove Item":
+                                        remove_item_name_input = action_row_widget.findChild(QLineEdit, "RemoveItemNameInput")
+                                        remove_item_quantity_input = action_row_widget.findChild(QLineEdit, "RemoveItemQuantityInput")
+                                        remove_item_target_setting_radio = action_row_widget.findChild(QRadioButton, "RemoveItemTargetSettingRadio")
+                                        remove_item_target_character_radio = action_row_widget.findChild(QRadioButton, "RemoveItemTargetCharacterRadio")
+                                        remove_item_target_name_input = action_row_widget.findChild(QLineEdit, "RemoveItemTargetNameInput")
+                                        
+                                        if remove_item_name_input:
+                                            try:
+                                                action_obj["item_name"] = remove_item_name_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["item_name"] = ""
+                                        if remove_item_quantity_input:
+                                            try:
+                                                action_obj["quantity"] = remove_item_quantity_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["quantity"] = "1"
+                                        else:
+                                            action_obj["quantity"] = "1"
+                                        
+                                        target_type = "Setting"
+                                        if remove_item_target_setting_radio and remove_item_target_character_radio:
+                                            try:
+                                                if remove_item_target_character_radio.isChecked():
+                                                    target_type = "Character"
+                                            except RuntimeError:
+                                                target_type = "Setting"
+                                        action_obj["target_type"] = target_type
+                                        
+                                        if remove_item_target_name_input:
+                                            try:
+                                                action_obj["target_name"] = remove_item_target_name_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["target_name"] = ""
+                                        else:
+                                            action_obj["target_name"] = ""
                                     elif action_type == "Post Visibility":
                                         current_post_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityCurrentPostRadio")
                                         player_post_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityPlayerPostRadio")
@@ -642,13 +783,24 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                                         var_name = var_name_input.text().strip()
                                                         operator = operator_combo.currentText() if operator_combo else "equals"
                                                         var_value = var_value_input.text().strip() if var_value_input else ""
-                                                        
+                                                        var_scope = "Global"
+                                                        var_scope_global_radio = condition_widget.findChild(QRadioButton, "PostVisibilityVarScopeGlobalRadio")
+                                                        var_scope_player_radio = condition_widget.findChild(QRadioButton, "PostVisibilityVarScopePlayerRadio")
+                                                        var_scope_character_radio = condition_widget.findChild(QRadioButton, "PostVisibilityVarScopeCharacterRadio")
+                                                        var_scope_setting_radio = condition_widget.findChild(QRadioButton, "PostVisibilityVarScopeSettingRadio")
+                                                        if var_scope_player_radio and var_scope_player_radio.isChecked():
+                                                            var_scope = "Player"
+                                                        elif var_scope_character_radio and var_scope_character_radio.isChecked():
+                                                            var_scope = "Character"
+                                                        elif var_scope_setting_radio and var_scope_setting_radio.isChecked():
+                                                            var_scope = "Setting"
                                                         if var_name:
                                                             var_condition_data = {
                                                                 "type": "Variable",
                                                                 "variable_name": var_name,
                                                                 "operator": operator,
-                                                                "value": var_value
+                                                                "value": var_value,
+                                                                "variable_scope": var_scope
                                                             }
                                                             conditions.append(var_condition_data)
                                         
@@ -682,6 +834,34 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                             action_obj["system_message_position"] = "last"
                                         else:
                                             action_obj["system_message_position"] = "first"
+                                    elif action_type == "Advance Time":
+                                        advance_time_input = action_row_widget.findChild(QLineEdit, "AdvanceTimeInput")
+                                        if advance_time_input:
+                                            try:
+                                                action_obj["advance_amount"] = advance_time_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["advance_amount"] = ""
+                                        else:
+                                            action_obj["advance_amount"] = ""
+                                    elif action_type == "Change Time Passage":
+                                        passage_static_radio = action_row_widget.findChild(QRadioButton, "ChangeTimePassageStaticRadio")
+                                        passage_realtime_radio = action_row_widget.findChild(QRadioButton, "ChangeTimePassageRealtimeRadio")
+                                        multiplier_input = action_row_widget.findChild(QDoubleSpinBox, "ChangeTimePassageMultiplierInput")
+                                        
+                                        if passage_static_radio and passage_static_radio.isChecked():
+                                            action_obj["passage_mode"] = "static"
+                                        elif passage_realtime_radio and passage_realtime_radio.isChecked():
+                                            action_obj["passage_mode"] = "realtime"
+                                        else:
+                                            action_obj["passage_mode"] = "static"
+                                        
+                                        if multiplier_input:
+                                            try:
+                                                action_obj["time_multiplier"] = multiplier_input.value()
+                                            except RuntimeError:
+                                                action_obj["time_multiplier"] = 1.0
+                                        else:
+                                            action_obj["time_multiplier"] = 1.0
                                     actions.append(action_obj)
                             try:
                                 tag = tag_editor.toPlainText().strip()
@@ -986,15 +1166,7 @@ def _populate_condition_row(self, row_widget, cond_data):
                     selector.setCurrentIndex(none_index)
 
         condition_type = selector.currentText() if selector else 'None'
-        if condition_type == 'Turn':
-            turn_spinner = row_widget.findChild(QSpinBox, "ConditionTurnSpinner")
-            turn_op_selector = row_widget.findChild(QComboBox, "TurnCondOpSelector")
-            if turn_spinner:
-                turn_spinner.setValue(cond_data.get('turn', 1))
-            if turn_op_selector:
-                op_index = turn_op_selector.findText(cond_data.get('operator', '=='))
-                turn_op_selector.setCurrentIndex(op_index if op_index >= 0 else 0)
-        elif condition_type in ['Setting', 'Location', 'Region', 'World']:
+        if condition_type in ['Setting', 'Location', 'Region', 'World']:
             geography_editor = row_widget.findChild(QLineEdit, "GeographyNameEditor")
             if geography_editor:
                 geography_editor.setText(cond_data.get('geography_name', ''))
@@ -1027,6 +1199,18 @@ def _populate_condition_row(self, row_widget, cond_data):
                 scene_op_selector.setCurrentIndex(op_index if op_index >= 0 else 0)
             if scene_count_spinner:
                 scene_count_spinner.setValue(cond_data.get('value', 1))
+        elif condition_type == 'Game Time':
+            game_time_op_selector = row_widget.findChild(QComboBox, "GameTimeCondOpSelector")
+            game_time_type_selector = row_widget.findChild(QComboBox, "GameTimeTypeSelector")
+            game_time_value_spinner = row_widget.findChild(QSpinBox, "GameTimeValueSpinner")
+            if game_time_op_selector:
+                op_index = game_time_op_selector.findText(cond_data.get('operator', 'Before'))
+                game_time_op_selector.setCurrentIndex(op_index if op_index >= 0 else 0)
+            if game_time_type_selector:
+                type_index = game_time_type_selector.findText(cond_data.get('time_type', 'Minute'))
+                game_time_type_selector.setCurrentIndex(type_index if type_index >= 0 else 0)
+            if game_time_value_spinner:
+                game_time_value_spinner.setValue(cond_data.get('value', 0))
         if selector:
             selector.currentIndexChanged.emit(selector.currentIndex())
         if 'op_selector' in locals() and op_selector:
