@@ -1034,6 +1034,54 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
         color: white;
     }}
 
+    /* Setting Manager Table Style */
+    QTableWidget#SettingManagerTable {{
+        background-color: {darker_bg};
+        color: {base_color};
+        border: 1px solid {base_color};
+        selection-background-color: {highlight};
+        selection-color: white;
+        alternate-background-color: {bg_color};
+        border-radius: 3px;
+        gridline-color: rgba({r}, {g}, {b}, 0.3);
+        font: 10pt "Consolas";
+        outline: none;
+    }}
+    QTableWidget#SettingManagerTable::item {{
+        padding: 4px;
+        border: none;
+        outline: none;
+    }}
+    QTableWidget#SettingManagerTable::item:selected {{
+        background-color: {highlight};
+        color: white;
+        outline: none;
+    }}
+    QTableWidget#SettingManagerTable::item:focus {{
+        background-color: {darker_bg};
+        color: {base_color};
+        border: 1px solid {highlight};
+        outline: none;
+    }}
+    QHeaderView#SettingManagerTableHeader {{
+        background-color: {bg_color};
+        color: {base_color};
+        border: 1px solid {base_color};
+        font: 10pt "Consolas";
+        font-weight: bold;
+    }}
+    QHeaderView#SettingManagerTableHeader::section {{
+        background-color: {bg_color};
+        color: {base_color};
+        border: 1px solid {base_color};
+        padding: 4px;
+        font-weight: bold;
+    }}
+    QHeaderView#SettingManagerTableHeader::section:hover {{
+        background-color: {highlight};
+        color: white;
+    }}
+
     /* NEW: Setting Manager Name/Description Inputs */
     QLineEdit#SettingManagerNameInput, QTextEdit#SettingManagerDescInput {{
         color: {base_color};
@@ -1099,6 +1147,38 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
             subcontrol-position: bottom right; /* Place down button bottom right */
     }}
     QSpinBox#ConditionSceneCountSpinner::up-arrow, QSpinBox#ConditionSceneCountSpinner::down-arrow {{
+        width: 0px; height: 0px; /* Hide default arrows */
+    }}
+    /* END ADDED */
+
+    /* ADDED: Styling for Game Time Value Spinner */
+    QSpinBox#GameTimeValueSpinner {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 9pt "Consolas";
+        border-radius: 3px;
+        padding: 1px 3px; /* Less vertical padding */
+        min-width: 40px; /* Adjust width */
+        max-width: 60px;
+    }}
+    QSpinBox#GameTimeValueSpinner::up-button, QSpinBox#GameTimeValueSpinner::down-button {{
+        background-color: {base_color};
+        border: 1px solid {bg_color};
+        width: 12px; /* Smaller buttons */
+        subcontrol-origin: border;
+        subcontrol-position: right; /* Position buttons on the right */
+        margin: 1px;
+    }}
+    QSpinBox#GameTimeValueSpinner::up-button {{
+            subcontrol-position: top right; /* Place up button top right */
+    }}
+    QSpinBox#GameTimeValueSpinner::down-button {{
+            subcontrol-position: bottom right; /* Place down button bottom right */
+    }}
+    QSpinBox#GameTimeValueSpinner::up-arrow, QSpinBox#GameTimeValueSpinner::down-arrow {{
         width: 0px; height: 0px; /* Hide default arrows */
     }}
     /* END ADDED */
