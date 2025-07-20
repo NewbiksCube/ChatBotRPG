@@ -27,33 +27,25 @@ def _start_npc_inference_threads(self):
         tab_data = self.tabs_data[current_tab_index]
         if not tab_data:
             return
-        
-        # Pause timers during NPC processing
         if hasattr(self, 'timer_manager') and self.timer_manager:
             self.timer_manager.pause_timers()
-        
         is_timer_triggered = bool(
             tab_data.get('_timer_final_instruction') or 
             tab_data.get('_is_timer_narrator_action_active') or
             tab_data.get('_last_timer_action_type')
         )
-        
         if is_timer_triggered and hasattr(self, '_character_tags'):
-            print("[CHARACTER TAGS] Clearing all character tags before timer-based rule evaluation to prevent stacking")
             self._character_tags.clear()
-        
         if tab_data.get('_is_force_narrator_first_active', False):
             self._npc_inference_queue = []
             self._npc_message_queue = []
             self._npc_inference_in_progress = False
-            # Resume timers if we're not processing NPCs
             if hasattr(self, 'timer_manager') and self.timer_manager:
                 self.timer_manager.resume_timers()
             return
         if tab_data.get('force_narrator', {}).get('active') and \
            tab_data.get('force_narrator', {}).get('order', '').lower() == 'last' and \
            tab_data.get('_fn_last_npc_turn_done', False):
-            # Resume timers if we're not processing NPCs
             if hasattr(self, 'timer_manager') and self.timer_manager:
                 self.timer_manager.resume_timers()
             return
@@ -73,7 +65,6 @@ def _start_npc_inference_threads(self):
                             thread.wait(200)
                         except Exception as e:
                             print(f"[WARN] Error terminating thread: {e}")
-            # Resume timers if we're not processing NPCs
             if hasattr(self, 'timer_manager') and self.timer_manager:
                 self.timer_manager.resume_timers()
             return
@@ -89,7 +80,6 @@ def _start_npc_inference_threads(self):
                             thread.wait(200)
                         except Exception as e:
                             print(f"[WARN] Error terminating thread: {e}")
-            # Resume timers if we're not processing NPCs
             if hasattr(self, 'timer_manager') and self.timer_manager:
                 self.timer_manager.resume_timers()
             return
@@ -104,7 +94,6 @@ def _start_npc_inference_threads(self):
             self._npc_inference_queue = []
             self._npc_message_queue = [] 
             self._npc_inference_in_progress = False
-            # Resume timers if we're not processing NPCs
             if hasattr(self, 'timer_manager') and self.timer_manager:
                 self.timer_manager.resume_timers()
             return
@@ -163,7 +152,6 @@ def _start_npc_inference_threads(self):
                             break
         if current_setting_file and setting_data:
             chars = setting_data.get('characters', [])
-            # Filter out non-string elements from the characters list
             chars_filtered = [c for c in chars if isinstance(c, str)]
             npcs_in_scene_raw = [c for c in chars_filtered if c != player_name and c != "Player"]
             npcs_in_scene = []
@@ -287,8 +275,6 @@ def _start_npc_inference_threads(self):
                 )
             full_history_context = self.get_current_context()
             current_scene = tab_data.get('scene_number', 1)
-            
-            # Filter conversation history by visibility for the current character
             from core.utils import _filter_conversation_history_by_visibility
             filtered_context = _filter_conversation_history_by_visibility(
                 full_history_context, char, workflow_data_dir, tab_data
@@ -456,7 +442,6 @@ def _start_npc_inference_threads(self):
                         if char in tab_data.get('_characters_to_exit_rules', set()):
                             print(f"[EXIT RULE PROCESSING] Character '{char}' marked to exit rule processing - stopping further rules for this character")
                             break
-                        
                         characters_to_skip = tab_data.get('_characters_to_skip', set())
                         if char in characters_to_skip:
                             print(f"[SKIP POST] Character '{char}' marked to skip during rule '{rule_id}' - exiting rule processing early")
@@ -517,7 +502,6 @@ def _start_npc_inference_threads(self):
                 npc_context_for_llm.append(item)
             for mod in context_modifications:
                 if mod.get('role') == 'system' and mod.get('position') == 'prepend':
-                    # Apply variable substitution to system message content
                     content = mod['content']
                     if hasattr(self, '_substitute_variables_in_string'):
                         content = self._substitute_variables_in_string(content, tab_data, char)
@@ -528,7 +512,6 @@ def _start_npc_inference_threads(self):
             })
             for mod in context_modifications:
                 if mod.get('role') == 'system' and mod.get('position') == 'append':
-                    # Apply variable substitution to system message content
                     content = mod['content']
                     if hasattr(self, '_substitute_variables_in_string'):
                         content = self._substitute_variables_in_string(content, tab_data, char)
@@ -569,7 +552,6 @@ def _start_npc_inference_threads(self):
                         trigger_msg = self._last_user_msg_for_post_rules if hasattr(self, '_last_user_msg_for_post_rules') and self._last_user_msg_for_post_rules else "FN:Last deferred trigger (no NPCs in scene)"
                     QTimer.singleShot(0, lambda: self._complete_message_processing(trigger_msg))
                     self._npc_lock = False
-                    # Resume timers when NPC processing is complete
                     if hasattr(self, 'timer_manager') and self.timer_manager:
                         self.timer_manager.resume_timers()
                     return
@@ -582,7 +564,6 @@ def _start_npc_inference_threads(self):
                 self._re_enable_input_after_pipeline()
                 self._allow_live_input_for_current_action = False
             self._npc_lock = False
-            # Resume timers when NPC processing is complete
             if hasattr(self, 'timer_manager') and self.timer_manager:
                 self.timer_manager.resume_timers()
             return
@@ -600,14 +581,12 @@ def _start_next_npc_inference(self):
             self._npc_inference_queue = []
             self._npc_message_queue = []
             self._npc_inference_in_progress = False
-            # Resume timers when NPC processing is complete
             if hasattr(self, 'timer_manager') and self.timer_manager:
                 self.timer_manager.resume_timers()
             return
         if tab_data and tab_data.get('force_narrator', {}).get('active') and \
            tab_data.get('force_narrator', {}).get('order', '').lower() == 'last' and \
            tab_data.get('_fn_last_npc_turn_done', False):
-            # Resume timers when NPC processing is complete
             if hasattr(self, 'timer_manager') and self.timer_manager:
                 self.timer_manager.resume_timers()
             return
@@ -636,7 +615,6 @@ def _start_next_npc_inference(self):
                     tab_data['_deferred_last_narrator'] = True
                     QTimer.singleShot(0, lambda: self._complete_message_processing(last_user_msg))
                     return
-        # Resume timers when NPC processing is complete
         if hasattr(self, 'timer_manager') and self.timer_manager:
             self.timer_manager.resume_timers()
         return
@@ -649,7 +627,6 @@ def _start_next_npc_inference(self):
        tab_data.get('force_narrator', {}).get('order', '').lower() == 'last' and \
        tab_data.get('_fn_last_npc_turn_done', False):
         self._npc_inference_queue = []
-        # Resume timers when NPC processing is complete
         if hasattr(self, 'timer_manager') and self.timer_manager:
             self.timer_manager.resume_timers()
         return
@@ -762,16 +739,12 @@ def _process_end_of_round_rules(self, tab_data, callback=None):
             callback()
         return
     tab_data['_end_of_round_rules_processed_for_turn'] = tab_data.get('turn_count')
-    
-    # Clear exit rule processing flags at the start of End of Round processing
-    # This allows timer rules to execute properly in the next turn
     if '_characters_to_exit_rules' in tab_data:
         print(f"[END OF ROUND] Clearing exit rule processing flags for characters: {tab_data['_characters_to_exit_rules']}")
         tab_data.pop('_characters_to_exit_rules', None)
     if '_narrator_to_exit_rules' in tab_data:
         print(f"[END OF ROUND] Clearing exit rule processing flag for narrator")
         tab_data.pop('_narrator_to_exit_rules', None)
-    
     rules = tab_data.get('thought_rules', [])
     end_of_round_rules = [r for r in rules if r.get('applies_to') == 'End of Round']
     if not end_of_round_rules:
@@ -779,25 +752,19 @@ def _process_end_of_round_rules(self, tab_data, callback=None):
             callback()
         return
     self._cot_sequential_index = 0
-    
     current_context = self.get_current_context()
     user_msg = ""
     assistant_msg = ""
     if current_context and len(current_context) >= 2:
         user_msg = current_context[-2].get('content', '') if current_context[-2].get('role') == 'user' else ""
         assistant_msg = current_context[-1].get('content', '') if current_context[-1].get('role') == 'assistant' else ""
-    
     from rules.rule_evaluator import _process_next_sequential_rule_pre
-    
     self._is_processing_eor = True
-    
     def after_rules_with_cleanup():
         self._is_processing_eor = False
         if callback:
             callback()
-
     self._cot_next_step = after_rules_with_cleanup
-    
     QTimer.singleShot(0, lambda: _process_next_sequential_rule_pre(self, user_msg, assistant_msg, end_of_round_rules))
 
 def _check_process_npc_queue(self):
@@ -868,7 +835,6 @@ def _check_process_npc_queue(self):
                 self._schedule_timer_checks()
         QTimer.singleShot(0, fn_last_final_executor)
         return
-    # --- INSERT END OF ROUND RULES HERE ---
     def after_end_of_round():
         if hasattr(self, '_last_user_msg_for_post_rules') and self._last_user_msg_for_post_rules:
             self._last_user_msg_for_post_rules = None
@@ -886,8 +852,9 @@ def _display_next_npc_message(self):
     tab_data_check = self.get_current_tab_data()
     if not tab_data_check:
         return
-    from editor_panel.time_manager import update_time
-    update_time(self, tab_data_check)
+    time_manager_widget = tab_data_check.get('time_manager_widget')
+    if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
+        time_manager_widget.update_time(self, tab_data_check)
     self._processing_npc_queue = True
     message_data = self._npc_message_queue.pop(0)
     message_content = message_data['content']
@@ -910,7 +877,6 @@ def _display_next_npc_message(self):
             save_npc_message_obj["metadata"]["text_tag"] = text_tag_local
         if post_effects_local is not None:
             save_npc_message_obj["metadata"]["post_effects"] = post_effects_local
-            # Add Post Visibility metadata if present
             if 'post_visibility' in post_effects_local:
                 save_npc_message_obj["metadata"]["post_visibility"] = post_effects_local['post_visibility']
         workflow_data_dir = tab_data_check.get('workflow_data_dir')
@@ -920,10 +886,25 @@ def _display_next_npc_message(self):
                 save_npc_message_obj["metadata"]["location"] = location
         current_turn_for_metadata = tab_data_check.get('turn_count', 0)
         save_npc_message_obj["metadata"]["turn"] = current_turn_for_metadata
+        
+        if workflow_data_dir:
+            try:
+                tab_index = self.tabs_data.index(tab_data_check) if tab_data_check in self.tabs_data else -1
+                if tab_index >= 0:
+                    variables = self._load_variables(tab_index)
+                    game_datetime = variables.get('datetime')
+                    if game_datetime:
+                        save_npc_message_obj["metadata"]["game_datetime"] = game_datetime
+            except Exception as e:
+                print(f"Error adding game timestamp to NPC message: {e}")
+        
         current_context.append(save_npc_message_obj)
         self._save_context_for_tab(self.current_tab_index)
         if hasattr(self, '_npc_inference_queue') and self._npc_inference_queue:
             self._update_remaining_character_contexts()
+    time_manager_widget = tab_data_check.get('time_manager_widget') if tab_data_check else None
+    if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
+        time_manager_widget.update_time(self, tab_data_check)
     if hasattr(self, 'timer_manager') and tab_data_check:
         pass
     theme_settings = tab_data_check.get('settings', {}) if tab_data_check else {}
