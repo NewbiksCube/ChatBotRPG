@@ -21,15 +21,111 @@ class TimerInstance:
 
     def _calculate_interval_ms(self):
         interval_ms = 60000
-        if self.rule_data.get('interval_is_random', False):
-            min_interval = self.rule_data.get('interval_min', 5)
-            max_interval = self.rule_data.get('interval_max', 60)
-            interval_seconds = random.randint(min_interval, max_interval)
-            interval_ms = interval_seconds * 1000
+        
+        # Check if this timer uses game time instead of real time
+        use_game_time = self._should_use_game_time()
+        
+        if use_game_time:
+            # Calculate game time interval
+            game_seconds = self._calculate_game_time_interval()
+            if game_seconds > 0:
+                # Convert game time to real time based on time multiplier
+                time_multiplier = self._get_time_multiplier()
+                real_seconds = game_seconds / time_multiplier if time_multiplier > 0 else game_seconds
+                interval_ms = int(real_seconds * 1000)
+                print(f"[TIMER] Game time interval: {game_seconds}s game time = {real_seconds}s real time (multiplier: {time_multiplier})")
         else:
-            interval_seconds = self.rule_data.get('interval', 60)
-            interval_ms = interval_seconds * 1000
+            # Use real time interval (original logic)
+            if self.rule_data.get('interval_is_random', False):
+                min_interval = self.rule_data.get('interval_min', 5)
+                max_interval = self.rule_data.get('interval_max', 60)
+                interval_seconds = random.randint(min_interval, max_interval)
+                interval_ms = interval_seconds * 1000
+            else:
+                interval_seconds = self.rule_data.get('interval', 60)
+                interval_ms = interval_seconds * 1000
+        
         return interval_ms
+    
+    def _should_use_game_time(self):
+        """Check if this timer should use game time instead of real time"""
+        # Check the time_mode field first
+        time_mode = self.rule_data.get('time_mode', 'real_time')
+        if time_mode == 'game_time':
+            return True
+        
+        # Fallback: Check if any game time fields are set (for backward compatibility)
+        game_seconds = self.rule_data.get('game_seconds', 0)
+        game_minutes = self.rule_data.get('game_minutes', 0)
+        game_hours = self.rule_data.get('game_hours', 0)
+        game_days = self.rule_data.get('game_days', 0)
+        
+        # If any game time field is non-zero, use game time
+        return game_seconds > 0 or game_minutes > 0 or game_hours > 0 or game_days > 0
+    
+    def _calculate_game_time_interval(self):
+        """Calculate the total game time interval in seconds"""
+        total_seconds = 0
+        
+        # Add game seconds
+        if self.rule_data.get('game_seconds_is_random', False):
+            min_seconds = self.rule_data.get('game_seconds_min', 0)
+            max_seconds = self.rule_data.get('game_seconds_max', 59)
+            total_seconds += random.randint(min_seconds, max_seconds)
+        else:
+            total_seconds += self.rule_data.get('game_seconds', 0)
+        
+        # Add game minutes
+        if self.rule_data.get('game_minutes_is_random', False):
+            min_minutes = self.rule_data.get('game_minutes_min', 0)
+            max_minutes = self.rule_data.get('game_minutes_max', 59)
+            total_seconds += random.randint(min_minutes, max_minutes) * 60
+        else:
+            total_seconds += self.rule_data.get('game_minutes', 0) * 60
+        
+        # Add game hours
+        if self.rule_data.get('game_hours_is_random', False):
+            min_hours = self.rule_data.get('game_hours_min', 0)
+            max_hours = self.rule_data.get('game_hours_max', 23)
+            total_seconds += random.randint(min_hours, max_hours) * 3600
+        else:
+            total_seconds += self.rule_data.get('game_hours', 0) * 3600
+        
+        # Add game days
+        if self.rule_data.get('game_days_is_random', False):
+            min_days = self.rule_data.get('game_days_min', 0)
+            max_days = self.rule_data.get('game_days_max', 365)
+            total_seconds += random.randint(min_days, max_days) * 86400
+        else:
+            total_seconds += self.rule_data.get('game_days', 0) * 86400
+        
+        return total_seconds
+    
+    def _get_time_multiplier(self):
+        """Get the current time multiplier from the time manager"""
+        if not self.tab_data:
+            return 1.0
+        
+        time_manager_widget = self.tab_data.get('time_manager_widget')
+        if not time_manager_widget:
+            return 1.0
+        
+        # Try to get the time multiplier from the time manager
+        try:
+            # Load the time passage configuration
+            workflow_data_dir = self.tab_data.get('workflow_data_dir')
+            if not workflow_data_dir:
+                return 1.0
+            
+            time_passage_file = os.path.join(workflow_data_dir, 'resources', 'data files', 'settings', 'time_passage.json')
+            if os.path.exists(time_passage_file):
+                with open(time_passage_file, 'r', encoding='utf-8') as f:
+                    time_config = json.load(f)
+                    return time_config.get('time_multiplier', 1.0)
+        except Exception as e:
+            print(f"[TIMER] Error getting time multiplier: {e}")
+        
+        return 1.0
 
     def start(self):
         self.is_running = True
@@ -222,6 +318,74 @@ class TimerManager(QObject):
         elif operator == "<=":
             return a <= b
         return False
+    
+    def _evaluate_game_time_condition(self, condition, tab_data):
+        """Evaluate Game Time conditions for timer rules using cyclical time"""
+        if not condition or condition.get('type') != 'Game Time':
+            return False
+        
+        operator = condition.get('operator', 'Before')
+        time_type = condition.get('time_type', 'Minute')
+        target_value = condition.get('value', 0)
+        
+        # Get current game datetime from variables
+        try:
+            main_ui = self.parent()
+            tab_index = main_ui.tabs_data.index(tab_data) if tab_data in main_ui.tabs_data else -1
+            if tab_index < 0:
+                print(f"[TIMER DEBUG] Could not find tab index for Game Time condition")
+                return False
+            
+            variables = main_ui._load_variables(tab_index)
+            current_datetime_str = variables.get('datetime')
+            
+            if not current_datetime_str:
+                print(f"[TIMER DEBUG] No game datetime found in variables")
+                return False
+                
+            current_datetime = datetime.fromisoformat(current_datetime_str)
+            
+            # Extract cyclical time component based on time_type
+            if time_type == 'Second':
+                current_value = current_datetime.second
+            elif time_type == 'Minute':
+                current_value = current_datetime.minute
+            elif time_type == 'Hour':
+                current_value = current_datetime.hour
+            elif time_type == 'Date':
+                current_value = current_datetime.day
+            elif time_type == 'Month':
+                current_value = current_datetime.month
+            elif time_type == 'Year':
+                current_value = current_datetime.year
+            else:
+                print(f"[TIMER DEBUG] Unknown time type '{time_type}' for Game Time condition")
+                return False
+            
+            print(f"[TIMER DEBUG] Game Time condition: {operator} {target_value} {time_type} (current: {current_value}, target: {target_value})")
+            
+            # Evaluate the condition using cyclical time
+            if operator == 'Before':
+                result = current_value < target_value
+            elif operator == 'After':
+                result = current_value > target_value
+            elif operator == 'At':
+                result = current_value == target_value
+            else:
+                print(f"[TIMER DEBUG] Unknown Game Time operator: {operator}")
+                return False
+                
+            print(f"[TIMER DEBUG] Game Time condition result: {result}")
+            return result
+                
+        except (ValueError, TypeError) as e:
+            print(f"[TIMER DEBUG] Error parsing game datetime '{current_datetime_str}': {e}")
+            return False
+        except Exception as e:
+            print(f"[TIMER DEBUG] Error evaluating Game Time condition: {e}")
+            return False
+    
+
         
     def _evaluate_rule_conditions(self, rule, tab_data, character_name=None):
         condition_type = rule.get('condition_type', 'Always')
@@ -235,7 +399,13 @@ class TimerManager(QObject):
             condition_operator_log = rule.get('condition_operator', 'AND')
             for i, condition in enumerate(condition_details):
                 logic_op_to_previous_log = condition.get('logic_to_previous', 'AND')
-                cond_result_log = self._evaluate_variable_condition(condition, tab_data, character_name)
+                
+                # Check if this is a Game Time condition
+                if condition.get('type') == 'Game Time':
+                    cond_result_log = self._evaluate_game_time_condition(condition, tab_data)
+                else:
+                    cond_result_log = self._evaluate_variable_condition(condition, tab_data, character_name)
+                
                 if final_result_log is None:
                     final_result_log = cond_result_log
                 elif logic_op_to_previous_log == 'AND':
@@ -454,6 +624,12 @@ class TimerManager(QObject):
                         has_character_binding = timer_instance.character is not None
                         is_character_timer = rule_scope == 'Character' or has_character_binding
                         is_recurring_timer = rule_data.get('recurring', False)
+                        is_global_timer = rule_data.get('global', False)
+                        
+                        # Don't terminate global timers on scene change
+                        if is_global_timer:
+                            print(f"[SCENE CHANGE] Keeping global timer for rule '{rule_id}', character: '{timer_instance.character}'")
+                            continue
                         
                         if is_character_timer or is_recurring_timer:
                             timer_type = "character" if is_character_timer else "recurring"
@@ -1044,8 +1220,9 @@ class TimerManager(QObject):
 def execute_timer_action(main_ui, rule_data, action, character_name=None, tab_data=None):
     if not main_ui or not action or not tab_data:
         return
-    from editor_panel.time_manager import update_time
-    update_time(main_ui, tab_data)
+    time_manager_widget = tab_data.get('time_manager_widget')
+    if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
+        time_manager_widget.update_time(main_ui, tab_data)
     action_type = action.get('type')
     allow_live_input = action.get('allow_live_input', False)
     main_ui._allow_live_input_for_current_action = allow_live_input
@@ -1113,8 +1290,6 @@ def _execute_set_var_action(main_ui, action, character_name, tab_data):
     operation = action.get('operation', 'Set')
     if not var_name:
         return
-    
-    # Apply variable substitution to var_value if it's a string
     if isinstance(var_value, str) and hasattr(main_ui, '_substitute_variables_in_string'):
         print(f"[TIMER SET VAR DEBUG] Before substitution: var_value='{var_value}', character_name='{character_name}'")
         var_value = main_ui._substitute_variables_in_string(var_value, tab_data, character_name)
