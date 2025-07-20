@@ -10,8 +10,9 @@ from core.utils import (_get_player_character_name, _prepare_condition_text,
 import time
 
 def _evaluate_conditions(self, tab_data, conditions, operator, current_turn, triggered_directly=False, character_name=None):
-    from editor_panel.time_manager import update_time
-    update_time(self, tab_data)
+    time_manager_widget = tab_data.get('time_manager_widget')
+    if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
+        time_manager_widget.update_time(self, tab_data)
     tab_index = self.tabs_data.index(tab_data) if tab_data in self.tabs_data else -1
     if tab_index >= 0:
         variables_file = tab_data.get('variables_file')
@@ -967,6 +968,10 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
         elif action_type == 'Game Over':
             _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
             return None
+        elif action_type == 'Advance Time':
+            _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
+        elif action_type == 'Change Time Passage':
+            _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
     try:
         if force_narrator_action_obj:
             force_order = force_narrator_action_obj.get('force_narrator_order', 'First')
