@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QAbstractItemView, QLineEdit, QTextEdit, QListWidgetItem, QPushButton, QMessageBox, QInputDialog, QSizePolicy, QTabWidget, QFileDialog, QGroupBox, QScrollArea, QCheckBox, QComboBox, QCompleter, QDialog, QStackedWidget
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QAbstractItemView, QLineEdit, QTextEdit, QListWidgetItem, QPushButton, QMessageBox, QInputDialog, QSizePolicy, QTabWidget, QFileDialog, QGroupBox, QScrollArea, QCheckBox, QComboBox, QCompleter, QDialog, QStackedWidget, QTableWidget, QTableWidgetItem, QHeaderView
 from PyQt5.QtCore import Qt, QTimer
 import os
 import json
@@ -536,38 +536,49 @@ class SettingManagerWidget(QWidget):
         self.setting_description_input = QTextEdit()
         self.setting_description_input.setObjectName("SettingManagerDescInput")
         self.setting_description_input.setMaximumHeight(60)
+        from .inventory_manager import ItemInstanceWidget
+        
         label_inventory_setting = QLabel("Inventory:")
         label_inventory_setting.setObjectName("SettingManagerEditLabel")
-        self.setting_inventory_list = QListWidget()
-        self.setting_inventory_list.setObjectName("SettingManagerList")
-        self.setting_inventory_list.setFixedHeight(80)
-        self.setting_inventory_list.setAlternatingRowColors(True)
-        self.setting_inventory_list.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.setting_inventory_list.setFocusPolicy(Qt.NoFocus)
-        inventory_btn_layout = QHBoxLayout()
-        self.add_inventory_btn = QPushButton("+")
-        self.add_inventory_btn.setObjectName("AddButton")
-        self.add_inventory_btn.setToolTip("Add Inventory Item")
-        self.add_inventory_btn.setMaximumWidth(30)
-        self.add_inventory_btn.clicked.connect(self._add_inventory_item)
-        self.remove_inventory_btn = QPushButton("-")
-        self.remove_inventory_btn.setObjectName("RemoveButton")
-        self.remove_inventory_btn.setToolTip("Remove Selected Inventory Item")
-        self.remove_inventory_btn.setMaximumWidth(30)
-        self.remove_inventory_btn.clicked.connect(self._remove_inventory_item)
-        inventory_btn_layout.addWidget(self.add_inventory_btn)
-        inventory_btn_layout.addWidget(self.remove_inventory_btn)
-        inventory_btn_layout.addStretch(1)
+        
         inventory_section_layout = QVBoxLayout()
         inventory_section_layout.setContentsMargins(0, 0, 0, 0)
         inventory_section_layout.setSpacing(2)
+        
         inventory_header_layout = QHBoxLayout()
         inventory_header_layout.addWidget(label_inventory_setting)
         inventory_header_layout.addStretch(1)
-        inventory_header_layout.addWidget(self.add_inventory_btn)
-        inventory_header_layout.addWidget(self.remove_inventory_btn)
+        
+        self.edit_inventory_btn = QPushButton("Edit")
+        self.edit_inventory_btn.setObjectName("EditButton")
+        self.edit_inventory_btn.setToolTip("Edit Inventory in Inventory Manager")
+        self.edit_inventory_btn.setMaximumWidth(60)
+        self.edit_inventory_btn.clicked.connect(self._edit_inventory_in_manager)
+        inventory_header_layout.addWidget(self.edit_inventory_btn)
+        
         inventory_section_layout.addLayout(inventory_header_layout)
-        inventory_section_layout.addWidget(self.setting_inventory_list)
+        
+        self.setting_inventory_table = QTableWidget()
+        self.setting_inventory_table.setObjectName("SettingManagerTable")
+        self.setting_inventory_table.setColumnCount(4)
+        self.setting_inventory_table.setHorizontalHeaderLabels(["Name", "Quantity", "Owner", "Description"])
+        header = self.setting_inventory_table.horizontalHeader()
+        header.setObjectName("SettingManagerTableHeader")
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        self.setting_inventory_table.setColumnWidth(1, 80)
+        self.setting_inventory_table.setColumnWidth(2, 100)
+        self.setting_inventory_table.verticalHeader().setVisible(False)
+        self.setting_inventory_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.setting_inventory_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setting_inventory_table.setAlternatingRowColors(True)
+        self.setting_inventory_table.setFocusPolicy(Qt.NoFocus)
+        self.setting_inventory_table.setMaximumHeight(150)
+        self.setting_inventory_table.itemChanged.connect(self._on_inventory_item_changed)
+        
+        inventory_section_layout.addWidget(self.setting_inventory_table)
         setting_section_layout.addWidget(label3)
         setting_section_layout.addLayout(setting_list_filter_layout)
         edit_layout_setting = QVBoxLayout()
@@ -788,7 +799,7 @@ class SettingManagerWidget(QWidget):
         self.location_description_input.textChanged.connect(self._schedule_description_save)
         self.setting_name_input.editingFinished.connect(self._save_current_details)
         self.setting_description_input.textChanged.connect(self._schedule_description_save)
-        self.setting_inventory_list.currentTextChanged.connect(self._schedule_description_save)
+
         self.world_name_input.installEventFilter(self)
         self.world_description_input.installEventFilter(self)
         self.region_name_input.installEventFilter(self)
@@ -797,7 +808,7 @@ class SettingManagerWidget(QWidget):
         self.location_description_input.installEventFilter(self)
         self.setting_name_input.installEventFilter(self)
         self.setting_description_input.installEventFilter(self)
-        self.setting_inventory_list.installEventFilter(self)
+
 
         self._ensure_default_setting_structure()
         self.populate_worlds()
@@ -831,7 +842,7 @@ class SettingManagerWidget(QWidget):
         self.list3.clear()
         self.setting_name_input.clear()
         self.setting_description_input.clear()
-        self.setting_inventory_list.clear()
+        self.setting_inventory_table.setRowCount(0)
         self._clear_variable_rows()
         self.actors_in_setting_list.clear()
         if actual_location_path:
@@ -912,7 +923,7 @@ class SettingManagerWidget(QWidget):
         self.region_name_input.clear(); self.region_description_input.clear()
         self.location_name_input.clear(); self.location_description_input.clear()
         self.setting_name_input.clear(); self.setting_description_input.clear()
-        self.setting_inventory_list.clear(); self.actors_in_setting_list.clear()
+        self.setting_inventory_table.setRowCount(0); self.actors_in_setting_list.clear()
         self._selected_level = None; self._selected_region_orig = None
         self._selected_location_orig = None; self._selected_setting_orig = None
         self.world_features_list.clear(); self.world_feature_name_input.clear(); self.world_feature_desc_input.clear()
@@ -1051,7 +1062,7 @@ class SettingManagerWidget(QWidget):
             self.location_description_input.clear()
             self.setting_name_input.clear()
             self.setting_description_input.clear()
-            self.setting_inventory_list.clear()
+            self.setting_inventory_table.setRowCount(0)
             self.actors_in_setting_list.clear()
 
     def _on_region_selected(self, current_item, previous_item):
@@ -1061,7 +1072,7 @@ class SettingManagerWidget(QWidget):
         self.list3.clear()
         self.location_name_input.clear(); self.location_description_input.clear()
         self.setting_name_input.clear(); self.setting_description_input.clear()
-        self.setting_inventory_list.clear()
+        self.setting_inventory_table.setRowCount(0)
         self.actors_in_setting_list.clear()
         self._selected_level = None
         self._selected_location_orig = None
@@ -1083,7 +1094,7 @@ class SettingManagerWidget(QWidget):
                 self.list2.clear(); self.list3.clear()
                 self.location_name_input.clear(); self.location_description_input.clear()
                 self.setting_name_input.clear(); self.setting_description_input.clear()
-                self.setting_inventory_list.clear(); self.actors_in_setting_list.clear()
+                self.setting_inventory_table.setRowCount(0); self.actors_in_setting_list.clear()
             return
         self._selected_region_orig = current_item.data(Qt.UserRole)
         if not self._selected_region_orig :
@@ -1113,7 +1124,7 @@ class SettingManagerWidget(QWidget):
             else:
                 self.list3.clear()
                 self.setting_name_input.clear(); self.setting_description_input.clear()
-                self.setting_inventory_list.clear(); self.actors_in_setting_list.clear()
+                self.setting_inventory_table.setRowCount(0); self.actors_in_setting_list.clear()
             return
         self.region_name_input.setReadOnly(False)
         self.region_description_input.setReadOnly(False)
@@ -1123,7 +1134,7 @@ class SettingManagerWidget(QWidget):
             self.list2.clear(); self.list3.clear()
             self.location_name_input.clear(); self.location_description_input.clear()
             self.setting_name_input.clear(); self.setting_description_input.clear()
-            self.setting_inventory_list.clear(); self.actors_in_setting_list.clear()
+            self.setting_inventory_table.setRowCount(0); self.actors_in_setting_list.clear()
             return
         region_path = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings', self._selected_world_orig, self._selected_region_orig)
         region_json_path = self._get_json_path('region', self._selected_world_orig, self._selected_region_orig)
@@ -1148,7 +1159,7 @@ class SettingManagerWidget(QWidget):
         self._is_navigating = True
         self._description_save_timer.stop()
         self.list3.clear(); self.setting_name_input.clear(); self.setting_description_input.clear()
-        self.setting_inventory_list.clear(); self.actors_in_setting_list.clear()
+        self.setting_inventory_table.setRowCount(0); self.actors_in_setting_list.clear()
         self._selected_level = None; self._selected_setting_orig = None
         self.location_features_list.clear(); self.location_feature_name_input.clear(); self.location_feature_desc_input.clear()
         self.current_location_features = []
@@ -1312,7 +1323,7 @@ class SettingManagerWidget(QWidget):
         self._clear_variable_rows()
         if current_item is None:
             self.setting_name_input.clear(); self.setting_description_input.clear()
-            self.setting_inventory_list.clear(); self._clear_variable_rows()
+            self.setting_inventory_table.setRowCount(0); self._clear_variable_rows()
             self.actors_in_setting_list.clear()
             self._is_navigating = False
             return
@@ -1321,7 +1332,7 @@ class SettingManagerWidget(QWidget):
         original_location_name = self._selected_location_orig
         if not original_world_name:
             self.setting_name_input.clear(); self.setting_description_input.clear()
-            self.setting_inventory_list.clear(); self._clear_variable_rows()
+            self.setting_inventory_table.setRowCount(0); self._clear_variable_rows()
             self.actors_in_setting_list.clear()
             self._is_navigating = False
             return
@@ -1329,7 +1340,7 @@ class SettingManagerWidget(QWidget):
         if not item_data:
             print("Error: No data associated with selected setting item.")
             self.setting_name_input.clear(); self.setting_description_input.clear()
-            self.setting_inventory_list.clear(); self._clear_variable_rows()
+            self.setting_inventory_table.setRowCount(0); self._clear_variable_rows()
             self.actors_in_setting_list.clear()
             self._is_navigating = False
             return
@@ -1339,7 +1350,7 @@ class SettingManagerWidget(QWidget):
         if not self._current_setting_file_path_absolute or not os.path.isfile(self._current_setting_file_path_absolute):
             print(f"  ERROR: Setting file not found at resolved path: {self._current_setting_file_path_absolute}")
             self.setting_name_input.clear(); self.setting_description_input.clear()
-            self.setting_inventory_list.clear(); self._clear_variable_rows()
+            self.setting_inventory_table.setRowCount(0); self._clear_variable_rows()
             self.actors_in_setting_list.clear()
             self._is_navigating = False
             return
@@ -1372,15 +1383,28 @@ class SettingManagerWidget(QWidget):
         self.setting_description_input.blockSignals(True)
         self.setting_description_input.setText(description)
         self.setting_description_input.blockSignals(False)
-        self.setting_inventory_list.clear()
+        self.setting_inventory_table.setRowCount(0)
         inventory = setting_data.get('inventory', [])
         if isinstance(inventory, str):
             inventory = [line.strip() for line in inventory.splitlines() if line.strip()]
         if isinstance(inventory, list):
+            self.setting_inventory_table.setRowCount(0)
             for item in inventory:
-                if isinstance(item, str):
-                    self.setting_inventory_list.addItem(item)
-                    self.setting_exterior_checkbox.blockSignals(True)
+                if isinstance(item, dict):
+                    row = self.setting_inventory_table.rowCount()
+                    self.setting_inventory_table.insertRow(row)
+                    self.setting_inventory_table.setItem(row, 0, QTableWidgetItem(item.get('name', '')))
+                    self.setting_inventory_table.setItem(row, 1, QTableWidgetItem(item.get('quantity', '1')))
+                    self.setting_inventory_table.setItem(row, 2, QTableWidgetItem(item.get('owner', '')))
+                    self.setting_inventory_table.setItem(row, 3, QTableWidgetItem(item.get('description', '')))
+                elif isinstance(item, str):
+                    row = self.setting_inventory_table.rowCount()
+                    self.setting_inventory_table.insertRow(row)
+                    self.setting_inventory_table.setItem(row, 0, QTableWidgetItem(item))
+                    self.setting_inventory_table.setItem(row, 1, QTableWidgetItem('1'))
+                    self.setting_inventory_table.setItem(row, 2, QTableWidgetItem(''))
+                    self.setting_inventory_table.setItem(row, 3, QTableWidgetItem(''))
+            self.setting_exterior_checkbox.blockSignals(True)
             is_exterior = bool(setting_data.get('exterior', False))
             self.setting_exterior_checkbox.setChecked(is_exterior)
             self.setting_exterior_checkbox.blockSignals(False)
@@ -1804,27 +1828,31 @@ class SettingManagerWidget(QWidget):
                                 if actual_old_dir_path:
                                     print(f"Found directory in alternative location: {actual_old_dir_path}")
                                     break
-                    old_internal_json_path = self._find_file_case_insensitive(
-                        actual_old_dir_path, old_item_json_filename)
+                    old_internal_json_path = None
+                    if actual_old_dir_path:
+                        old_internal_json_path = self._find_file_case_insensitive(
+                            actual_old_dir_path, old_item_json_filename)
                     if old_internal_json_path:
                         print(f"Found internal JSON: {old_internal_json_path}")
                         temp_new_internal_json_path_in_old_folder = os.path.join(
                             os.path.dirname(old_internal_json_path), new_item_json_filename)
                         os.rename(old_internal_json_path, temp_new_internal_json_path_in_old_folder)
                         found_jsons = []
-                        for file in os.listdir(actual_old_dir_path):
-                            file_lower = file.lower()
-                            if file_lower.endswith(f"_{level_to_save.lower()}.json"):
-                                found_jsons.append(file)
-                                print(f"  Found potential match: {file}")
-                        if found_jsons:
-                            selected_json = found_jsons[0]
-                            old_internal_json_path = os.path.join(actual_old_dir_path, selected_json)
-                            temp_new_internal_json_path_in_old_folder = os.path.join(
-                                actual_old_dir_path, new_item_json_filename)
-                            os.rename(old_internal_json_path, temp_new_internal_json_path_in_old_folder)
-                    os.rename(actual_old_dir_path, new_item_fs_path)
-                    print(f"Renamed directory from '{actual_old_dir_path}' to '{new_item_fs_path}'")
+                        if actual_old_dir_path:
+                            for file in os.listdir(actual_old_dir_path):
+                                file_lower = file.lower()
+                                if file_lower.endswith(f"_{level_to_save.lower()}.json"):
+                                    found_jsons.append(file)
+                                    print(f"  Found potential match: {file}")
+                            if found_jsons:
+                                selected_json = found_jsons[0]
+                                old_internal_json_path = os.path.join(actual_old_dir_path, selected_json)
+                                temp_new_internal_json_path_in_old_folder = os.path.join(
+                                    actual_old_dir_path, new_item_json_filename)
+                                os.rename(old_internal_json_path, temp_new_internal_json_path_in_old_folder)
+                    if actual_old_dir_path:
+                        os.rename(actual_old_dir_path, new_item_fs_path)
+                        print(f"Renamed directory from '{actual_old_dir_path}' to '{new_item_fs_path}'")
                     json_path = os.path.join(new_item_fs_path, new_item_json_filename)
                     if level_to_save == 'location':
                         self._update_references_for_renamed_location(
@@ -1920,13 +1948,24 @@ class SettingManagerWidget(QWidget):
         data['description'] = new_description_from_input
         if level_to_save == 'setting':
             inventory_items = []
-            for i in range(self.setting_inventory_list.count()):
-                item = self.setting_inventory_list.item(i)
-                if item:
-                    text = item.text().strip()
-                    if text:
-                        inventory_items.append(text)
-            data['inventory'] = inventory_items
+            for row in range(self.setting_inventory_table.rowCount()):
+                item_name = self.setting_inventory_table.item(row, 0)
+                quantity = self.setting_inventory_table.item(row, 1)
+                owner = self.setting_inventory_table.item(row, 2)
+                description = self.setting_inventory_table.item(row, 3)
+                
+                if item_name and item_name.text().strip():
+                    inventory_items.append({
+                        'name': item_name.text().strip(),
+                        'quantity': quantity.text().strip() if quantity else '1',
+                        'owner': owner.text().strip() if owner else '',
+                        'description': description.text().strip() if description else ''
+                    })
+            
+            if inventory_items:
+                data['inventory'] = inventory_items
+            else:
+                data.pop('inventory', None)
             variables_data = self._get_variables_data()
             if variables_data:
                 data['variables'] = variables_data
@@ -2608,7 +2647,7 @@ class SettingManagerWidget(QWidget):
                  if level == 'world': self.world_name_input.clear(); self.world_description_input.clear()
                  elif level == 'region': self.region_name_input.clear(); self.region_description_input.clear()
                  elif level == 'location': self.location_name_input.clear(); self.location_description_input.clear()
-                 elif level == 'setting': self.setting_name_input.clear(); self.setting_description_input.clear(); self.setting_inventory_list.clear()
+                 elif level == 'setting': self.setting_name_input.clear(); self.setting_description_input.clear(); self.setting_inventory_table.setRowCount(0)
         except OSError as e:
             QMessageBox.critical(self, "Error", f"Could not remove {level} '{item_name}'. Error: {e}")
             return
@@ -2634,7 +2673,7 @@ class SettingManagerWidget(QWidget):
                 self.current_location_features = []
                 self.location_paths_list.clear(); self.location_path_name_input.clear(); self.location_path_desc_input.clear()
                 self.current_location_path_data_cache.clear()
-                self.setting_name_input.clear(); self.setting_description_input.clear(); self.setting_inventory_list.clear(); self._clear_variable_rows(); self.actors_in_setting_list.clear()
+                self.setting_name_input.clear(); self.setting_description_input.clear(); self.setting_inventory_table.setRowCount(0); self._clear_variable_rows(); self.actors_in_setting_list.clear()
                 self._clear_connections_ui()
             elif level == 'region':
                 self.region_name_input.clear(); self.region_description_input.clear()
@@ -2644,7 +2683,7 @@ class SettingManagerWidget(QWidget):
                 self.current_location_features = []
                 self.location_paths_list.clear(); self.location_path_name_input.clear(); self.location_path_desc_input.clear()
                 self.current_location_path_data_cache.clear()
-                self.setting_name_input.clear(); self.setting_description_input.clear(); self.setting_inventory_list.clear(); self._clear_variable_rows(); self.actors_in_setting_list.clear()
+                self.setting_name_input.clear(); self.setting_description_input.clear(); self.setting_inventory_table.setRowCount(0); self._clear_variable_rows(); self.actors_in_setting_list.clear()
                 self._clear_connections_ui()
             elif level == 'location':
                 self.location_name_input.clear(); self.location_description_input.clear()
@@ -2653,10 +2692,10 @@ class SettingManagerWidget(QWidget):
                 self.location_paths_list.clear(); self.location_path_name_input.clear(); self.location_path_desc_input.clear()
                 self.current_location_path_data_cache.clear()
                 self.list3.clear()
-                self.setting_name_input.clear(); self.setting_description_input.clear(); self.setting_inventory_list.clear(); self._clear_variable_rows(); self.actors_in_setting_list.clear()
+                self.setting_name_input.clear(); self.setting_description_input.clear(); self.setting_inventory_table.setRowCount(0); self._clear_variable_rows(); self.actors_in_setting_list.clear()
                 self._clear_connections_ui()
             elif level == 'setting':
-                self.setting_name_input.clear(); self.setting_description_input.clear(); self.setting_inventory_list.clear(); self._clear_variable_rows(); self.actors_in_setting_list.clear()
+                self.setting_name_input.clear(); self.setting_description_input.clear(); self.setting_inventory_table.setRowCount(0); self._clear_variable_rows(); self.actors_in_setting_list.clear()
                 self._clear_connections_ui()
                 self.setting_exterior_checkbox.setChecked(False)
                 self.visible_section_container.setVisible(False)
@@ -2782,7 +2821,7 @@ class SettingManagerWidget(QWidget):
                 self._selected_setting_orig = None
                 self.setting_name_input.clear()
                 self.setting_description_input.clear()
-                self.setting_inventory_list.clear()
+                self.setting_inventory_table.setRowCount(0)
                 self._clear_variable_rows()
                 self.actors_in_setting_list.clear()
                 self._clear_connections_ui()
@@ -3195,7 +3234,7 @@ class SettingManagerWidget(QWidget):
         else:
             self.setting_name_input.clear()
             self.setting_description_input.clear()
-            self.setting_inventory_list.clear()
+            self.setting_inventory_table.setRowCount(0)
             self._clear_variable_rows()
             self.actors_in_setting_list.clear()
             self._clear_connections_ui()
@@ -3608,14 +3647,9 @@ class SettingManagerWidget(QWidget):
             for char in characters:
                 if isinstance(char, str) and char.strip():
                     clean_characters.append(char.strip())
-                elif isinstance(char, list):
-                    print(f"[WARN] Found list in characters data, skipping: {char}")
-                else:
-                    print(f"[WARN] Found non-string character data, skipping: {char}")
             self.actors_in_setting_list.addItems(sorted(clean_characters))
 
     def _add_actor_to_setting(self):
-        # Get actor name from the text input
         actor_to_add = self.actor_name_input.text().strip()
         if not actor_to_add:
             QMessageBox.warning(self, "No Actor Name", "Please enter an actor name in the text field.")
@@ -3646,7 +3680,6 @@ class SettingManagerWidget(QWidget):
             setting_path = self._get_json_path('setting', world_name, region_name, location_name, setting_filename, respect_game_override=False)
         if not setting_path or not os.path.exists(setting_path):
             manual_base_path = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings')
-            print(f"[DEBUG] Manual base path: {manual_base_path}")
             if os.path.exists(manual_base_path):
                 for root, dirs, files in os.walk(manual_base_path):
                     if setting_filename in files:
@@ -3798,16 +3831,75 @@ class SettingManagerWidget(QWidget):
         return False
 
     def _add_inventory_item(self):
-        text, ok = QInputDialog.getText(self, "Add Inventory Item", "Enter inventory item:")
-        if ok and text.strip():
-            self.setting_inventory_list.addItem(text.strip())
-            self._schedule_description_save()
+        row = self.setting_inventory_table.rowCount()
+        self.setting_inventory_table.insertRow(row)
+        self.setting_inventory_table.setItem(row, 0, QTableWidgetItem(""))
+        self.setting_inventory_table.setItem(row, 1, QTableWidgetItem("1"))
+        self.setting_inventory_table.setItem(row, 2, QTableWidgetItem(""))
+        self.setting_inventory_table.setItem(row, 3, QTableWidgetItem(""))
+        self._schedule_description_save()
 
     def _remove_inventory_item(self):
-        current_row = self.setting_inventory_list.currentRow()
+        current_row = self.setting_inventory_table.currentRow()
         if current_row >= 0:
-            self.setting_inventory_list.takeItem(current_row)
+            self.setting_inventory_table.removeRow(current_row)
             self._schedule_description_save()
+
+    def _on_inventory_item_changed(self, item):
+        self._schedule_description_save()
+    
+    def _edit_inventory_in_manager(self):
+        current_setting_item = self.list3.currentItem()
+        if not current_setting_item:
+            QMessageBox.warning(self, "No Selection", "Please select a setting first.")
+            return
+        setting_name = current_setting_item.text().replace(" *", "")
+        main_ui = self._get_main_ui()
+        if not main_ui:
+            return
+        try:
+            import pygame
+            if hasattr(main_ui, '_left_splitter_sound') and main_ui._left_splitter_sound:
+                main_ui._left_splitter_sound.play()
+            else:
+                if not pygame.mixer.get_init():
+                    pygame.mixer.init()
+                left_splitter_sound = pygame.mixer.Sound('sounds/LeftSplitterSelection.mp3')
+                left_splitter_sound.play()
+                main_ui._left_splitter_sound = left_splitter_sound
+        except Exception:
+            pass
+        main_window = self
+        while True:
+            if hasattr(main_window, 'parentWidget') and main_window.parentWidget() is not None:
+                main_window = main_window.parentWidget()
+            else:
+                break
+        from PyQt5.QtWidgets import QStackedWidget, QPushButton
+        inventory_manager_button = None
+        for button in main_window.findChildren(QPushButton):
+            if hasattr(button, 'objectName') and button.objectName() == "InventoryManagerButtonLeft":
+                inventory_manager_button = button
+                break
+        if not inventory_manager_button:
+            QMessageBox.warning(self, "Navigation Error", "Could not find Inventory Manager button.")
+            return
+        inventory_manager_button.setChecked(True)
+        center_stack = None
+        for stack in main_window.findChildren(QStackedWidget):
+            if stack.count() > 8:
+                center_stack = stack
+                break
+        if not center_stack:
+            QMessageBox.warning(self, "Navigation Error", "Could not find center stack widget.")
+            return
+        inventory_manager_widget = center_stack.widget(8)
+        if not inventory_manager_widget or not hasattr(inventory_manager_widget, 'instances_btn'):
+            QMessageBox.warning(self, "Navigation Error", "Could not find Inventory Manager widget.")
+            return
+        center_stack.setCurrentIndex(8)
+        inventory_manager_widget.instances_btn.setChecked(True)
+        inventory_manager_widget.select_setting_in_instances(setting_name)
 
     def _add_world_path(self):
         if not self._selected_world_orig:
@@ -4298,7 +4390,6 @@ class SettingManagerWidget(QWidget):
         world_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings', self._selected_world_orig)
         world_map_data_file = os.path.join(world_dir, 'world_map_data.json')
         if not os.path.isfile(world_map_data_file):
-            print(f"[DEBUG] World map data file not found: {world_map_data_file}")
             return
         try:
             with open(world_map_data_file, 'r', encoding='utf-8') as f:
@@ -4393,7 +4484,6 @@ class SettingManagerWidget(QWidget):
                 dir_contents = os.listdir(world_dir)
                 for item in dir_contents:
                     item_path = os.path.join(world_dir, item)
-                    item_type = "Directory" if os.path.isdir(item_path) else "File"
             all_regions = [region for region in os.listdir(world_dir) 
                           if os.path.isdir(os.path.join(world_dir, region)) 
                           and region.lower() != 'resources']
@@ -4413,7 +4503,6 @@ class SettingManagerWidget(QWidget):
                 region_contents = os.listdir(region_path)
                 for item in region_contents:
                     item_path = os.path.join(region_path, item)
-                    item_type = "Directory" if os.path.isdir(item_path) else "File"
                 region_setting_files = [item for item in region_contents 
                                       if item.lower().endswith('_setting.json')]
                 if not setting_file_path:
@@ -4519,10 +4608,8 @@ class SettingManagerWidget(QWidget):
                                     try:
                                         setting_data = self._load_json(potential_file)
                                         if setting_data and 'name' in setting_data:
-                                            print(f"[DEBUG]     File has name: '{setting_data['name']}'")
                                             if setting_data['name'].lower() == setting_name.lower():
                                                 setting_file_path = potential_file
-                                                print(f"[DEBUG] Secondary search found setting '{setting_name}' at {potential_file}")
                                                 break
                                     except Exception as file_e:
                                         print(f"[ERROR] Error checking file {filename}: {file_e}")
@@ -4530,19 +4617,15 @@ class SettingManagerWidget(QWidget):
                             for filename in os.listdir(location_path):
                                 if filename.lower().endswith('_setting.json'):
                                     potential_file = os.path.join(location_path, filename)
-                                    print(f"[DEBUG]   Checking file: {filename} for setting '{connected_setting}'")
                                     try:
                                         setting_data = self._load_json(potential_file)
                                         if setting_data and 'name' in setting_data:
-                                            print(f"[DEBUG]     File has name: '{setting_data['name']}'")
                                             if setting_data['name'].lower() == connected_setting.lower():
                                                 target_setting_file_path = potential_file
-                                                print(f"[DEBUG] Secondary search found setting '{connected_setting}' at {potential_file}")
                                                 break
                                     except Exception as file_e:
                                         print(f"[ERROR] Error checking file {filename}: {file_e}")
                         if setting_file_path and target_setting_file_path:
-                            print(f"[DEBUG] Found all missing settings in secondary search")
                             break
                 except Exception as e:
                     print(f"[ERROR] Error in secondary search for region {region_folder}: {e}")
@@ -4552,20 +4635,16 @@ class SettingManagerWidget(QWidget):
                 if setting_file_path and target_setting_file_path:
                     break
         if not setting_file_path:
-            print(f"[DEBUG] Using dedicated helper to find source setting '{setting_name}'")
             setting_file_path = self._find_setting_by_name(world_dir, setting_name)
         if not target_setting_file_path:
-            print(f"[DEBUG] Using dedicated helper to find target setting '{connected_setting}'")
             target_setting_file_path = self._find_setting_by_name(world_dir, connected_setting)
         if not setting_file_path:
-            print(f"[ERROR] Failed to find setting file for '{setting_name}' after exhaustive search")
             return False
         if not target_setting_file_path:
             print(f"[ERROR] Failed to find target setting file for '{connected_setting}' after exhaustive search")
         try:
             setting_data = self._load_json(setting_file_path)
             if not setting_data:
-                print(f"[ERROR] Failed to load source setting file: {setting_file_path}")
                 return False
             connections = setting_data.get('connections')
             connection_description = f"Connected through {location_name}"
@@ -4596,7 +4675,6 @@ class SettingManagerWidget(QWidget):
                 setting_data['connections'] = connections
                 print(f"[DEBUG] Updated list-style connections for '{setting_name}'")
             else:
-                print(f"[WARNING] Found unexpected connections format: {type(connections)}. Creating new list format.")
                 setting_data['connections'] = [
                     {
                         "connected_setting_name": connected_setting,
@@ -4610,17 +4688,7 @@ class SettingManagerWidget(QWidget):
             try:
                 with open(setting_file_path, 'w', encoding='utf-8') as f:
                     json.dump(setting_data, f, indent=2, ensure_ascii=False)
-                if isinstance(setting_data.get('connections'), list):
-                    conn_names = [c.get("connected_setting_name") for c in setting_data.get('connections', []) if isinstance(c, dict)]
-                    print(f"[DEBUG] Updated connection in source setting '{setting_name}' to '{connected_setting}' via '{location_name}'")
-                    print(f"[DEBUG] Setting file saved at: {setting_file_path}")
-                    print(f"[DEBUG] Connections in source setting: {conn_names}")
-                else:
-                    print(f"[DEBUG] Updated connection in source setting '{setting_name}' to '{connected_setting}' via '{location_name}'")
-                    print(f"[DEBUG] Setting file saved at: {setting_file_path}")
-                    print(f"[DEBUG] Connections in source setting: {list(setting_data.get('connections', {}).keys())}")
             except Exception as e:
-                print(f"[ERROR] Failed to save source setting file: {e}")
                 import traceback
                 traceback.print_exc()
                 return False
@@ -4673,11 +4741,9 @@ class SettingManagerWidget(QWidget):
                 if current_setting_display_name:
                     current_item = self.list3.currentItem()
                     if current_setting_display_name.lower() == setting_name.lower():
-                        print(f"[DEBUG] Refreshing connection display for currently viewed setting '{setting_name}'")
                         if current_item:
                             self._on_setting_selected(current_item, None)
                     elif current_setting_display_name.lower() == connected_setting.lower():
-                        print(f"[DEBUG] Refreshing connection display for currently viewed target setting '{connected_setting}'")
                         if current_item:
                             self._on_setting_selected(current_item, None)
                 else:
@@ -4877,7 +4943,6 @@ class SettingManagerWidget(QWidget):
         print(f"Setting generation error: {error}")
 
     def _get_main_ui(self):
-        """Get the main UI instance for sound playback."""
         parent = self.parentWidget()
         while parent:
             if hasattr(parent, 'add_rule_sound'):
