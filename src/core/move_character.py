@@ -74,7 +74,8 @@ def move_characters(
     mode='Setting',
     context_for_move=None,
     tab_data=None,
-    advance_time=True
+    advance_time=True,
+    speed_multiplier=1.0
 ):
     result = {
         'success': False,
@@ -151,7 +152,6 @@ def move_characters(
         original_actors_to_move = actors_to_move.copy()
         for character_name in chars_in_setting:
             if not isinstance(character_name, str):
-                print(f"[WARN] Skipping non-string character name: {character_name}")
                 continue
             if character_name in original_actors_to_move:
                 continue
@@ -556,15 +556,16 @@ def move_characters(
                 final_player_setting_name = final_setting_data.get('name')
         if not final_player_setting_name:
             final_player_setting_name = target_setting_name
-        if advance_time and current_setting_name and final_player_setting_name and current_setting_name != final_player_setting_name:
+        if advance_time and result['player_moved'] and current_setting_name and final_player_setting_name and current_setting_name != final_player_setting_name:
             travel_time_minutes = _calculate_travel_time_between_settings(
                 workflow_data_dir_for_update, 
                 current_setting_name, 
                 final_player_setting_name
             )
             if travel_time_minutes > 0:
-                _advance_game_time(workflow_data_dir_for_update, travel_time_minutes)
-        
+                adjusted_travel_time = travel_time_minutes / speed_multiplier
+                print(f"[TRAVEL TIME] Base: {travel_time_minutes} minutes, Speed Multiplier: {speed_multiplier}x, Final: {adjusted_travel_time:.1f} minutes")
+                _advance_game_time_from_travel(workflow_data_dir_for_update, adjusted_travel_time, tab_data)
         if right_splitter and workflow_data_dir_for_update and final_player_setting_name:
             from PyQt5.QtCore import QTimer
             try:
@@ -715,6 +716,51 @@ def _calculate_travel_time_from_path_length(map_data, path_length, map_type):
         return time_in_units * 60 * 24
     else:
         return time_in_units
+
+def _advance_game_time_from_travel(workflow_data_dir, minutes_to_advance, tab_data):
+    from datetime import datetime, timedelta
+    import json
+    if not tab_data:
+        print(f"ERROR: Cannot advance time from travel - tab_data not found")
+        return
+    
+    variables_file = tab_data.get('variables_file')
+    if not variables_file:
+        print(f"ERROR: Cannot advance time from travel - variables_file not found")
+        return
+    try:
+        variables = {}
+        if os.path.exists(variables_file):
+            try:
+                with open(variables_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if content:
+                        variables = json.loads(content)
+            except Exception as e:
+                print(f"Error loading variables for travel time advancement: {e}")
+                return
+        if not variables.get('datetime'):
+            print(f"ERROR: Cannot advance time from travel - no current datetime found in variables")
+            return
+        current_time = datetime.fromisoformat(variables['datetime'])
+        new_time = current_time + timedelta(minutes=minutes_to_advance)
+        variables['datetime'] = new_time.isoformat()
+        variables['game_datetime'] = new_time.isoformat()
+        variables['_last_real_time_update'] = datetime.now().isoformat()
+        variables['_manual_time_advancement'] = True
+        try:
+            with open(variables_file, 'w', encoding='utf-8') as f:
+                json.dump(variables, f, indent=2, ensure_ascii=False)
+            if tab_data:
+                tab_data['variables'] = variables.copy()
+            print(f"✓ Successfully advanced time by {minutes_to_advance:.1f} minutes to {new_time.isoformat()}")
+        except Exception as e:
+            print(f"✗ FAILED to save advanced time: {e}")
+            
+    except Exception as e:
+        print(f"ERROR: Failed to advance time from travel: {e}")
+        import traceback
+        traceback.print_exc()
 
 def _advance_game_time(workflow_data_dir, minutes_to_advance):
     from datetime import datetime, timedelta
