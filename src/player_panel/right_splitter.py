@@ -24,8 +24,11 @@ class RightSplitterWidget(QWidget):
         main_layout.setSpacing(0)
         button_layout = QHBoxLayout()
         self.setting_button = QPushButton("Setting")
+        self.setting_button.setFocusPolicy(Qt.NoFocus)
         self.character_button = QPushButton("Character")
+        self.character_button.setFocusPolicy(Qt.NoFocus)
         self.inventory_button = QPushButton("Inventory")
+        self.inventory_button.setFocusPolicy(Qt.NoFocus)
         button_layout.addWidget(self.character_button)
         button_layout.addWidget(self.inventory_button)
         button_layout.addWidget(self.setting_button)
@@ -45,6 +48,7 @@ class RightSplitterWidget(QWidget):
         self._apply_button_theme()
         self.stacked_widget.setCurrentIndex(2)
         self.setLayout(main_layout)
+        self.setMaximumWidth(300)
 
     @property
     def workflow_data_dir(self):
@@ -76,6 +80,7 @@ class RightSplitterWidget(QWidget):
         top_layout.addWidget(self.setting_description_label)
         self.characters_label = QLabel("Characters: --")
         self.characters_label.setAlignment(Qt.AlignLeft)
+        self.characters_label.setWordWrap(True)
         self.characters_label.setStyleSheet("font-weight: bold; font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace; font-size: 10pt; margin: 0; padding: 1px;")
         top_layout.addWidget(self.characters_label)
         self.game_time_label = QLabel("Game Time: --")
