@@ -1,9 +1,16 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QSplitter, QPushButton, QHBoxLayout, QStackedWidget, QScrollArea, QFrame, QGridLayout
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 import json
 import os
 import glob
+from datetime import datetime
+
+def get_display_name_from_setting(setting_name):
+    if not setting_name or setting_name == "--":
+        return "--"
+    parts = setting_name.split(',')
+    return parts[-1].strip() if parts else setting_name
 
 class RightSplitterWidget(QWidget):
     def __init__(self, theme_settings=None, parent=None):
@@ -48,6 +55,7 @@ class RightSplitterWidget(QWidget):
         self._workflow_data_dir = value
         if value:
             self.load_character_data()
+            self._update_game_time()
 
     def _create_setting_page(self):
         page = QWidget()
@@ -56,14 +64,24 @@ class RightSplitterWidget(QWidget):
         top_widget = QWidget()
         top_layout = QVBoxLayout(top_widget)
         top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(0)
         self.setting_name_label = QLabel("--")
         self.setting_name_label.setAlignment(Qt.AlignCenter)
         self.setting_name_label.setStyleSheet("font-weight: bold; padding: 2px; border-bottom: 1px solid gray;")
         top_layout.addWidget(self.setting_name_label)
+        self.setting_description_label = QLabel("--")
+        self.setting_description_label.setAlignment(Qt.AlignCenter)
+        self.setting_description_label.setWordWrap(True)
+        self.setting_description_label.setStyleSheet("font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace; font-size: 9pt; padding: 1px; margin: 0;")
+        top_layout.addWidget(self.setting_description_label)
         self.characters_label = QLabel("Characters: --")
         self.characters_label.setAlignment(Qt.AlignLeft)
-        self.characters_label.setStyleSheet("font-weight: bold; font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace; font-size: 10pt; margin-bottom: 8px;")
+        self.characters_label.setStyleSheet("font-weight: bold; font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace; font-size: 10pt; margin: 0; padding: 1px;")
         top_layout.addWidget(self.characters_label)
+        self.game_time_label = QLabel("Game Time: --")
+        self.game_time_label.setAlignment(Qt.AlignCenter)
+        self.game_time_label.setStyleSheet("font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace; font-size: 10pt; padding: 1px; margin: 0;")
+        top_layout.addWidget(self.game_time_label)
         try:
             from player_panel.world_map import create_world_map
             self.setting_minimap_widget = create_world_map(parent=self, theme_settings=self.theme_settings)
@@ -328,8 +346,17 @@ class RightSplitterWidget(QWidget):
 
     def update_setting_name(self, setting_name, workflow_data_dir=None):
         try:
+            display_name = get_display_name_from_setting(setting_name)
             if hasattr(self, 'setting_name_label'):
-                self.setting_name_label.setText(setting_name)
+                self.setting_name_label.setText(display_name)
+            
+            setting_description = "--"
+            if workflow_data_dir and setting_name and setting_name != "--":
+                setting_description = self._load_setting_description(setting_name, workflow_data_dir)
+            
+            if hasattr(self, 'setting_description_label'):
+                self.setting_description_label.setText(setting_description)
+            
             if workflow_data_dir:
                 self.workflow_data_dir = workflow_data_dir
             if hasattr(self, 'workflow_data_dir') and self.workflow_data_dir:
@@ -556,6 +583,46 @@ class RightSplitterWidget(QWidget):
             if hasattr(self, 'characters_label'):
                 self.characters_label.setText("Characters: (error)")
 
+    def _load_setting_description(self, setting_name, workflow_data_dir):
+        if not workflow_data_dir or not setting_name or setting_name == "--":
+            return "--"
+        
+        try:
+            setting_file = None
+            game_settings_dir = os.path.join(workflow_data_dir, "game", "settings")
+            resources_settings_dir = os.path.join(workflow_data_dir, "resources", "data files", "settings")
+            
+            for settings_dir in [game_settings_dir, resources_settings_dir]:
+                if os.path.exists(settings_dir):
+                    for root, dirs, files in os.walk(settings_dir):
+                        for file in files:
+                            if file.endswith("_setting.json"):
+                                file_path = os.path.join(root, file)
+                                try:
+                                    with open(file_path, 'r', encoding='utf-8') as f:
+                                        data = json.load(f)
+                                    if data.get("name") == setting_name:
+                                        setting_file = file_path
+                                        break
+                                except: 
+                                    continue
+                            if setting_file:
+                                break
+                        if setting_file:
+                            break
+                    if setting_file:
+                        break
+            
+            if setting_file:
+                with open(setting_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                description = data.get('description', '--')
+                return description if description else "--"
+            
+            return "--"
+        except Exception:
+            return "--"
+
     def _update_characters_list(self, setting_name, workflow_data_dir):
         if not workflow_data_dir or not setting_name or setting_name == "--":
             return
@@ -582,13 +649,11 @@ class RightSplitterWidget(QWidget):
                             break
                     if setting_file_for_chars: 
                         break
-            
             actors = []
             if setting_file_for_chars:
                 with open(setting_file_for_chars, 'r', encoding='utf-8') as f_char_data:
                     data_char_list = json.load(f_char_data)
                 actors_raw = data_char_list.get('characters', [])
-            # Filter out non-string elements to prevent errors
             actors = [actor for actor in actors_raw if isinstance(actor, str)]
             player_name = None
             actors_dir = os.path.join(workflow_data_dir, 'game', 'actors')
@@ -599,7 +664,6 @@ class RightSplitterWidget(QWidget):
                         try:
                             with open(file_path, 'r', encoding='utf-8') as f_actor:
                                 data_actor = json.load(f_actor)
-                            # Check both isPlayer (from character generator) and variables.is_player (legacy)
                             if data_actor.get('isPlayer', False) or data_actor.get('variables', {}).get('is_player', False):
                                 player_name = data_actor.get('name')
                                 break
@@ -607,12 +671,8 @@ class RightSplitterWidget(QWidget):
                             pass
             if not player_name:
                 player_name = 'Player'
-            
-            # Remove "Player" placeholder from actors list if we found an actual player character name
             if player_name and player_name != 'Player':
                 actors = [a for a in actors if a.lower() != 'player']
-            
-            # Add the actual player name to the front of the list
             if player_name and player_name not in actors:
                 actors = [player_name] + actors
             elif player_name:
@@ -754,6 +814,9 @@ class RightSplitterWidget(QWidget):
     def refresh_character_sheet(self):
         self.load_character_data()
 
+    def update_game_time(self):
+        self._update_game_time()
+
     def _switch_to_tab_with_sound(self, tab_index):
         if self.main_app and hasattr(self.main_app, 'hover_message_sound') and self.main_app.hover_message_sound:
             try:
@@ -767,3 +830,40 @@ class RightSplitterWidget(QWidget):
     def _switch_to_character_tab(self):
         self.stacked_widget.setCurrentIndex(0)
         self.load_character_data()
+    
+    def _update_game_time(self):
+        if not hasattr(self, 'game_time_label') or not self.workflow_data_dir:
+            return
+        
+        try:
+            variables_file = os.path.join(self.workflow_data_dir, 'game', 'variables.json')
+            print(f"[GAME TIME] Checking variables file: {variables_file}")
+            
+            if os.path.exists(variables_file):
+                with open(variables_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if content:
+                        variables = json.loads(content)
+                        print(f"[GAME TIME] Variables keys: {list(variables.keys())}")
+                        game_time_str = variables.get('datetime') or variables.get('game_datetime')
+                        print(f"[GAME TIME] Found time string: {game_time_str}")
+                        
+                        if game_time_str:
+                            try:
+                                game_time = datetime.fromisoformat(game_time_str)
+                                time_str = game_time.strftime("%Y-%m-%d %H:%M:%S")
+                                self.game_time_label.setText(f"Game Time: {time_str}")
+                                print(f"[GAME TIME] Updated to: {time_str}")
+                                return
+                            except ValueError as e:
+                                print(f"[GAME TIME] Error parsing time: {e}")
+                                pass
+                    else:
+                        print(f"[GAME TIME] Variables file is empty")
+            else:
+                print(f"[GAME TIME] Variables file not found")
+            
+            self.game_time_label.setText("Game Time: --")
+        except Exception as e:
+            print(f"[GAME TIME] Error updating game time: {e}")
+            self.game_time_label.setText("Game Time: --")
