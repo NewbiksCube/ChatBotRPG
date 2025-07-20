@@ -485,7 +485,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         selector.setObjectName("StartConditionSelector")
         selector.setFont(QFont('Consolas', 10))
         selector.setMinimumWidth(90)
-        selector.addItems(["None", "Always", "Turn", "Variable", "Scene Count", "Setting", "Location", "Region", "World"])
+        selector.addItems(["None", "Always", "Variable", "Scene Count", "Setting", "Location", "Region", "World", "Game Time"])
         row_layout.addWidget(selector)
         geography_widget = QWidget()
         geography_layout = QHBoxLayout(geography_widget)
@@ -504,25 +504,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         geography_layout.addStretch()
         geography_widget.setVisible(False)
         row_layout.addWidget(geography_widget)
-        turn_label = QLabel("Turn #:")
-        turn_label.setObjectName("ConditionTurnLabel")
-        turn_label.setFont(QFont('Consolas', 10))
-        turn_label.setVisible(False)
-        turn_spinner = QSpinBox()
-        turn_spinner.setObjectName("ConditionTurnSpinner")
-        turn_spinner.setFont(QFont('Consolas', 10))
-        turn_spinner.setRange(1, 999)
-        turn_spinner.setMinimumWidth(50)
-        turn_spinner.setVisible(False)
-        row_layout.addWidget(turn_label)
-        turn_op_selector = QComboBox()
-        turn_op_selector.setObjectName("TurnCondOpSelector")
-        turn_op_selector.setFont(QFont('Consolas', 9))
-        turn_op_selector.setMinimumWidth(60)
-        turn_op_selector.addItems(["==", "!=", ">", "<", ">=", "<="])
-        turn_op_selector.setVisible(False)
-        row_layout.addWidget(turn_op_selector)
-        row_layout.addWidget(turn_spinner)
+
         var_widget = QWidget()
         var_layout = QHBoxLayout(var_widget)
         var_layout.setContentsMargins(0, 0, 0, 0)
@@ -613,6 +595,45 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         scene_count_layout.addStretch()
         scene_count_widget.setVisible(False)
         row_layout.addWidget(scene_count_widget)
+        
+        game_time_widget = QWidget()
+        game_time_layout = QHBoxLayout(game_time_widget)
+        game_time_layout.setContentsMargins(0, 0, 0, 0)
+        game_time_layout.setSpacing(0)
+        
+        game_time_operator_label = QLabel("Game Time:")
+        game_time_operator_label.setObjectName("GameTimeOperatorLabel")
+        game_time_operator_label.setFont(QFont('Consolas', 10))
+        game_time_operator_label.setVisible(False)
+        
+        game_time_op_selector = QComboBox()
+        game_time_op_selector.setObjectName("GameTimeCondOpSelector")
+        game_time_op_selector.setFont(QFont('Consolas', 9))
+        game_time_op_selector.setMinimumWidth(60)
+        game_time_op_selector.addItems(["Before", "After"])
+        game_time_op_selector.setVisible(False)
+        
+        game_time_type_selector = QComboBox()
+        game_time_type_selector.setObjectName("GameTimeTypeSelector")
+        game_time_type_selector.setFont(QFont('Consolas', 9))
+        game_time_type_selector.setMinimumWidth(80)
+        game_time_type_selector.addItems(["Minute", "Hour", "Date"])
+        game_time_type_selector.setVisible(False)
+        
+        game_time_value_spinner = QSpinBox()
+        game_time_value_spinner.setObjectName("GameTimeValueSpinner")
+        game_time_value_spinner.setFont(QFont('Consolas', 10))
+        game_time_value_spinner.setRange(0, 9999)
+        game_time_value_spinner.setMinimumWidth(60)
+        game_time_value_spinner.setVisible(False)
+        
+        game_time_layout.addWidget(game_time_operator_label)
+        game_time_layout.addWidget(game_time_op_selector)
+        game_time_layout.addWidget(game_time_type_selector)
+        game_time_layout.addWidget(game_time_value_spinner)
+        game_time_layout.addStretch()
+        game_time_widget.setVisible(False)
+        row_layout.addWidget(game_time_widget)
         add_btn = QPushButton("+")
         add_btn.setObjectName("AddConditionButton")
         remove_btn = QPushButton("−")
@@ -621,10 +642,10 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         row_layout.addWidget(remove_btn)
 
         def update_row_widgets():
-            is_turn = (selector.currentText() == "Turn")
             is_var = (selector.currentText() == "Variable")
             is_scene_count = (selector.currentText() == "Scene Count")
             is_geography = selector.currentText() in ["Setting", "Location", "Region", "World"]
+            is_game_time = (selector.currentText() == "Game Time")
             rule_applies_to_character = False
             parent = row_widget
             rules_manager_widget = None
@@ -641,13 +662,21 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
                     print("Debug: Found rules_manager_widget but not AppliesToCharacterRadio within it.")
             else:
                  pass
-            turn_label.setVisible(is_turn)
-            turn_spinner.setVisible(is_turn)
             var_widget.setVisible(is_var)
             scene_count_widget.setVisible(is_scene_count)
             geography_widget.setVisible(is_geography)
+            game_time_widget.setVisible(is_game_time)
+            if is_game_time:
+                game_time_operator_label.setVisible(True)
+                game_time_op_selector.setVisible(True)
+                game_time_type_selector.setVisible(True)
+                game_time_value_spinner.setVisible(True)
+            else:
+                game_time_operator_label.setVisible(False)
+                game_time_op_selector.setVisible(False)
+                game_time_type_selector.setVisible(False)
+                game_time_value_spinner.setVisible(False)
             var_scope_widget.setVisible(is_var)
-            turn_op_selector.setVisible(is_turn)
             if is_var:
                 op = op_selector.currentText()
                 needs_value = op not in ["exists", "not exists"]
@@ -682,9 +711,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
                                 label = remaining_row_widget.findChild(QLabel, "ConditionLabel")
                                 if is_valid_widget(label):
                                     label.setText(f"Condition {i+1}:")
-                        
                         update_all_condition_buttons()
-                        
                     else:
                         pass
                 else:
@@ -693,8 +720,6 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         remove_btn.clicked.connect(remove_row)
         if data:
             selector.setCurrentText(data.get('type', 'None'))
-            if data.get('type') == 'Turn':
-                turn_spinner.setValue(data.get('turn', 1))
             if data.get('type') == 'Variable':
                 var_editor.setText(data.get('variable', ''))
                 op_selector.setCurrentText(data.get('operator', '=='))
@@ -706,11 +731,14 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
             if data.get('type') == 'Scene Count':
                 scene_op_selector.setCurrentText(data.get('operator', '=='))
                 scene_count_spinner.setValue(data.get('value', 1))
+            if data.get('type') == 'Game Time':
+                game_time_op_selector.setCurrentText(data.get('operator', 'Before'))
+                game_time_type_selector.setCurrentText(data.get('time_type', 'Minute'))
+                game_time_value_spinner.setValue(data.get('value', 0))
         row = {
             'widget': row_widget,
             'label': label,
             'selector': selector,
-            'turn_spinner': turn_spinner,
             'var_editor': var_editor,
             'op_selector': op_selector,
             'val_editor': val_editor,
@@ -719,6 +747,10 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
             'scene_count_widget': scene_count_widget,
             'scene_op_selector': scene_op_selector,
             'scene_count_spinner': scene_count_spinner,
+            'game_time_widget': game_time_widget,
+            'game_time_op_selector': game_time_op_selector,
+            'game_time_type_selector': game_time_type_selector,
+            'game_time_value_spinner': game_time_value_spinner,
             'var_scope_widget': var_scope_widget,
             'scope_global_radio': scope_global_radio,
             'scope_character_radio': scope_character_radio,
@@ -891,7 +923,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
     center_stack.addWidget(notes_manager_widget_standalone)
     setting_manager_widget = SettingManagerWidget(workflow_data_dir=tab_dir, theme_colors=tab_settings)
     center_stack.addWidget(setting_manager_widget)
-    time_manager_widget = TimeManager(theme_colors=tab_settings, workflow_data_dir=tab_dir)
+    time_manager_widget = TimeManager(theme_colors=tab_settings, workflow_data_dir=tab_dir, main_ui=self, tab_data=None)
     center_stack.addWidget(time_manager_widget)
     actor_manager_widget = ActorManagerWidget(tab_dir)
     center_stack.addWidget(actor_manager_widget)
@@ -1172,6 +1204,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         'scene_number': 1,
         'right_splitter': right_splitter_instance,
         'actor_manager_widget': actor_manager_widget,
+        'time_manager_widget': time_manager_widget,
         'start_conditions_manager_widget': start_conditions_manager_widget,
         'random_generators_widget': random_generators_widget,
         'workflow_data_dir': tab_dir,
@@ -1182,6 +1215,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         'loaded': not skip_heavy_loading
     }
     output_field.tab_data = tab_data
+    time_manager_widget.set_tab_data(tab_data)
     if replace_existing_index is not None:
         if replace_existing_index < len(self.tabs_data):
             old_tab_data = self.tabs_data[replace_existing_index]
