@@ -900,6 +900,11 @@ def _display_next_npc_message(self):
         
         current_context.append(save_npc_message_obj)
         self._save_context_for_tab(self.current_tab_index)
+        
+        right_splitter = tab_data_check.get('right_splitter') if tab_data_check else None
+        if right_splitter and hasattr(right_splitter, 'update_game_time'):
+            right_splitter.update_game_time()
+        
         if hasattr(self, '_npc_inference_queue') and self._npc_inference_queue:
             self._update_remaining_character_contexts()
     time_manager_widget = tab_data_check.get('time_manager_widget') if tab_data_check else None
@@ -1278,6 +1283,10 @@ def _finalize_character_message(self, character_name, final_message, tag_to_use)
         _generate_and_save_npc_note(self, character_name, final_message)
         character_post_effects = _get_character_post_effects(self, character_name)
         _queue_npc_message(self, final_message, character_name, final_tag, character_post_effects)
+        
+        right_splitter = tab_data.get('right_splitter') if tab_data else None
+        if right_splitter and hasattr(right_splitter, 'update_game_time'):
+            right_splitter.update_game_time()
         is_timer_triggered = False
         if tab_data:
             is_timer_triggered = bool(tab_data.get('_timer_final_instruction') or 
