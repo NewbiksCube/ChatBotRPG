@@ -5,7 +5,7 @@ import copy
 import pygame
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel, QPushButton, QMessageBox, QRadioButton, QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QCheckBox
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QApplication # Added for application-level update blocking
+from PyQt5.QtWidgets import QApplication
 
 def is_valid_widget(widget):
     if not widget:
@@ -16,8 +16,6 @@ def is_valid_widget(widget):
     except (RuntimeError, Exception):
         return False
 _layout_refs = []
-
-
 
 def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pairs_argument_ignored,
             prepend_radio, append_radio, replace_radio, is_last_exchange, trigger_selector, rules_list):
@@ -197,19 +195,15 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                             action_obj["location_mode"] = "Setting"
                                             if target_setting_input:
                                                 action_obj["target_setting"] = target_setting_input.text()
-                                        
-                                        # Save the advance time checkbox state
                                         if advance_time_checkbox:
                                             action_obj["advance_time"] = advance_time_checkbox.isChecked()
                                         else:
-                                            action_obj["advance_time"] = True  # Default to True
-                                        
-                                        # Save the speed multiplier spinner value
+                                            action_obj["advance_time"] = True
                                         speed_multiplier_spinner = action_row_widget.findChild(QDoubleSpinBox, "ChangeLocationSpeedMultiplierSpinner")
                                         if speed_multiplier_spinner:
                                             action_obj["speed_multiplier"] = speed_multiplier_spinner.value()
                                         else:
-                                            action_obj["speed_multiplier"] = 1.0  # Default to 1.0
+                                            action_obj["speed_multiplier"] = 1.0
                                     elif action_type == "Set Var":
                                         if var_name_editor and var_value_editor:
                                             try:
@@ -654,10 +648,63 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                                 action_obj["to_name"] = ""
                                         else:
                                             action_obj["to_name"] = ""
+                                        
+                                        move_item_from_container_checkbox = action_row_widget.findChild(QCheckBox, "MoveItemFromContainerCheckbox")
+                                        move_item_from_item_name_input = action_row_widget.findChild(QLineEdit, "MoveItemFromItemNameInput")
+                                        move_item_from_container_name_input = action_row_widget.findChild(QLineEdit, "MoveItemFromContainerNameInput")
+                                        
+                                        if move_item_from_container_checkbox and move_item_from_container_checkbox.isChecked():
+                                            action_obj["from_container_enabled"] = True
+                                            if move_item_from_item_name_input:
+                                                try:
+                                                    action_obj["from_item_name"] = move_item_from_item_name_input.text().strip()
+                                                except RuntimeError:
+                                                    action_obj["from_item_name"] = ""
+                                            else:
+                                                action_obj["from_item_name"] = ""
+                                            if move_item_from_container_name_input:
+                                                try:
+                                                    action_obj["from_container_name"] = move_item_from_container_name_input.text().strip()
+                                                except RuntimeError:
+                                                    action_obj["from_container_name"] = ""
+                                            else:
+                                                action_obj["from_container_name"] = ""
+                                        else:
+                                            action_obj["from_container_enabled"] = False
+                                            action_obj["from_item_name"] = ""
+                                            action_obj["from_container_name"] = ""
+                                        
+                                        move_item_to_container_checkbox = action_row_widget.findChild(QCheckBox, "MoveItemToContainerCheckbox")
+                                        move_item_to_item_name_input = action_row_widget.findChild(QLineEdit, "MoveItemToItemNameInput")
+                                        move_item_to_container_name_input = action_row_widget.findChild(QLineEdit, "MoveItemToContainerNameInput")
+                                        
+                                        if move_item_to_container_checkbox and move_item_to_container_checkbox.isChecked():
+                                            action_obj["to_container_enabled"] = True
+                                            if move_item_to_item_name_input:
+                                                try:
+                                                    action_obj["to_item_name"] = move_item_to_item_name_input.text().strip()
+                                                except RuntimeError:
+                                                    action_obj["to_item_name"] = ""
+                                            else:
+                                                action_obj["to_item_name"] = ""
+                                            if move_item_to_container_name_input:
+                                                try:
+                                                    action_obj["to_container_name"] = move_item_to_container_name_input.text().strip()
+                                                except RuntimeError:
+                                                    action_obj["to_container_name"] = ""
+                                            else:
+                                                action_obj["to_container_name"] = ""
+                                        else:
+                                            action_obj["to_container_enabled"] = False
+                                            action_obj["to_item_name"] = ""
+                                            action_obj["to_container_name"] = ""
                                     elif action_type == "Add Item":
                                         add_item_name_input = action_row_widget.findChild(QLineEdit, "AddItemNameInput")
                                         add_item_quantity_input = action_row_widget.findChild(QLineEdit, "AddItemQuantityInput")
                                         add_item_generate_checkbox = action_row_widget.findChild(QCheckBox, "AddItemGenerateCheckbox")
+                                        add_item_owner_input = action_row_widget.findChild(QLineEdit, "AddItemOwnerInput")
+                                        add_item_description_input = action_row_widget.findChild(QLineEdit, "AddItemDescriptionInput")
+                                        add_item_location_input = action_row_widget.findChild(QLineEdit, "AddItemLocationInput")
                                         add_item_target_setting_radio = action_row_widget.findChild(QRadioButton, "AddItemTargetSettingRadio")
                                         add_item_target_character_radio = action_row_widget.findChild(QRadioButton, "AddItemTargetCharacterRadio")
                                         add_item_target_name_input = action_row_widget.findChild(QLineEdit, "AddItemTargetNameInput")
@@ -683,14 +730,40 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                         else:
                                             action_obj["generate"] = False
                                         
-                                        target_type = "Setting"
-                                        if add_item_target_setting_radio and add_item_target_character_radio:
+                                        if add_item_owner_input:
                                             try:
-                                                if add_item_target_character_radio.isChecked():
-                                                    target_type = "Character"
+                                                action_obj["owner"] = add_item_owner_input.text().strip()
                                             except RuntimeError:
-                                                target_type = "Setting"
-                                        action_obj["target_type"] = target_type
+                                                action_obj["owner"] = ""
+                                        else:
+                                            action_obj["owner"] = ""
+                                        
+                                        if add_item_description_input:
+                                            try:
+                                                action_obj["description"] = add_item_description_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["description"] = ""
+                                        else:
+                                            action_obj["description"] = ""
+                                        
+                                        if add_item_location_input:
+                                            try:
+                                                action_obj["location"] = add_item_location_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["location"] = ""
+                                        else:
+                                            action_obj["location"] = ""
+                                        
+                                        if add_item_target_setting_radio:
+                                            try:
+                                                if add_item_target_setting_radio.isChecked():
+                                                    action_obj["target_type"] = "Setting"
+                                                else:
+                                                    action_obj["target_type"] = "Character"
+                                            except RuntimeError:
+                                                action_obj["target_type"] = "Setting"
+                                        else:
+                                            action_obj["target_type"] = "Setting"
                                         
                                         if add_item_target_name_input:
                                             try:
@@ -699,6 +772,31 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                                 action_obj["target_name"] = ""
                                         else:
                                             action_obj["target_name"] = ""
+                                        
+                                        add_item_target_container_checkbox = action_row_widget.findChild(QCheckBox, "AddItemTargetContainerCheckbox")
+                                        add_item_target_item_name_input = action_row_widget.findChild(QLineEdit, "AddItemTargetItemNameInput")
+                                        add_item_target_container_name_input = action_row_widget.findChild(QLineEdit, "AddItemTargetContainerNameInput")
+                                        
+                                        if add_item_target_container_checkbox and add_item_target_container_checkbox.isChecked():
+                                            action_obj["target_container_enabled"] = True
+                                            if add_item_target_item_name_input:
+                                                try:
+                                                    action_obj["target_item_name"] = add_item_target_item_name_input.text().strip()
+                                                except RuntimeError:
+                                                    action_obj["target_item_name"] = ""
+                                            else:
+                                                action_obj["target_item_name"] = ""
+                                            if add_item_target_container_name_input:
+                                                try:
+                                                    action_obj["target_container_name"] = add_item_target_container_name_input.text().strip()
+                                                except RuntimeError:
+                                                    action_obj["target_container_name"] = ""
+                                            else:
+                                                action_obj["target_container_name"] = ""
+                                        else:
+                                            action_obj["target_container_enabled"] = False
+                                            action_obj["target_item_name"] = ""
+                                            action_obj["target_container_name"] = ""
                                     elif action_type == "Remove Item":
                                         remove_item_name_input = action_row_widget.findChild(QLineEdit, "RemoveItemNameInput")
                                         remove_item_quantity_input = action_row_widget.findChild(QLineEdit, "RemoveItemQuantityInput")
@@ -735,6 +833,31 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                                 action_obj["target_name"] = ""
                                         else:
                                             action_obj["target_name"] = ""
+                                        
+                                        remove_item_target_container_checkbox = action_row_widget.findChild(QCheckBox, "RemoveItemTargetContainerCheckbox")
+                                        remove_item_target_item_name_input = action_row_widget.findChild(QLineEdit, "RemoveItemTargetItemNameInput")
+                                        remove_item_target_container_name_input = action_row_widget.findChild(QLineEdit, "RemoveItemTargetContainerNameInput")
+                                        
+                                        if remove_item_target_container_checkbox and remove_item_target_container_checkbox.isChecked():
+                                            action_obj["target_container_enabled"] = True
+                                            if remove_item_target_item_name_input:
+                                                try:
+                                                    action_obj["target_item_name"] = remove_item_target_item_name_input.text().strip()
+                                                except RuntimeError:
+                                                    action_obj["target_item_name"] = ""
+                                            else:
+                                                action_obj["target_item_name"] = ""
+                                            if remove_item_target_container_name_input:
+                                                try:
+                                                    action_obj["target_container_name"] = remove_item_target_container_name_input.text().strip()
+                                                except RuntimeError:
+                                                    action_obj["target_container_name"] = ""
+                                            else:
+                                                action_obj["target_container_name"] = ""
+                                        else:
+                                            action_obj["target_container_enabled"] = False
+                                            action_obj["target_item_name"] = ""
+                                            action_obj["target_container_name"] = ""
                                     elif action_type == "Post Visibility":
                                         current_post_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityCurrentPostRadio")
                                         player_post_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityPlayerPostRadio")
