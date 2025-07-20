@@ -2,7 +2,9 @@ from PyQt5.QtCore import QTimer
 import json
 import os
 import random
+import time
 from core.utils import _get_player_current_setting_name, _get_or_create_actor_data, _find_player_character_file, _load_json_safely, _find_setting_file_prioritizing_game_dir, _get_player_character_name, _find_actor_file_path
+import re
 
 def _apply_string_operation_mode(prev_value, new_value, set_var_mode, delimiter="/"):
     if isinstance(prev_value, (int, float)) and isinstance(new_value, (int, float)):
@@ -36,6 +38,92 @@ def smart_convert_variable_value(value):
         except (ValueError, TypeError) as e:
             return value_stripped
     return value
+
+def _find_item_by_name_or_id(inventory, item_identifier):
+    if not inventory:
+        return None, -1
+    for i, item in enumerate(inventory):
+        if not isinstance(item, dict):
+            continue
+        if item_identifier.startswith('item_') and item.get('item_id') == item_identifier:
+            return item, i
+        if item.get('name') == item_identifier:
+            return item, i
+    return None, -1
+
+def _find_item_in_container_recursive(inventory, item_identifier, container_path=None):
+    if not inventory:
+        return None, None
+    for item in inventory:
+        if not isinstance(item, dict):
+            continue
+        if (item_identifier.startswith('item_') and item.get('item_id') == item_identifier) or \
+           item.get('name') == item_identifier:
+            return item, container_path
+        containers = item.get('containers', {})
+        for container_name, container_items in containers.items():
+            current_path = container_path or []
+            new_path = current_path + [(item.get('name', ''), container_name)]
+            result, result_path = _find_item_in_container_recursive(container_items, item_identifier, new_path)
+            if result:
+                return result, result_path
+    return None, None
+
+def _add_item_to_container(inventory, target_item_identifier, container_name, new_item):
+    target_item, _ = _find_item_by_name_or_id(inventory, target_item_identifier)
+    if not target_item:
+        return False
+    containers = target_item.get('containers', {})
+    if container_name not in containers:
+        return False
+    containers[container_name].append(new_item)
+    return True
+
+def _remove_item_from_container(inventory, target_item_identifier, container_name, item_name, quantity=1):
+    target_item, _ = _find_item_by_name_or_id(inventory, target_item_identifier)
+    if not target_item:
+        return 0
+    containers = target_item.get('containers', {})
+    if container_name not in containers:
+        return 0
+    container_items = containers[container_name]
+    removed_count = 0
+    items_to_remove = quantity
+    for i in range(len(container_items) - 1, -1, -1):
+        item = container_items[i]
+        if item.get('name') == item_name:
+            current_quantity = item.get('quantity', 1)
+            if current_quantity <= items_to_remove:
+                removed_count += current_quantity
+                container_items.pop(i)
+                items_to_remove -= current_quantity
+            else:
+                item['quantity'] = current_quantity - items_to_remove
+                removed_count += items_to_remove
+                items_to_remove = 0
+            if items_to_remove <= 0:
+                break
+    return removed_count
+
+def _move_item_between_containers(inventory, from_item_identifier, from_container_name, 
+                                 to_item_identifier, to_container_name, item_name, quantity=1):
+    removed_count = _remove_item_from_container(inventory, from_item_identifier, from_container_name, item_name, quantity)
+    if removed_count == 0:
+        return 0
+    new_item = {
+        'item_id': f"item_{int(time.time() * 1000)}",
+        'name': item_name,
+        'quantity': removed_count,
+        'owner': '',
+        'description': '',
+        'location': '',
+        'containers': {}
+    }
+    success = _add_item_to_container(inventory, to_item_identifier, to_container_name, new_item)
+    if not success:
+        _add_item_to_container(inventory, from_item_identifier, from_container_name, new_item)
+        return 0
+    return removed_count
 
 def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_msg=None, prev_assistant_msg=None):
     from rules.rule_evaluator import _process_specific_rule
@@ -81,7 +169,6 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 print(f"WARNING: Could not find generator '{generator_name}' for permutation")
         resource_folder = os.path.join(workflow_data_dir, 'resources', 'generators')
         game_folder = os.path.join(workflow_data_dir, 'game', 'generators')
-
         os.makedirs(game_folder, exist_ok=True)
         os.makedirs(resource_folder, exist_ok=True)
         from generate.generate_random_list import generate_random_list
@@ -700,7 +787,7 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                             if setting_data.get('name') == player_setting_name:
                                 found_setting_file = file_path
                                 break
-                    if found_setting_file:
+                    if source_value is not None:
                         break
                 if not found_setting_file:
                     base_settings_dir = os.path.join(workflow_data_dir, 'resources', 'data files', 'settings')
@@ -913,13 +1000,29 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
     elif obj_type == 'Add Item':
         item_name = obj.get('item_name', '')
         quantity = obj.get('quantity', '1')
+        owner = obj.get('owner', '')
+        description = obj.get('description', '')
+        location = obj.get('location', '')
         target_type = obj.get('target_type', 'Setting')
         target_name = obj.get('target_name', '')
         generate = obj.get('generate', False)
+        target_container_enabled = obj.get('target_container_enabled', False)
+        target_item_name = obj.get('target_item_name', '')
+        target_container_name = obj.get('target_container_name', '')
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if not workflow_data_dir:
             print(f"ERROR: Cannot process Add Item - workflow_data_dir not found")
             return
+        if not item_name:
+            print(f"ERROR: Cannot add item - item_name is empty")
+            return
+        player_name = _get_player_character_name(workflow_data_dir)
+        current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+        owner = _substitute_variables_in_string(owner, tab_data, character_name)
+        description = _substitute_variables_in_string(description, tab_data, character_name)
+        location = _substitute_variables_in_string(location, tab_data, character_name)
+        if not target_name and current_setting_name:
+            target_name = current_setting_name
         target_file_path = None
         if target_type == 'Setting':
             target_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, target_name)
@@ -930,17 +1033,52 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 pass
             dummy_self = DummySelf()
             target_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, target_name)
-        rule_id = rule.get('id', 'Unknown') if rule else 'Unknown'
-        print(f"  >> Rule '{rule_id}' Action: Add Item called - Item: '{item_name}', Quantity: {quantity}, Target Type: {target_type}, Target Name: '{target_name}' ({target_file_path}), Generate: {generate}")
+        
+        if not target_file_path or not os.path.exists(target_file_path):
+            print(f"ERROR: Cannot add item - target file not found: {target_file_path}")
+            return
+        try:
+            with open(target_file_path, 'r', encoding='utf-8') as f:
+                target_data = json.load(f)
+            if 'inventory' not in target_data:
+                target_data['inventory'] = []
+            new_item = {
+                'item_id': f"item_{int(time.time() * 1000)}",
+                'name': item_name,
+                'quantity': int(quantity) if quantity.isdigit() else 1,
+                'owner': owner,
+                'description': description,
+                'location': location,
+                'containers': {}
+            }
+            if target_container_enabled and target_item_name and target_container_name:
+                success = _add_item_to_container(target_data['inventory'], target_item_name, target_container_name, new_item)
+                if not success:
+                    print(f"ERROR: Cannot add item '{item_name}' to container '{target_container_name}' in item '{target_item_name}' - target item or container not found")
+                    return
+                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully added item '{item_name}' (qty: {quantity}) to container '{target_container_name}' in {target_type} '{target_name}'")
+            else:
+                target_data['inventory'].append(new_item)
+                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully added item '{item_name}' (qty: {quantity}) to {target_type} '{target_name}'")
+            with open(target_file_path, 'w', encoding='utf-8') as f:
+                json.dump(target_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"ERROR: Failed to add item '{item_name}' to {target_type} '{target_name}': {e}")
     
     elif obj_type == 'Remove Item':
         item_name = obj.get('item_name', '')
         quantity = obj.get('quantity', '1')
         target_type = obj.get('target_type', 'Setting')
         target_name = obj.get('target_name', '')
+        target_container_enabled = obj.get('target_container_enabled', False)
+        target_item_name = obj.get('target_item_name', '')
+        target_container_name = obj.get('target_container_name', '')
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if not workflow_data_dir:
             print(f"ERROR: Cannot process Remove Item - workflow_data_dir not found")
+            return
+        if not item_name:
+            print(f"ERROR: Cannot remove item - item_name is empty")
             return
         target_file_path = None
         if target_type == 'Setting':
@@ -952,8 +1090,49 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 pass
             dummy_self = DummySelf()
             target_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, target_name)
-        rule_id = rule.get('id', 'Unknown') if rule else 'Unknown'
-        print(f"  >> Rule '{rule_id}' Action: Remove Item called - Item: '{item_name}', Quantity: {quantity}, Target Type: {target_type}, Target Name: '{target_name}' ({target_file_path})")
+        if not target_file_path or not os.path.exists(target_file_path):
+            print(f"ERROR: Cannot remove item - target file not found: {target_file_path}")
+            return
+        try:
+            with open(target_file_path, 'r', encoding='utf-8') as f:
+                target_data = json.load(f)
+            inventory = target_data.get('inventory', [])
+            if not inventory:
+                print(f"WARNING: No inventory found in {target_type} '{target_name}'")
+                return
+            if target_container_enabled and target_item_name and target_container_name:
+                removed_count = _remove_item_from_container(inventory, target_item_name, target_container_name, item_name, int(quantity) if quantity.isdigit() else 1)
+                if removed_count == 0:
+                    print(f"WARNING: No items '{item_name}' found in container '{target_container_name}' of item '{target_item_name}' in {target_type} '{target_name}'")
+                    return
+                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully removed {removed_count} of item '{item_name}' from container '{target_container_name}' in {target_type} '{target_name}'")
+            else:
+                items_to_remove = int(quantity) if quantity.isdigit() else 1
+                removed_count = 0
+                
+                for i in range(len(inventory) - 1, -1, -1):
+                    item = inventory[i]
+                    if item.get('name') == item_name:
+                        current_quantity = item.get('quantity', 1)
+                        if current_quantity <= items_to_remove:
+                            removed_count += current_quantity
+                            inventory.pop(i)
+                            items_to_remove -= current_quantity
+                        else:
+                            item['quantity'] = current_quantity - items_to_remove
+                            removed_count += items_to_remove
+                            items_to_remove = 0
+                        
+                        if items_to_remove <= 0:
+                            break
+                if removed_count == 0:
+                    print(f"WARNING: No items '{item_name}' found in {target_type} '{target_name}'")
+                    return
+                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully removed {removed_count} of item '{item_name}' from {target_type} '{target_name}'")
+            with open(target_file_path, 'w', encoding='utf-8') as f:
+                json.dump(target_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"ERROR: Failed to remove item '{item_name}' from {target_type} '{target_name}': {e}")
     
     elif obj_type == 'Move Item':
         item_name = obj.get('item_name', '')
@@ -962,9 +1141,18 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
         from_name = obj.get('from_name', '')
         to_type = obj.get('to_type', '')
         to_name = obj.get('to_name', '')
+        from_container_enabled = obj.get('from_container_enabled', False)
+        from_item_name = obj.get('from_item_name', '')
+        from_container_name = obj.get('from_container_name', '')
+        to_container_enabled = obj.get('to_container_enabled', False)
+        to_item_name = obj.get('to_item_name', '')
+        to_container_name = obj.get('to_container_name', '')
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if not workflow_data_dir:
             print(f"ERROR: Cannot process Move Item - workflow_data_dir not found")
+            return
+        if not item_name:
+            print(f"ERROR: Cannot move item - item_name is empty")
             return
         player_name = _get_player_character_name(workflow_data_dir)
         current_setting_name = _get_player_current_setting_name(workflow_data_dir)
@@ -996,8 +1184,165 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 pass
             dummy_self = DummySelf()
             to_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, to_name)
-        rule_id = rule.get('id', 'Unknown') if rule else 'Unknown'
-        print(f"  >> Rule '{rule_id}' Action: Move Item called - Item: '{item_name}', Quantity: {quantity}, From: {from_type} '{from_name}' ({from_file_path}), To: {to_type} '{to_name}' ({to_file_path})")
+        if not from_file_path or not os.path.exists(from_file_path):
+            print(f"ERROR: Cannot move item - source file not found: {from_file_path}")
+            return
+        if not to_file_path or not os.path.exists(to_file_path):
+            print(f"ERROR: Cannot move item - destination file not found: {to_file_path}")
+            return
+        try:
+            with open(from_file_path, 'r', encoding='utf-8') as f:
+                from_data = json.load(f)
+            
+            with open(to_file_path, 'r', encoding='utf-8') as f:
+                to_data = json.load(f)
+            from_inventory = from_data.get('inventory', [])
+            to_inventory = to_data.get('inventory', [])
+            if not from_inventory:
+                print(f"WARNING: No inventory found in source {from_type} '{from_name}'")
+                return
+            if 'inventory' not in to_data:
+                to_data['inventory'] = []
+            items_to_move = int(quantity) if isinstance(quantity, str) and quantity.isdigit() else int(quantity)
+            moved_count = 0
+            if from_container_enabled and to_container_enabled and from_item_name and to_item_name and from_container_name and to_container_name:
+                if from_file_path == to_file_path:
+                    moved_count = _move_item_between_containers(from_inventory, from_item_name, from_container_name, 
+                                                              to_item_name, to_container_name, item_name, items_to_move)
+                else:
+                    removed_count = _remove_item_from_container(from_inventory, from_item_name, from_container_name, item_name, items_to_move)
+                    if removed_count == 0:
+                        print(f"WARNING: No items '{item_name}' found in container '{from_container_name}' of item '{from_item_name}' in source {from_type} '{from_name}'")
+                        return
+                    new_item = {
+                        'item_id': f"item_{int(time.time() * 1000)}",
+                        'name': item_name,
+                        'quantity': removed_count,
+                        'owner': '',
+                        'description': '',
+                        'location': '',
+                        'containers': {}
+                    }
+                    success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
+                    if not success:
+                        _add_item_to_container(from_inventory, from_item_name, from_container_name, new_item)
+                        print(f"ERROR: Cannot add item '{item_name}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
+                        return
+                    moved_count = removed_count
+                if moved_count > 0:
+                    print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_name}' from container '{from_container_name}' to container '{to_container_name}'")
+            elif from_container_enabled and from_item_name and from_container_name:
+                removed_count = _remove_item_from_container(from_inventory, from_item_name, from_container_name, item_name, items_to_move)
+                if removed_count == 0:
+                    print(f"WARNING: No items '{item_name}' found in container '{from_container_name}' of item '{from_item_name}' in source {from_type} '{from_name}'")
+                    return
+                new_item = {
+                    'item_id': f"item_{int(time.time() * 1000)}",
+                    'name': item_name,
+                    'quantity': removed_count,
+                    'owner': '',
+                    'description': '',
+                    'location': '',
+                    'containers': {}
+                }
+                to_inventory.append(new_item)
+                moved_count = removed_count
+                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_name}' from container '{from_container_name}' to main inventory")
+            elif to_container_enabled and to_item_name and to_container_name:
+                for i in range(len(from_inventory) - 1, -1, -1):
+                    item = from_inventory[i]
+                    if item.get('name') == item_name:
+                        current_quantity = item.get('quantity', 1)
+                        if current_quantity <= items_to_move:
+                            moved_count += current_quantity
+                            from_inventory.pop(i)
+                            items_to_move -= current_quantity
+                            new_item = {
+                                'item_id': f"item_{int(time.time() * 1000)}",
+                                'name': item_name,
+                                'quantity': current_quantity,
+                                'owner': '',
+                                'description': '',
+                                'location': '',
+                                'containers': {}
+                            }
+                            success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
+                            if not success:
+                                from_inventory.append(new_item)
+                                print(f"ERROR: Cannot add item '{item_name}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
+                                return
+                        else:
+                            item['quantity'] = current_quantity - items_to_move
+                            moved_count += items_to_move
+                            items_to_move = 0
+                            new_item = {
+                                'item_id': f"item_{int(time.time() * 1000)}",
+                                'name': item_name,
+                                'quantity': items_to_move,
+                                'owner': '',
+                                'description': '',
+                                'location': '',
+                                'containers': {}
+                            }
+                            success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
+                            if not success:
+                                item['quantity'] = current_quantity
+                                print(f"ERROR: Cannot add item '{item_name}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
+                                return
+                        if items_to_move <= 0:
+                            break
+                if moved_count == 0:
+                    print(f"WARNING: No items '{item_name}' found in source {from_type} '{from_name}'")
+                    return
+                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_name}' from main inventory to container '{to_container_name}'")
+            else:
+                for i in range(len(from_inventory) - 1, -1, -1):
+                    item = from_inventory[i]
+                    if item.get('name') == item_name:
+                        current_quantity = item.get('quantity', 1)
+                        if current_quantity <= items_to_move:
+                            moved_count += current_quantity
+                            from_inventory.pop(i)
+                            items_to_move -= current_quantity
+                            new_item = {
+                                'item_id': f"item_{int(time.time() * 1000)}",
+                                'name': item_name,
+                                'quantity': current_quantity,
+                                'owner': '',
+                                'description': '',
+                                'location': '',
+                                'containers': {}
+                            }
+                            to_inventory.append(new_item)
+                        else:
+                            item['quantity'] = current_quantity - items_to_move
+                            moved_count += items_to_move
+                            items_to_move = 0
+                            
+                            new_item = {
+                                'item_id': f"item_{int(time.time() * 1000)}",
+                                'name': item_name,
+                                'quantity': items_to_move,
+                                'owner': '',
+                                'description': '',
+                                'location': '',
+                                'containers': {}
+                            }
+                            to_inventory.append(new_item)
+                        if items_to_move <= 0:
+                            break
+                if moved_count == 0:
+                    print(f"WARNING: No items '{item_name}' found in source {from_type} '{from_name}'")
+                    return
+                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_name}' from {from_type} '{from_name}' to {to_type} '{to_name}'")
+            from_data['inventory'] = from_inventory
+            to_data['inventory'] = to_inventory
+            with open(from_file_path, 'w', encoding='utf-8') as f:
+                json.dump(from_data, f, indent=2, ensure_ascii=False)
+            with open(to_file_path, 'w', encoding='utf-8') as f:
+                json.dump(to_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"ERROR: Failed to move item '{item_name}' from {from_type} '{from_name}' to {to_type} '{to_name}': {e}")
     
     elif obj_type == 'Game Over':
         game_over_message = obj.get('game_over_message', 'Game Over')
@@ -1161,3 +1506,67 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 user_msg_for_next_rule = current_user_msg if current_user_msg is not None else ''
                 assistant_msg_for_next_rule = prev_assistant_msg if prev_assistant_msg is not None else ''
                 QTimer.singleShot(0, lambda nr=next_rule_data: _process_specific_rule(self, nr, user_msg_for_next_rule, assistant_msg_for_next_rule, rules_list=tab_data.get('thought_rules', []), rule_index=None, triggered_directly=True))
+
+def _substitute_variables_in_string(text_to_process, tab_data, actor_name_context=None):
+    if not text_to_process or not isinstance(text_to_process, str):
+        return text_to_process
+    from core.utils import (
+        _get_player_character_name,
+        _get_or_create_actor_data,
+        _get_player_current_setting_name,
+        _find_setting_file_prioritizing_game_dir,
+        _load_json_safely
+    )
+    result_text = text_to_process
+    workflow_data_dir = tab_data.get('workflow_data_dir') if tab_data else None
+    if '(character)' in result_text and actor_name_context:
+        result_text = result_text.replace('(character)', actor_name_context)
+    if '(player)' in result_text and workflow_data_dir:
+        player_name = _get_player_character_name(workflow_data_dir)
+        if player_name:
+            result_text = result_text.replace('(player)', player_name)
+    if '(setting)' in result_text and workflow_data_dir:
+        setting_name = _get_player_current_setting_name(workflow_data_dir)
+        if setting_name and setting_name != "Unknown Setting":
+            result_text = result_text.replace('(setting)', setting_name)
+    if workflow_data_dir:
+        def get_var_value(scope, var_name):
+            if scope == "global":
+                variables_file = os.path.join(workflow_data_dir, "game", "variables.json")
+                if os.path.exists(variables_file):
+                    try:
+                        with open(variables_file, 'r', encoding='utf-8') as f:
+                            variables = json.load(f)
+                            return variables.get(var_name, "")
+                    except:
+                        return ""
+                return ""
+            elif scope == "player":
+                player_name = _get_player_character_name(workflow_data_dir)
+                if player_name:
+                    actor_data, _ = _get_or_create_actor_data(None, workflow_data_dir, player_name)
+                    return actor_data.get('variables', {}).get(var_name, "")
+                return ""
+            elif scope == "actor" or scope == "character":
+                if actor_name_context:
+                    actor_data, _ = _get_or_create_actor_data(None, workflow_data_dir, actor_name_context)
+                    return actor_data.get('variables', {}).get(var_name, "")
+                return ""
+            elif scope == "setting":
+                current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+                if current_setting_name and current_setting_name != "Unknown Setting":
+                    setting_file_path, _ = _find_setting_file_prioritizing_game_dir(None, workflow_data_dir, current_setting_name)
+                    if setting_file_path and os.path.exists(setting_file_path):
+                        setting_data = _load_json_safely(setting_file_path)
+                        if setting_data:
+                            return setting_data.get('variables', {}).get(var_name, "")
+                return ""
+            return ""
+        def replace_match(match):
+            scope = match.group(1).lower()
+            var_name = match.group(2).strip()
+            val = get_var_value(scope, var_name)
+            return str(val)
+        pattern = r'\[(global|player|actor|character|setting),\s*([^,\]]+?)\s*\]'
+        result_text = re.sub(pattern, replace_match, result_text)
+    return result_text
