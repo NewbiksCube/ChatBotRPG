@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QLineEdit, QPushButton, QRadioButton, QButtonGroup, QComboBox, QCompleter, QVBoxLayout, QHBoxLayout, QApplication, QMessageBox, QCheckBox, QStackedWidget, QFrame
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QLineEdit, QPushButton, QRadioButton, QButtonGroup, QComboBox, QCompleter, QVBoxLayout, QHBoxLayout, QApplication, QMessageBox, QCheckBox, QStackedWidget, QFrame, QDoubleSpinBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from core.utils import is_valid_widget, _get_available_actors, _get_available_settings
@@ -252,7 +252,7 @@ def create_pair_widget(tab_data):
             "Rewrite Post", "Generate Story", "Generate Setting",
             "Generate Character", "Generate Random List",
             "Text Tag", "New Scene", "Change Actor Location", "Force Narrator", "Set Screen Effect", "Skip Post", "Change Brightness", "Exit Rule Processing", "Game Over",
-            "Post Visibility", "Add Item", "Remove Item", "Move Item", "Post Streaming"
+            "Post Visibility", "Add Item", "Remove Item", "Move Item", "Post Streaming", "Advance Time", "Change Time Passage"
         ])
         top_h_layout.addWidget(type_selector)
         value_editor = QTextEdit()
@@ -929,6 +929,78 @@ def create_pair_widget(tab_data):
         
         move_item_widget.setVisible(False)
         top_h_layout.addWidget(move_item_widget)
+        
+        advance_time_widget = QWidget()
+        advance_time_widget.setObjectName("AdvanceTimeWidget")
+        advance_time_layout = QHBoxLayout(advance_time_widget)
+        advance_time_layout.setContentsMargins(0, 0, 0, 0)
+        advance_time_layout.setSpacing(5)
+        advance_time_label = QLabel("Advance by:")
+        advance_time_label.setFont(QFont('Consolas', 9))
+        advance_time_input = QLineEdit()
+        advance_time_input.setObjectName("AdvanceTimeInput")
+        advance_time_input.setFont(QFont('Consolas', 9))
+        advance_time_input.setPlaceholderText("e.g., 2h 30m, 1d 6h, 45m")
+        advance_time_input.setMinimumWidth(150)
+        advance_time_input.setToolTip("Format: 1h 30m, 2d 6h, 45m, etc. (hours, minutes, days)")
+        advance_time_layout.addWidget(advance_time_label)
+        advance_time_layout.addWidget(advance_time_input)
+        advance_time_layout.addStretch()
+        advance_time_widget.setVisible(False)
+        top_h_layout.addWidget(advance_time_widget)
+        
+        change_time_passage_widget = QWidget()
+        change_time_passage_widget.setObjectName("ChangeTimePassageWidget")
+        change_time_passage_layout = QVBoxLayout(change_time_passage_widget)
+        change_time_passage_layout.setContentsMargins(0, 0, 0, 0)
+        change_time_passage_layout.setSpacing(3)
+        
+        passage_mode_layout = QHBoxLayout()
+        passage_mode_label = QLabel("Mode:")
+        passage_mode_label.setFont(QFont('Consolas', 9))
+        passage_static_radio = QRadioButton("Static")
+        passage_static_radio.setObjectName("ChangeTimePassageStaticRadio")
+        passage_static_radio.setFont(QFont('Consolas', 9))
+        passage_static_radio.setChecked(True)
+        passage_realtime_radio = QRadioButton("Realtime")
+        passage_realtime_radio.setObjectName("ChangeTimePassageRealtimeRadio")
+        passage_realtime_radio.setFont(QFont('Consolas', 9))
+        passage_mode_group = QButtonGroup(change_time_passage_widget)
+        passage_mode_group.addButton(passage_static_radio)
+        passage_mode_group.addButton(passage_realtime_radio)
+        passage_mode_layout.addWidget(passage_mode_label)
+        passage_mode_layout.addWidget(passage_static_radio)
+        passage_mode_layout.addWidget(passage_realtime_radio)
+        passage_mode_layout.addStretch()
+        change_time_passage_layout.addLayout(passage_mode_layout)
+        
+        multiplier_layout = QHBoxLayout()
+        multiplier_label = QLabel("Multiplier:")
+        multiplier_label.setFont(QFont('Consolas', 9))
+        multiplier_input = QDoubleSpinBox()
+        multiplier_input.setObjectName("ChangeTimePassageMultiplierInput")
+        multiplier_input.setFont(QFont('Consolas', 9))
+        multiplier_input.setRange(0.0, 100.0)
+        multiplier_input.setSingleStep(0.1)
+        multiplier_input.setDecimals(1)
+        multiplier_input.setValue(1.0)
+        multiplier_input.setSuffix("x")
+        multiplier_input.setToolTip("Game time speed relative to real time (only for Realtime mode)")
+        multiplier_input.setEnabled(False)
+        multiplier_layout.addWidget(multiplier_label)
+        multiplier_layout.addWidget(multiplier_input)
+        multiplier_layout.addStretch()
+        change_time_passage_layout.addLayout(multiplier_layout)
+        
+        def update_multiplier_visibility():
+            is_realtime = passage_realtime_radio.isChecked()
+            multiplier_input.setEnabled(is_realtime)
+        
+        passage_realtime_radio.toggled.connect(update_multiplier_visibility)
+        passage_static_radio.toggled.connect(update_multiplier_visibility)
+        
+        change_time_passage_widget.setVisible(False)
+        top_h_layout.addWidget(change_time_passage_widget)
         position_container = QWidget()
         position_container.setObjectName("ActionPositionContainer")
         position_layout = QVBoxLayout(position_container)
@@ -1733,6 +1805,8 @@ def create_pair_widget(tab_data):
             is_add_item = (t == "Add Item")
             is_remove_item = (t == "Remove Item")
             is_move_item = (t == "Move Item")
+            is_advance_time = (t == "Advance Time")
+            is_change_time_passage = (t == "Change Time Passage")
             is_generate_operation = False
             is_from_random_list = False
             if is_set_var and operation_selector:
@@ -1756,7 +1830,7 @@ def create_pair_widget(tab_data):
                 is_set_var, is_generate_setting, is_generate_story,
                 is_generate_character, is_change_location, is_force_narrator,
                 is_screen_effect, is_generate_random_list, is_change_brightness, is_exit_rule_processing, is_game_over, is_post_visibility,
-                is_add_item, is_remove_item, is_move_item
+                is_add_item, is_remove_item, is_move_item, is_advance_time, is_change_time_passage
             ])
             value_editor.setVisible(value_editor_visible)
             var_name_editor.setVisible(is_set_var)
@@ -1769,6 +1843,8 @@ def create_pair_widget(tab_data):
             add_item_widget.setVisible(is_add_item)
             remove_item_widget.setVisible(is_remove_item)
             move_item_widget.setVisible(is_move_item)
+            advance_time_widget.setVisible(is_advance_time)
+            change_time_passage_widget.setVisible(is_change_time_passage)
             position_container.setVisible(is_sys_msg)
             switch_model_widget.setVisible(is_switch_model)
             generate_setting_widget.setVisible(is_generate_setting)
@@ -1795,6 +1871,8 @@ def create_pair_widget(tab_data):
                 elif t == "Switch Model": value_editor.setPlaceholderText("Model name")
                 elif is_rewrite: value_editor.setPlaceholderText("Rewrite instructions")
                 elif is_text_tag: value_editor.setPlaceholderText("Tag text (displays centered)")
+                elif is_advance_time: value_editor.setPlaceholderText("Time advancement amount (e.g., 2h 30m)")
+                elif is_change_time_passage: value_editor.setPlaceholderText("Time passage configuration")
                 else: value_editor.setPlaceholderText("Action value")
         type_selector.currentIndexChanged.connect(update_inputs)
         operation_selector.currentIndexChanged.connect(update_inputs)
@@ -2053,6 +2131,12 @@ def create_pair_widget(tab_data):
             'move_item_from_container_name_input': move_from_container_name_input,
             'move_item_to_container_checkbox': move_to_container_checkbox,
             'move_item_to_container_name_input': move_to_container_name_input,
+            'advance_time_widget': advance_time_widget,
+            'advance_time_input': advance_time_input,
+            'change_time_passage_widget': change_time_passage_widget,
+            'passage_static_radio': passage_static_radio,
+            'passage_realtime_radio': passage_realtime_radio,
+            'multiplier_input': multiplier_input,
             'action_number_label': action_number_label
         }
         temp_parent = row_widget
@@ -2220,6 +2304,12 @@ def create_pair_widget(tab_data):
             
         elif action_type == 'Move Item':
             populate_move_item(data, row)
+            
+        elif action_type == 'Advance Time':
+            populate_advance_time(data, row)
+            
+        elif action_type == 'Change Time Passage':
+            populate_change_time_passage(data, row)
 
     def populate_generate_operation(data, row):
         generate_instructions_input = row.get('generate_instructions_input')
@@ -2737,6 +2827,28 @@ def create_pair_widget(tab_data):
         enable_combo = row.get('enable_combo')
         if enable_combo and is_valid_widget(enable_combo):
             enable_combo.setCurrentText("True" if enabled else "False")
+
+    def populate_advance_time(data, row):
+        advance_amount = data.get('advance_amount', '')
+        advance_time_input = row.get('advance_time_input')
+        if advance_time_input and is_valid_widget(advance_time_input):
+            advance_time_input.setText(advance_amount)
+
+    def populate_change_time_passage(data, row):
+        passage_mode = data.get('passage_mode', 'static')
+        time_multiplier = data.get('time_multiplier', 1.0)
+        
+        passage_static_radio = row.get('passage_static_radio')
+        passage_realtime_radio = row.get('passage_realtime_radio')
+        if passage_static_radio and passage_realtime_radio:
+            if passage_mode == 'static':
+                passage_static_radio.setChecked(True)
+            else:
+                passage_realtime_radio.setChecked(True)
+        
+        multiplier_input = row.get('multiplier_input')
+        if multiplier_input and is_valid_widget(multiplier_input):
+            multiplier_input.setValue(time_multiplier)
 
     def add_pair_action_row(data=None, workflow_data_dir=None):
         if pair_action_rows:
