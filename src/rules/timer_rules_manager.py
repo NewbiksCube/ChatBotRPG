@@ -104,8 +104,13 @@ class TimerRulesWidget(QWidget):
         self.recurring_checkbox.setObjectName("TimerRuleRecurringCheckbox")
         self.recurring_checkbox.setToolTip("If checked, timer keeps looping even if conditions fail. Only stops on scene change.")
         self.recurring_checkbox.setChecked(False)
+        self.global_checkbox = QCheckBox("Global")
+        self.global_checkbox.setObjectName("TimerRuleGlobalCheckbox")
+        self.global_checkbox.setToolTip("If checked, timer persists across scene changes. Otherwise, timer stops when changing scenes.")
+        self.global_checkbox.setChecked(False)
         enable_layout.addWidget(self.enable_checkbox)
         enable_layout.addWidget(self.recurring_checkbox)
+        enable_layout.addWidget(self.global_checkbox)
         enable_layout.addStretch()
         list_controls_layout.addLayout(id_layout)
         list_controls_layout.addLayout(desc_layout)
@@ -177,6 +182,23 @@ class TimerRulesWidget(QWidget):
         left_panel_layout.addWidget(self.condition_type_widget)
         rule_properties_layout = QVBoxLayout()
         rule_properties_layout.setSpacing(10)
+        time_mode_label = QLabel("Time Mode:")
+        time_mode_label.setObjectName("TimerRuleTimeModeLabel")
+        time_mode_label.setAlignment(Qt.AlignCenter)
+        rule_properties_layout.addWidget(time_mode_label)
+        time_mode_radio_layout = QHBoxLayout()
+        time_mode_radio_layout.setAlignment(Qt.AlignCenter)
+        self.real_time_radio = QRadioButton("Real Time")
+        self.real_time_radio.setObjectName("TimerRuleRealTimeRadio")
+        self.real_time_radio.setChecked(True)
+        self.game_time_radio = QRadioButton("Game Time")
+        self.game_time_radio.setObjectName("TimerRuleGameTimeRadio")
+        self.time_mode_group = QButtonGroup()
+        self.time_mode_group.addButton(self.real_time_radio)
+        self.time_mode_group.addButton(self.game_time_radio)
+        time_mode_radio_layout.addWidget(self.real_time_radio)
+        time_mode_radio_layout.addWidget(self.game_time_radio)
+        rule_properties_layout.addLayout(time_mode_radio_layout)
         interval_main_layout = QVBoxLayout()
         interval_main_layout.setSpacing(3)
         interval_label_layout = QHBoxLayout()
@@ -212,10 +234,54 @@ class TimerRulesWidget(QWidget):
         interval_random_layout.addRow("Max:", self.interval_max_input)
         self.interval_random_inputs_widget.setVisible(False)
         interval_main_layout.addWidget(self.interval_random_inputs_widget)
-        rule_properties_layout.addLayout(interval_main_layout)
+        self.real_time_container = QWidget()
+        self.real_time_container.setObjectName("TimerRuleRealTimeContainer")
+        real_time_layout = QVBoxLayout(self.real_time_container)
+        real_time_layout.setContentsMargins(0, 0, 0, 0)
+        real_time_layout.addLayout(interval_main_layout)
+        rule_properties_layout.addWidget(self.real_time_container)
+        self.game_time_container = QWidget()
+        self.game_time_container.setObjectName("TimerRuleGameTimeContainer")
+        game_time_layout = QVBoxLayout(self.game_time_container)
+        game_time_layout.setContentsMargins(0, 0, 0, 0)
         game_time_label = QLabel("<b>Game Time Interval:</b>")
         game_time_label.setObjectName("TimerRuleGameTimeIntervalLabel")
-        rule_properties_layout.addWidget(game_time_label)
+        game_time_layout.addWidget(game_time_label)
+        game_seconds_main_layout = QVBoxLayout()
+        game_seconds_main_layout.setSpacing(3)
+        game_seconds_label_layout = QHBoxLayout()
+        game_seconds_label = QLabel("Game Seconds:")
+        game_seconds_label.setObjectName("TimerRuleGameSecondsLabel")
+        self.game_seconds_random_checkbox = QCheckBox("Random")
+        self.game_seconds_random_checkbox.setObjectName("TimerRuleGameSecondsRandomCheckbox")
+        game_seconds_label_layout.addWidget(game_seconds_label)
+        game_seconds_label_layout.addWidget(self.game_seconds_random_checkbox)
+        game_seconds_label_layout.addStretch(1)
+        self.game_seconds_input = QSpinBox()
+        self.game_seconds_input.setObjectName("TimerRuleGameSecondsInput")
+        self.game_seconds_input.setMinimum(0)
+        self.game_seconds_input.setMaximum(59)
+        self.game_seconds_input.setFixedWidth(80)
+        game_seconds_label_layout.addWidget(self.game_seconds_input)
+        game_seconds_main_layout.addLayout(game_seconds_label_layout)
+        self.game_seconds_random_inputs_widget = QWidget()
+        self.game_seconds_random_inputs_widget.setObjectName("TimerRuleGameSecondsRandomInputsWidget")
+        game_seconds_random_layout = QFormLayout(self.game_seconds_random_inputs_widget)
+        game_seconds_random_layout.setContentsMargins(20, 3, 0, 3)
+        game_seconds_random_layout.setSpacing(5)
+        self.game_seconds_min_input = QSpinBox()
+        self.game_seconds_min_input.setObjectName("TimerRuleGameSecondsMinInput")
+        self.game_seconds_min_input.setMinimum(0)
+        self.game_seconds_min_input.setMaximum(58)
+        self.game_seconds_max_input = QSpinBox()
+        self.game_seconds_max_input.setObjectName("TimerRuleGameSecondsMaxInput")
+        self.game_seconds_max_input.setMinimum(0)
+        self.game_seconds_max_input.setMaximum(59)
+        game_seconds_random_layout.addRow("Min:", self.game_seconds_min_input)
+        game_seconds_random_layout.addRow("Max:", self.game_seconds_max_input)
+        self.game_seconds_random_inputs_widget.setVisible(False)
+        game_seconds_main_layout.addWidget(self.game_seconds_random_inputs_widget)
+        game_time_layout.addLayout(game_seconds_main_layout)
         game_minutes_main_layout = QVBoxLayout()
         game_minutes_main_layout.setSpacing(3)
         game_minutes_label_layout = QHBoxLayout()
@@ -250,7 +316,7 @@ class TimerRulesWidget(QWidget):
         game_minutes_random_layout.addRow("Max:", self.game_minutes_max_input)
         self.game_minutes_random_inputs_widget.setVisible(False)
         game_minutes_main_layout.addWidget(self.game_minutes_random_inputs_widget)
-        rule_properties_layout.addLayout(game_minutes_main_layout)
+        game_time_layout.addLayout(game_minutes_main_layout)
         game_hours_main_layout = QVBoxLayout()
         game_hours_main_layout.setSpacing(3)
         game_hours_label_layout = QHBoxLayout()
@@ -285,7 +351,7 @@ class TimerRulesWidget(QWidget):
         game_hours_random_layout.addRow("Max:", self.game_hours_max_input)
         self.game_hours_random_inputs_widget.setVisible(False)
         game_hours_main_layout.addWidget(self.game_hours_random_inputs_widget)
-        rule_properties_layout.addLayout(game_hours_main_layout)
+        game_time_layout.addLayout(game_hours_main_layout)
         game_days_main_layout = QVBoxLayout()
         game_days_main_layout.setSpacing(3)
         game_days_label_layout = QHBoxLayout()
@@ -320,7 +386,10 @@ class TimerRulesWidget(QWidget):
         game_days_random_layout.addRow("Max:", self.game_days_max_input)
         self.game_days_random_inputs_widget.setVisible(False)
         game_days_main_layout.addWidget(self.game_days_random_inputs_widget)
-        rule_properties_layout.addLayout(game_days_main_layout)
+        game_time_layout.addLayout(game_days_main_layout)
+        rule_properties_layout.addWidget(self.game_time_container)
+        self.real_time_container.setVisible(True)
+        self.game_time_container.setVisible(False)
         left_panel_layout.addLayout(rule_properties_layout)
         left_panel_layout.addStretch(1)
         left_panel_scroll.setWidget(left_panel_widget)
@@ -368,10 +437,124 @@ class TimerRulesWidget(QWidget):
         self.variable_radio.toggled.connect(self._toggle_variable_condition_inputs)
         self.add_variable_condition_button.clicked.connect(self._add_variable_condition_row)
         self.interval_random_checkbox.toggled.connect(self._toggle_interval_random_inputs)
+        self.game_seconds_random_checkbox.toggled.connect(self._toggle_game_seconds_random_inputs)
         self.game_minutes_random_checkbox.toggled.connect(self._toggle_game_minutes_random_inputs)
         self.game_hours_random_checkbox.toggled.connect(self._toggle_game_hours_random_inputs)
         self.game_days_random_checkbox.toggled.connect(self._toggle_game_days_random_inputs)
+        self.time_mode_group.buttonClicked.connect(self._toggle_time_mode)
         self._apply_theme()
+        base_color = self.theme_colors.get("base_color", "#CCCCCC")
+        darker_bg = self.theme_colors.get("darker_bg", "#404040")
+        highlight = self.theme_colors.get("highlight", "rgba(204, 204, 204, 0.6)")
+        
+        game_seconds_style = f"""
+            QSpinBox {{
+                color: {base_color};
+                background-color: {darker_bg};
+                border: 1px solid {base_color};
+                border-radius: 3px;
+                padding: 1px 3px;
+                selection-background-color: {highlight};
+                selection-color: white;
+                font: 10pt "Consolas";
+            }}
+            QSpinBox::up-button, QSpinBox::down-button {{
+                background-color: {base_color};
+                border: 1px solid {darker_bg};
+                width: 12px;
+                min-height: 10px;
+                subcontrol-origin: border;
+                margin: 1px;
+            }}
+            QSpinBox::up-arrow, QSpinBox::down-arrow {{
+                width: 0px;
+                height: 0px;
+            }}
+        """
+        
+        self.game_seconds_input.setStyleSheet(game_seconds_style)
+        game_seconds_random_style = f"""
+            QSpinBox {{
+                color: {base_color};
+                background-color: {darker_bg};
+                border: 1px solid {base_color};
+                border-radius: 3px;
+                padding: 1px 3px;
+                selection-background-color: {highlight};
+                selection-color: white;
+                font: 10pt "Consolas";
+                min-width: 60px;
+            }}
+            QSpinBox::up-button, QSpinBox::down-button {{
+                background-color: {base_color};
+                border: 1px solid {darker_bg};
+                width: 12px;
+                min-height: 10px;
+                subcontrol-origin: border;
+                margin: 1px;
+            }}
+            QSpinBox::up-arrow, QSpinBox::down-arrow {{
+                width: 0px;
+                height: 0px;
+            }}
+        """
+        
+        self.game_seconds_min_input.setStyleSheet(game_seconds_random_style)
+        self.game_seconds_max_input.setStyleSheet(game_seconds_random_style)
+        radio_button_style = f"""
+            QRadioButton {{
+                color: {base_color};
+                font: 10pt "Consolas";
+                spacing: 5px;
+                background-color: transparent;
+            }}
+            QRadioButton::indicator {{
+                width: 13px;
+                height: 13px;
+                border-radius: 6px;
+                border: 1px solid {base_color};
+                background: transparent;
+            }}
+            QRadioButton::indicator:checked {{
+                background: {highlight};
+                border: 1px solid {base_color};
+            }}
+            QRadioButton::indicator:hover {{
+                border: 1px solid {base_color};
+                background: transparent;
+            }}
+        """
+        self.start_after_player_radio.setStyleSheet(radio_button_style)
+        self.start_after_character_radio.setStyleSheet(radio_button_style)
+        self.start_after_scene_change_radio.setStyleSheet(radio_button_style)
+        self.always_radio.setStyleSheet(radio_button_style)
+        self.variable_radio.setStyleSheet(radio_button_style)
+
+        checkbox_style = f"""
+            QCheckBox {{
+                color: {base_color};
+                font: 10pt "Consolas";
+                spacing: 5px;
+                background-color: transparent;
+            }}
+            QCheckBox::indicator {{
+                width: 13px;
+                height: 13px;
+                border-radius: 3px;
+                border: 1px solid {base_color};
+                background: transparent;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {base_color};
+            }}
+            QCheckBox::indicator:hover {{
+                border: 1px solid {base_color};
+            }}
+        """
+        
+        self.enable_checkbox.setStyleSheet(checkbox_style)
+        self.recurring_checkbox.setStyleSheet(checkbox_style)
+        self.global_checkbox.setStyleSheet(checkbox_style)
     
     def _toggle_variable_condition_inputs(self, checked):
         self.variable_conditions_area.setVisible(checked)
@@ -380,6 +563,10 @@ class TimerRulesWidget(QWidget):
     def _toggle_interval_random_inputs(self, checked):
         self.interval_random_inputs_widget.setVisible(checked)
         self.interval_input.setDisabled(checked)
+
+    def _toggle_game_seconds_random_inputs(self, checked):
+        self.game_seconds_random_inputs_widget.setVisible(checked)
+        self.game_seconds_input.setDisabled(checked)
 
     def _toggle_game_minutes_random_inputs(self, checked):
         self.game_minutes_random_inputs_widget.setVisible(checked)
@@ -392,6 +579,14 @@ class TimerRulesWidget(QWidget):
     def _toggle_game_days_random_inputs(self, checked):
         self.game_days_random_inputs_widget.setVisible(checked)
         self.game_days_input.setDisabled(checked)
+    
+    def _toggle_time_mode(self, button):
+        if button == self.real_time_radio:
+            self.real_time_container.setVisible(True)
+            self.game_time_container.setVisible(False)
+        elif button == self.game_time_radio:
+            self.real_time_container.setVisible(False)
+            self.game_time_container.setVisible(True)
     
     def _filter_rules(self, text):
         for i in range(self.rules_list.count()):
@@ -416,8 +611,12 @@ class TimerRulesWidget(QWidget):
             "description": "New timer rule",
             "enabled": True,
             "recurring": False,
+            "global": False,
+            "time_mode": "real_time",
             "interval": 60,
             "interval_is_random": False, "interval_min": 1, "interval_max": 60,
+            "game_seconds": 0,
+            "game_seconds_is_random": False, "game_seconds_min": 0, "game_seconds_max": 0,
             "game_minutes": 0,
             "game_minutes_is_random": False, "game_minutes_min": 0, "game_minutes_max": 0,
             "game_hours": 0,
@@ -486,7 +685,7 @@ class TimerRulesWidget(QWidget):
         main_ui = get_main_ui(self)
         if main_ui and hasattr(main_ui, 'remove_rule_sound') and main_ui.remove_rule_sound:
             try:
-                main_ui.remove_rule_sound.play()
+                main_ui.remove_rule_sound.play() 
             except Exception:
                 main_ui.remove_rule_sound = None
         self._auto_save_and_reload_timers()
@@ -542,11 +741,26 @@ class TimerRulesWidget(QWidget):
         self.desc_input.setText(rule["description"])
         self.enable_checkbox.setChecked(rule.get("enabled", True))
         self.recurring_checkbox.setChecked(rule.get("recurring", False))
+        self.global_checkbox.setChecked(rule.get("global", False))
         self.interval_input.setValue(rule.get("interval", 60))
         self.interval_random_checkbox.setChecked(rule.get("interval_is_random", False))
         self.interval_min_input.setValue(rule.get("interval_min", 1))
         self.interval_max_input.setValue(rule.get("interval_max", 60))
         self._toggle_interval_random_inputs(self.interval_random_checkbox.isChecked())
+
+        time_mode = rule.get("time_mode", "real_time")
+        if time_mode == "game_time":
+            self.game_time_radio.setChecked(True)
+            self._toggle_time_mode(self.game_time_radio)
+        else:
+            self.real_time_radio.setChecked(True)
+            self._toggle_time_mode(self.real_time_radio)
+        
+        self.game_seconds_input.setValue(rule.get("game_seconds", 0))
+        self.game_seconds_random_checkbox.setChecked(rule.get("game_seconds_is_random", False))
+        self.game_seconds_min_input.setValue(rule.get("game_seconds_min", 0))
+        self.game_seconds_max_input.setValue(rule.get("game_seconds_max", 0))
+        self._toggle_game_seconds_random_inputs(self.game_seconds_random_checkbox.isChecked())
         self.game_minutes_input.setValue(rule.get("game_minutes", 0))
         self.game_minutes_random_checkbox.setChecked(rule.get("game_minutes_is_random", False))
         self.game_minutes_min_input.setValue(rule.get("game_minutes_min", 0))
@@ -621,6 +835,13 @@ class TimerRulesWidget(QWidget):
         rule["description"] = self.desc_input.text()
         rule["enabled"] = self.enable_checkbox.isChecked()
         rule["recurring"] = self.recurring_checkbox.isChecked()
+        rule["global"] = self.global_checkbox.isChecked()
+
+        if self.game_time_radio.isChecked():
+            rule["time_mode"] = "game_time"
+        else:
+            rule["time_mode"] = "real_time"
+        
         rule["interval_is_random"] = self.interval_random_checkbox.isChecked()
         if rule["interval_is_random"]:
             rule["interval_min"] = self.interval_min_input.value()
@@ -630,6 +851,15 @@ class TimerRulesWidget(QWidget):
             rule["interval"] = self.interval_input.value()
             rule["interval_min"] = 0
             rule["interval_max"] = 0
+        rule["game_seconds_is_random"] = self.game_seconds_random_checkbox.isChecked()
+        if rule["game_seconds_is_random"]:
+            rule["game_seconds_min"] = self.game_seconds_min_input.value()
+            rule["game_seconds_max"] = self.game_seconds_max_input.value()
+            rule["game_seconds"] = 0 
+        else:
+            rule["game_seconds"] = self.game_seconds_input.value()
+            rule["game_seconds_min"] = 0
+            rule["game_seconds_max"] = 0
         rule["game_minutes_is_random"] = self.game_minutes_random_checkbox.isChecked()
         if rule["game_minutes_is_random"]:
             rule["game_minutes_min"] = self.game_minutes_min_input.value()
@@ -856,7 +1086,6 @@ class TimerRulesWidget(QWidget):
         narrator_allow_live_input_layout.addWidget(narrator_allow_live_input_checkbox)
         narrator_allow_live_input_layout.addStretch()
         narrator_post_layout.addLayout(narrator_allow_live_input_layout)
-        
         narrator_post_widget.setVisible(False)
         action_layout.addWidget(narrator_post_widget, 2)
         actor_post_widget = QWidget()
@@ -918,7 +1147,6 @@ class TimerRulesWidget(QWidget):
         actor_allow_live_input_layout.addWidget(actor_allow_live_input_checkbox)
         actor_allow_live_input_layout.addStretch()
         actor_post_layout.addLayout(actor_allow_live_input_layout)
-        
         actor_post_widget.setVisible(False)
         action_layout.addWidget(actor_post_widget, 2)
         system_message_widget = QWidget()
@@ -973,7 +1201,6 @@ class TimerRulesWidget(QWidget):
         position_layout.addWidget(position_label)
         position_layout.addWidget(position_combo)
         position_layout.addStretch()
-        
         sysmsg_position_label = QLabel("System Message Position:")
         sysmsg_position_label.setObjectName("TimerRuleSystemMsgSysMsgPositionLabel")
         sysmsg_position_combo = QComboBox()
@@ -997,7 +1224,6 @@ class TimerRulesWidget(QWidget):
         position_layout.addWidget(sysmsg_position_label)
         position_layout.addWidget(sysmsg_position_combo)
         system_message_layout.addLayout(position_layout)
-        
         system_message_widget.setVisible(False)
         action_layout.addWidget(system_message_widget, 2)
         game_over_widget = QWidget()
@@ -1005,7 +1231,6 @@ class TimerRulesWidget(QWidget):
         game_over_layout = QVBoxLayout(game_over_widget)
         game_over_layout.setContentsMargins(0, 0, 0, 0)
         game_over_layout.setSpacing(3)
-        
         game_over_message_label = QLabel("Game Over Message:")
         game_over_message_label.setObjectName("TimerRuleGameOverMessageLabel")
         game_over_message_label.setFont(QFont('Consolas', 9))
@@ -1572,11 +1797,20 @@ class TimerRulesWidget(QWidget):
         self.desc_input.clear()
         self.enable_checkbox.setChecked(True)
         self.recurring_checkbox.setChecked(False)
+        self.global_checkbox.setChecked(False)
         self.interval_input.setValue(60)
         self.interval_random_checkbox.setChecked(False)
         self.interval_min_input.setValue(1)
         self.interval_max_input.setValue(60)
         self._toggle_interval_random_inputs(False)
+        self.real_time_radio.setChecked(True)
+        self._toggle_time_mode(self.real_time_radio)
+        
+        self.game_seconds_input.setValue(0)
+        self.game_seconds_random_checkbox.setChecked(False)
+        self.game_seconds_min_input.setValue(0)
+        self.game_seconds_max_input.setValue(0)
+        self._toggle_game_seconds_random_inputs(False)
         self.game_minutes_input.setValue(0)
         self.game_minutes_random_checkbox.setChecked(False)
         self.game_minutes_min_input.setValue(0)
