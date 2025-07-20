@@ -22,7 +22,7 @@ from rules.screen_effects import BlurEffect, FlickerEffect, StaticNoiseEffect, D
 from core.splash_screen import SplashScreen
 from config import get_default_model, get_default_cot_model, get_api_key_for_service, get_base_url_for_service, get_current_service
 from core.process_keywords import inject_keywords_into_context, get_location_info_for_keywords
-from editor_panel.time_manager import update_time
+
 
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1203,7 +1203,9 @@ class ChatbotUI(QWidget):
         tab_data = self.get_current_tab_data()
         if tab_data is None:
             return
-        update_time(self, tab_data)
+        time_manager_widget = tab_data.get('time_manager_widget')
+        if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
+            time_manager_widget.update_time(self, tab_data)
         
         if hasattr(self, 'timer_manager') and tab_data:
             pass
@@ -1211,7 +1213,28 @@ class ChatbotUI(QWidget):
             tab_data = self.get_current_tab_data()
             if not tab_data:
                 return
-            current_processing_character = "Narrator" 
+            
+            current_context = self.get_current_context()
+            if current_context:
+                workflow_data_dir = tab_data.get('workflow_data_dir')
+                if workflow_data_dir:
+                    try:
+                        tab_index = self.tabs_data.index(tab_data) if tab_data in self.tabs_data else -1
+                        if tab_index >= 0:
+                            variables = self._load_variables(tab_index)
+                            game_datetime = variables.get('datetime')
+                            if game_datetime:
+                                for i in range(len(current_context) - 1, -1, -1):
+                                    msg = current_context[i]
+                                    if msg.get('role') == 'user' and msg.get('content') == user_message:
+                                        if 'metadata' not in msg:
+                                            msg['metadata'] = {}
+                                        msg['metadata']['game_datetime'] = game_datetime
+                                        break
+                    except Exception as e:
+                        print(f"Error adding game timestamp to user message: {e}")
+            
+            current_processing_character = "Narrator"
             is_timer_triggered_action = ("INTERNAL_TIMER_" in user_message) or bool(tab_data.get('_timer_final_instruction'))
             if is_timer_triggered_action:
                 if "INTERNAL_TIMER_NARRATOR_ACTION" in user_message:
@@ -1559,7 +1582,9 @@ class ChatbotUI(QWidget):
         print(f"Error during inference for tab {self.current_tab_index}: {error_message}")
         tab_data = self.get_current_tab_data()
         if tab_data:
-            update_time(self, tab_data)
+            time_manager_widget = tab_data.get('time_manager_widget')
+            if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
+                time_manager_widget.update_time(self, tab_data)
         self.display_message('assistant', f"Sorry, an error occurred: {error_message}")
         if self.return3_sound: self.return3_sound.play()
 
@@ -1648,6 +1673,10 @@ class ChatbotUI(QWidget):
             print("Error finalizing message: Tab data missing.")
             return
         tab_data = self.get_current_tab_data()
+        
+        time_manager_widget = tab_data.get('time_manager_widget') if tab_data else None
+        if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
+            time_manager_widget.update_time(self, tab_data)
         if tab_data and '_HARD_SUPPRESS_ALL_EXCEPT' in tab_data:
             allowed_character = tab_data.get('_HARD_SUPPRESS_ALL_EXCEPT')
             if self.character_name != allowed_character:
@@ -2366,32 +2395,6 @@ class ChatbotUI(QWidget):
                 return False
         elif ctype == 'Always':
              return True
-        elif ctype == 'Turn':
-            turn = cond.get('turn')
-            operator = cond.get('operator', '==')
-            try:
-                target_turn = int(turn)
-                print(f"  Evaluating Turn: Current={current_turn}, Op='{operator}', Target={target_turn}")
-                if operator == '==':
-                    result = current_turn == target_turn
-                elif operator == '!=':
-                    result = current_turn != target_turn
-                elif operator == '>':
-                    result = current_turn > target_turn
-                elif operator == '<':
-                    result = current_turn < target_turn
-                elif operator == '>=':
-                    result = current_turn >= target_turn
-                elif operator == '<=':
-                    result = current_turn <= target_turn
-                else:
-                    print(f"  Warning: Unknown operator '{operator}' for Turn condition. Evaluating as False.")
-                    result = False
-                print(f"    => {result}")
-                return result
-            except (ValueError, TypeError):
-                print(f"  Warning: Invalid Turn value '{turn}'. Evaluating as False.")
-                return False
         elif ctype == 'Variable':
             original_value = cond.get('value', '')
             substituted_value = self._substitute_placeholders_in_condition_value(original_value, tab_data, character_name)
@@ -2424,6 +2427,53 @@ class ChatbotUI(QWidget):
                 return current_scene <= target_scene
             else:
                 print(f"  Warning: Unknown operator '{operator}' for Scene Count. Evaluating as False.")
+                return False
+        elif ctype == 'Game Time':
+            operator = cond.get('operator', 'Before')
+            time_type = cond.get('time_type', 'Minute')
+            target_value = cond.get('value', 0)
+            
+            tab_index = self.tabs_data.index(tab_data) if tab_data in self.tabs_data else -1
+            if tab_index < 0:
+                print(f"  Warning: Could not find tab index for Game Time condition. Evaluating as False.")
+                return False
+                
+            variables = self._load_variables(tab_index)
+            current_datetime_str = variables.get('datetime')
+            
+            if not current_datetime_str:
+                print(f"  Warning: No game datetime found in variables. Evaluating as False.")
+                return False
+                
+            try:
+                from datetime import datetime
+                current_datetime = datetime.fromisoformat(current_datetime_str)
+                
+                if time_type == 'Minute':
+                    current_value = current_datetime.minute
+                elif time_type == 'Hour':
+                    current_value = current_datetime.hour
+                elif time_type == 'Date':
+                    current_value = current_datetime.day
+                else:
+                    print(f"  Warning: Unknown time type '{time_type}' for Game Time condition. Evaluating as False.")
+                    return False
+                
+                print(f"  Evaluating Game Time: Current={current_value} ({time_type}), Op='{operator}', Target={target_value}")
+                
+                if operator == 'Before':
+                    result = current_value < target_value
+                elif operator == 'After':
+                    result = current_value > target_value
+                else:
+                    print(f"  Warning: Unknown operator '{operator}' for Game Time condition. Evaluating as False.")
+                    return False
+                    
+                print(f"    => {result}")
+                return result
+                
+            except (ValueError, TypeError) as e:
+                print(f"  Warning: Error parsing game datetime '{current_datetime_str}': {e}. Evaluating as False.")
                 return False
         elif ctype in ['Setting', 'Location', 'Region', 'World']:
             target_name = cond.get('geography_name', '').strip().lower().replace(' ', '_')
