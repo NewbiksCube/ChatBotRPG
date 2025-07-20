@@ -1,17 +1,297 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QTabWidget, QPushButton, 
                              QHBoxLayout, QInputDialog, QMessageBox, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QAbstractItemView,
-                             QLineEdit, QComboBox, QCheckBox)
+                             QLineEdit, QComboBox, QCheckBox, QTreeWidget, QTreeWidgetItem,
+                             QDialog, QFormLayout, QSpinBox, QTextEdit, QDialogButtonBox,
+                             QScrollArea, QSplitter, QButtonGroup, QStackedWidget,
+                             QListWidget, QListWidgetItem)
+from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 import os
 import json
 import re
 import shutil
+import uuid
 
 def sanitize_path_name(name):
     sanitized = re.sub(r'[^a-zA-Z0-9_\-\. ]', '', name).strip()
     sanitized = sanitized.replace(' ', '_').lower()
     return sanitized or 'untitled'
+
+def generate_item_id():
+    return f"{uuid.uuid4().hex[:8]}"
+
+class ItemInstanceDialog(QDialog):
+    def __init__(self, parent=None, workflow_data_dir=None, existing_item_data=None):
+        super().__init__(parent)
+        self.workflow_data_dir = workflow_data_dir
+        self.existing_item_data = existing_item_data
+        self.selected_resource_item = None
+        self.selected_resource_category = None
+        self._init_ui()
+        self._load_resource_items()
+        if existing_item_data:
+            self._populate_from_existing()
+    
+    def _init_ui(self):
+        self.setWindowTitle("Add/Edit Item Instance")
+        self.setModal(True)
+        self.resize(600, 500)
+        layout = QVBoxLayout(self)
+        form_layout = QFormLayout()
+        self.resource_category_combo = QComboBox()
+        self.resource_category_combo.currentTextChanged.connect(self._on_category_changed)
+        form_layout.addRow("Resource Category:", self.resource_category_combo)
+        self.resource_item_combo = QComboBox()
+        self.resource_item_combo.currentTextChanged.connect(self._on_item_changed)
+        form_layout.addRow("Resource Item:", self.resource_item_combo)
+        self.quantity_spin = QSpinBox()
+        self.quantity_spin.setMinimum(1)
+        self.quantity_spin.setMaximum(999)
+        self.quantity_spin.setValue(1)
+        form_layout.addRow("Quantity:", self.quantity_spin)
+        self.durability_spin = QSpinBox()
+        self.durability_spin.setMinimum(0)
+        self.durability_spin.setMaximum(100)
+        self.durability_spin.setValue(100)
+        form_layout.addRow("Durability (%):", self.durability_spin)
+        self.description_edit = QTextEdit()
+        self.description_edit.setMaximumHeight(80)
+        form_layout.addRow("Description:", self.description_edit)
+        layout.addLayout(form_layout)
+        self.custom_properties_label = QLabel("Custom Properties:")
+        layout.addWidget(self.custom_properties_label)
+        self.custom_properties_edit = QTextEdit()
+        self.custom_properties_edit.setMaximumHeight(100)
+        self.custom_properties_edit.setPlaceholderText("Enter custom properties as JSON (e.g., {\"enchantment\": \"fire\", \"crafted_by\": \"Blacksmith\"})")
+        layout.addWidget(self.custom_properties_edit)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+    
+    def _load_resource_items(self):
+        self.resource_categories = []
+        self.resource_items = {}
+        resource_items_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'items')
+        if os.path.isdir(resource_items_dir):
+            for category_name in os.listdir(resource_items_dir):
+                category_path = os.path.join(resource_items_dir, category_name)
+                if os.path.isdir(category_path):
+                    self.resource_categories.append(category_name)
+                    self.resource_items[category_name] = []
+                    for filename in os.listdir(category_path):
+                        if filename.lower().endswith('.json'):
+                            file_path = os.path.join(category_path, filename)
+                            try:
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    item_data = json.load(f)
+                                    if 'name' in item_data:
+                                        self.resource_items[category_name].append(item_data['name'])
+                            except Exception:
+                                continue
+        
+        self.resource_category_combo.addItems(sorted(self.resource_categories))
+    
+    def _on_category_changed(self, category):
+        self.resource_item_combo.clear()
+        if category in self.resource_items:
+            self.resource_item_combo.addItems(sorted(self.resource_items[category]))
+        self.selected_resource_category = category
+    
+    def _on_item_changed(self, item_name):
+        self.selected_resource_item = item_name
+    
+    def _populate_from_existing(self):
+        if not self.existing_item_data:
+            return
+        resource_item = self.existing_item_data.get('resource_item', '')
+        resource_category = self.existing_item_data.get('resource_category', '')
+        if resource_category in self.resource_categories:
+            self.resource_category_combo.setCurrentText(resource_category)
+            if resource_item in self.resource_items.get(resource_category, []):
+                self.resource_item_combo.setCurrentText(resource_item)
+        self.quantity_spin.setValue(self.existing_item_data.get('quantity', 1))
+        self.durability_spin.setValue(self.existing_item_data.get('durability', 100))
+        self.description_edit.setPlainText(self.existing_item_data.get('description', ''))
+        custom_props = self.existing_item_data.get('custom_properties', {})
+        if custom_props:
+            self.custom_properties_edit.setPlainText(json.dumps(custom_props, indent=2))
+    
+    def get_item_data(self):
+        try:
+            custom_props_text = self.custom_properties_edit.toPlainText().strip()
+            custom_properties = {}
+            if custom_props_text:
+                custom_properties = json.loads(custom_props_text)
+        except json.JSONDecodeError:
+            custom_properties = {}
+        
+        return {
+            "item_id": self.existing_item_data.get('item_id', generate_item_id()) if self.existing_item_data else generate_item_id(),
+            "resource_item": self.selected_resource_item,
+            "resource_category": self.selected_resource_category,
+            "quantity": self.quantity_spin.value(),
+            "durability": self.durability_spin.value(),
+            "description": self.description_edit.toPlainText().strip(),
+            "custom_properties": custom_properties,
+            "contains": self.existing_item_data.get('contains', []) if self.existing_item_data else []
+        }
+
+class ItemInstanceWidget(QWidget):
+    def __init__(self, parent=None, workflow_data_dir=None, owner_id=None, location_id=None):
+        super().__init__(parent)
+        self.workflow_data_dir = workflow_data_dir
+        self.owner_id = owner_id
+        self.location_id = location_id
+        self._init_ui()
+        self._load_items()
+    
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(QLabel("Inventory Items:"))
+        header_layout.addStretch()
+        self.add_item_btn = QPushButton("+")
+        self.add_item_btn.setObjectName("AddButton")
+        self.add_item_btn.setToolTip("Add Item Instance")
+        self.add_item_btn.setMaximumWidth(30)
+        self.add_item_btn.clicked.connect(self._add_item_instance)
+        header_layout.addWidget(self.add_item_btn)
+        self.remove_item_btn = QPushButton("-")
+        self.remove_item_btn.setObjectName("RemoveButton")
+        self.remove_item_btn.setToolTip("Remove Selected Item")
+        self.remove_item_btn.setMaximumWidth(30)
+        self.remove_item_btn.clicked.connect(self._remove_item_instance)
+        header_layout.addWidget(self.remove_item_btn)
+        layout.addLayout(header_layout)
+        self.tree_widget = QTreeWidget()
+        self.tree_widget.setObjectName("InventoryTreeWidget")
+        self.tree_widget.setHeaderLabels(["Item", "Quantity", "Durability", "Description"])
+        self.tree_widget.setAlternatingRowColors(True)
+        self.tree_widget.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.tree_widget.setFocusPolicy(Qt.NoFocus)
+        self.tree_widget.itemDoubleClicked.connect(self._edit_item_instance)
+        self.tree_widget.setColumnWidth(0, 200)
+        self.tree_widget.setColumnWidth(1, 80)
+        self.tree_widget.setColumnWidth(2, 80)
+        layout.addWidget(self.tree_widget)
+    
+    def _load_items(self):
+        self.tree_widget.clear()
+        if not hasattr(self, 'current_items'):
+            self.current_items = []
+        for item_data in self.current_items:
+            self._add_item_to_tree(item_data)
+    
+    def _add_item_to_tree(self, item_data, parent_item=None):
+        display_name = item_data.get('resource_item', 'Unknown Item')
+        quantity = item_data.get('quantity', 1)
+        durability = item_data.get('durability', 100)
+        description = item_data.get('description', '')
+        if quantity > 1:
+            display_name = f"{display_name} (x{quantity})"
+        if durability < 100:
+            display_name = f"{display_name} [{durability}%]"
+        tree_item = QTreeWidgetItem(parent_item or self.tree_widget)
+        tree_item.setText(0, display_name)
+        tree_item.setText(1, str(quantity))
+        tree_item.setText(2, f"{durability}%")
+        tree_item.setText(3, description[:50] + "..." if len(description) > 50 else description)
+        tree_item.setData(0, Qt.UserRole, item_data)
+        if parent_item:
+            parent_item.addChild(tree_item)
+        else:
+            self.tree_widget.addTopLevelItem(tree_item)
+        contains = item_data.get('contains', [])
+        for contained_item in contains:
+            self._add_item_to_tree(contained_item, tree_item)
+        if contains:
+            tree_item.setExpanded(True)
+    
+    def _add_item_instance(self):
+        dialog = ItemInstanceDialog(self, self.workflow_data_dir)
+        if dialog.exec_() == QDialog.Accepted:
+            item_data = dialog.get_item_data()
+            item_data['owner'] = self.owner_id
+            item_data['location'] = self.location_id
+            self.current_items.append(item_data)
+            self._add_item_to_tree(item_data)
+            self._save_items()
+    
+    def _remove_item_instance(self):
+        current_item = self.tree_widget.currentItem()
+        if not current_item:
+            QMessageBox.warning(self, "No Selection", "Please select an item to remove.")
+            return
+        item_data = current_item.data(0, Qt.UserRole)
+        if not item_data:
+            return
+        reply = QMessageBox.question(self, "Remove Item", 
+                                   f"Are you sure you want to remove '{item_data.get('resource_item', 'Unknown')}'?",
+                                   QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self._remove_item_from_list(item_data)
+            self._load_items()
+            self._save_items()
+    
+    def _remove_item_from_list(self, target_item_data, items_list=None):
+        if items_list is None:
+            items_list = self.current_items
+        
+        for i, item_data in enumerate(items_list):
+            if item_data.get('item_id') == target_item_data.get('item_id'):
+                items_list.pop(i)
+                return True
+            
+            contains = item_data.get('contains', [])
+            if self._remove_item_from_list(target_item_data, contains):
+                return True
+        
+        return False
+    
+    def _edit_item_instance(self, item, column):
+        item_data = item.data(0, Qt.UserRole)
+        if not item_data:
+            return
+        
+        dialog = ItemInstanceDialog(self, self.workflow_data_dir, item_data)
+        if dialog.exec_() == QDialog.Accepted:
+            new_item_data = dialog.get_item_data()
+            new_item_data['owner'] = self.owner_id
+            new_item_data['location'] = self.location_id
+            new_item_data['contains'] = item_data.get('contains', [])
+            
+            self._update_item_in_list(item_data.get('item_id'), new_item_data)
+            self._load_items()
+            self._save_items()
+    
+    def _update_item_in_list(self, target_item_id, new_item_data, items_list=None):
+        if items_list is None:
+            items_list = self.current_items
+        
+        for i, item_data in enumerate(items_list):
+            if item_data.get('item_id') == target_item_id:
+                items_list[i] = new_item_data
+                return True
+            
+            contains = item_data.get('contains', [])
+            if self._update_item_in_list(target_item_id, new_item_data, contains):
+                return True
+        
+        return False
+    
+    def _save_items(self):
+        if hasattr(self.parent(), '_schedule_details_save'):
+            self.parent()._schedule_details_save()
+    
+    def set_items(self, items_data):
+        self.current_items = items_data if items_data else []
+        self._load_items()
+    
+    def get_items(self):
+        return self.current_items
 
 class InventoryCategoryPage(QWidget):
     def __init__(self, category_name, parent=None):
@@ -40,16 +320,18 @@ class InventoryCategoryPage(QWidget):
         layout.addLayout(item_management_layout)
         self.item_table_widget = QTableWidget()
         self.item_table_widget.setObjectName("InventoryTableWidget_Tab")
-        self.item_table_widget.setColumnCount(5)
-        self.item_table_widget.setHorizontalHeaderLabels(["Name", "Properties", "Variables", "Base Value", "Description"])
+        self.item_table_widget.setColumnCount(6)
+        self.item_table_widget.setHorizontalHeaderLabels(["Name", "Properties", "Containers", "Variables", "Base Value", "Description"])
         self.item_table_widget.horizontalHeader().setObjectName("InventoryTableWidget_Tab_HorizontalHeader")
         self.item_table_widget.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
         self.item_table_widget.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
-        self.item_table_widget.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
-        self.item_table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.item_table_widget.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        self.item_table_widget.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.item_table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Interactive)
+        self.item_table_widget.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.item_table_widget.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         self.item_table_widget.setColumnWidth(1, 250)
-        self.item_table_widget.setColumnWidth(2, 500)
+        self.item_table_widget.setColumnWidth(2, 150)
+        self.item_table_widget.setColumnWidth(3, 500)
         self.item_table_widget.verticalHeader().setObjectName("InventoryTableWidget_Tab_VerticalHeader")
         self.item_table_widget.verticalHeader().setVisible(False)
         self.item_table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -69,28 +351,23 @@ class InventoryCategoryPage(QWidget):
         first_row.setSpacing(8)
         consumable_checkbox = QCheckBox("Consumable")
         consumable_checkbox.setObjectName("InventoryConsumableRadio")
-        weapon_checkbox = QCheckBox("Weapon")
-        weapon_checkbox.setObjectName("InventoryWeaponRadio")
-        first_row.addWidget(consumable_checkbox)
-        first_row.addWidget(weapon_checkbox)
-        second_row = QHBoxLayout()
-        second_row.setSpacing(8)
         wearable_checkbox = QCheckBox("Wearable")
         wearable_checkbox.setObjectName("InventoryWearableRadio")
+        first_row.addWidget(consumable_checkbox)
+        first_row.addWidget(wearable_checkbox)
+        second_row = QHBoxLayout()
+        second_row.setSpacing(8)
         readable_checkbox = QCheckBox("Readable")
         readable_checkbox.setObjectName("InventoryReadableRadio")
-        second_row.addWidget(wearable_checkbox)
         second_row.addWidget(readable_checkbox)
+        second_row.addStretch()
         layout.addLayout(first_row)
         layout.addLayout(second_row)
         widget.consumable_checkbox = consumable_checkbox
-        widget.weapon_checkbox = weapon_checkbox
         widget.wearable_checkbox = wearable_checkbox
         widget.readable_checkbox = readable_checkbox
         if isinstance(properties, str):
-            if properties.lower() == "weapon":
-                weapon_checkbox.setChecked(True)
-            elif properties.lower() == "wearable":
+            if properties.lower() == "wearable":
                 wearable_checkbox.setChecked(True)
             elif properties.lower() == "readable":
                 readable_checkbox.setChecked(True)
@@ -100,19 +377,93 @@ class InventoryCategoryPage(QWidget):
             for prop in properties:
                 if prop.lower() == "consumable":
                     consumable_checkbox.setChecked(True)
-                elif prop.lower() == "weapon":
-                    weapon_checkbox.setChecked(True)
                 elif prop.lower() == "wearable":
                     wearable_checkbox.setChecked(True)
                 elif prop.lower() == "readable":
                     readable_checkbox.setChecked(True)
-        if not any([consumable_checkbox.isChecked(), weapon_checkbox.isChecked(), wearable_checkbox.isChecked(), readable_checkbox.isChecked()]):
+        if not any([consumable_checkbox.isChecked(), wearable_checkbox.isChecked(), readable_checkbox.isChecked()]):
             consumable_checkbox.setChecked(True)
         consumable_checkbox.stateChanged.connect(lambda: self._on_properties_changed())
-        weapon_checkbox.stateChanged.connect(lambda: self._on_properties_changed())
         wearable_checkbox.stateChanged.connect(lambda: self._on_properties_changed())
         readable_checkbox.stateChanged.connect(lambda: self._on_properties_changed())
         return widget
+
+    def _create_containers_widget(self, containers=None):
+        if containers is None:
+            containers = []
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(4)
+        container_text = ", ".join(containers) if containers else "None"
+        container_label = QLabel(container_text)
+        container_label.setObjectName("InventoryContainerLabel")
+        container_label.setStyleSheet("font: 9pt 'Consolas';")
+        container_label.setWordWrap(True)
+        container_label.setMaximumWidth(120)
+        add_container_btn = QPushButton("+")
+        add_container_btn.setObjectName("AddConditionButton")
+        add_container_btn.setMaximumWidth(22)
+        add_container_btn.setMaximumHeight(22)
+        add_container_btn.setToolTip("Add container")
+        add_container_btn.clicked.connect(lambda: self._add_container_item(widget, containers))
+        remove_container_btn = QPushButton("-")
+        remove_container_btn.setObjectName("RemoveConditionButton")
+        remove_container_btn.setMaximumWidth(22)
+        remove_container_btn.setMaximumHeight(22)
+        remove_container_btn.setToolTip("Remove container")
+        remove_container_btn.clicked.connect(lambda: self._remove_container_item(widget, containers))
+        layout.addWidget(container_label, 1)
+        layout.addWidget(add_container_btn)
+        layout.addWidget(remove_container_btn)
+        widget.container_label = container_label
+        widget.containers = containers
+        return widget
+
+    def _add_container_item(self, widget, containers):
+        container_name, ok = QInputDialog.getText(self, "Add Container", "Enter container name:")
+        if ok and container_name.strip():
+            containers.append(container_name.strip())
+            widget.containers = containers
+            container_text = ", ".join(containers)
+            widget.container_label.setText(container_text)
+            self._on_containers_changed()
+
+    def _remove_container_item(self, widget, containers):
+        if not containers:
+            return
+        container_name, ok = QInputDialog.getItem(self, "Remove Container", "Select container to remove:", containers, 0, False)
+        if ok and container_name:
+            containers.remove(container_name)
+            widget.containers = containers
+            container_text = ", ".join(containers) if containers else "None"
+            widget.container_label.setText(container_text)
+            self._on_containers_changed()
+
+    def _on_containers_changed(self):
+        sender = self.sender()
+        if not sender:
+            return
+        current = sender
+        while current and current != self:
+            parent = current.parentWidget()
+            if isinstance(parent, QTableWidget):
+                table = parent
+                for row in range(table.rowCount()):
+                    for col in range(table.columnCount()):
+                        cell_widget = table.cellWidget(row, col)
+                        if cell_widget and hasattr(cell_widget, 'containers') and self._widget_contains_sender(cell_widget, sender):
+                            dummy_item = QTableWidgetItem()
+                            dummy_item.row = lambda: row
+                            self._on_item_data_changed(dummy_item)
+                            return
+            current = parent
+
+    def _get_containers_from_widget(self, widget):
+        containers = []
+        if not widget or not hasattr(widget, 'containers'):
+            return containers
+        return widget.containers.copy()
     def _create_variable_actions_widget(self, variable_actions=None):
         if variable_actions is None:
             variable_actions = []
@@ -135,8 +486,8 @@ class InventoryCategoryPage(QWidget):
                 for i in range(actions_layout.count()):
                     item = actions_layout.itemAt(i)
                     if item and item.widget():
-                        total_height += 28
-                main_widget._parent_table.setRowHeight(main_widget._table_row, max(total_height, 50))
+                        total_height += 35
+                main_widget._parent_table.setRowHeight(main_widget._table_row, max(total_height, 60))
         def updateSize():
             updateRowHeight()
         main_widget.updateRowHeight = updateRowHeight
@@ -320,16 +671,18 @@ class InventoryCategoryPage(QWidget):
             self.item_table_widget.setItem(row, 0, name_item)
             properties_widget = self._create_properties_widget(data.get("properties", "Consumable"))
             self.item_table_widget.setCellWidget(row, 1, properties_widget)
+            containers_widget = self._create_containers_widget(data.get("containers", []))
+            self.item_table_widget.setCellWidget(row, 2, containers_widget)
             variable_actions = data.get("variable_actions", [])
             variables_widget = self._create_variable_actions_widget(variable_actions)
-            self.item_table_widget.setCellWidget(row, 2, variables_widget)
+            self.item_table_widget.setCellWidget(row, 3, variables_widget)
             if hasattr(variables_widget, '_parent_table'):
                 variables_widget._parent_table = self.item_table_widget
                 variables_widget._table_row = row
             value_item = QTableWidgetItem(str(data.get("base_value", "0")))
-            self.item_table_widget.setItem(row, 3, value_item)
+            self.item_table_widget.setItem(row, 4, value_item)
             desc_item = QTableWidgetItem(data.get("description", ""))
-            self.item_table_widget.setItem(row, 4, desc_item)
+            self.item_table_widget.setItem(row, 5, desc_item)
         self.item_table_widget.blockSignals(False)
         for row in range(self.item_table_widget.rowCount()):
             self.item_table_widget.resizeRowToContents(row)
@@ -353,6 +706,7 @@ class InventoryCategoryPage(QWidget):
         default_data = {
             "name": item_name,
             "properties": "Consumable",
+            "containers": [],
             "variable_actions": [],
             "base_value": "0",
             "description": ""
@@ -432,8 +786,6 @@ class InventoryCategoryPage(QWidget):
             selected_properties = []
             if hasattr(properties_widget, 'consumable_checkbox') and properties_widget.consumable_checkbox.isChecked():
                 selected_properties.append("Consumable")
-            if hasattr(properties_widget, 'weapon_checkbox') and properties_widget.weapon_checkbox.isChecked():
-                selected_properties.append("Weapon")
             if hasattr(properties_widget, 'wearable_checkbox') and properties_widget.wearable_checkbox.isChecked():
                 selected_properties.append("Wearable")
             if hasattr(properties_widget, 'readable_checkbox') and properties_widget.readable_checkbox.isChecked():
@@ -446,14 +798,19 @@ class InventoryCategoryPage(QWidget):
                 data['properties'] = "Consumable"
         else:
             data['properties'] = "Consumable"
-        variables_widget = self.item_table_widget.cellWidget(row, 2)
+        containers_widget = self.item_table_widget.cellWidget(row, 2)
+        if containers_widget:
+            data['containers'] = self._get_containers_from_widget(containers_widget)
+        else:
+            data['containers'] = []
+        variables_widget = self.item_table_widget.cellWidget(row, 3)
         if variables_widget:
             data['variable_actions'] = self._get_variable_actions_from_widget(variables_widget)
         else:
             data['variable_actions'] = []
-        value_item = self.item_table_widget.item(row, 3)
+        value_item = self.item_table_widget.item(row, 4)
         data['base_value'] = value_item.text() if value_item else "0"
-        desc_item = self.item_table_widget.item(row, 4)
+        desc_item = self.item_table_widget.item(row, 5)
         data['description'] = desc_item.text() if desc_item else ""
         return data
     def _load_json(self, file_path):
@@ -502,23 +859,56 @@ class InventoryCategoryPage(QWidget):
             return True
         if hasattr(widget, 'consumable_checkbox') and widget.consumable_checkbox == checkbox:
             return True
-        if hasattr(widget, 'weapon_checkbox') and widget.weapon_checkbox == checkbox:
-            return True
         if hasattr(widget, 'wearable_checkbox') and widget.wearable_checkbox == checkbox:
             return True
         if hasattr(widget, 'readable_checkbox') and widget.readable_checkbox == checkbox:
             return True
         return False
 
-
 class InventoryManagerWidget(QWidget):
-    def __init__(self, parent=None, workflow_data_dir=None):
+    def __init__(self, parent=None, workflow_data_dir=None, theme_colors=None):
         super().__init__(parent)
         self.workflow_data_dir = workflow_data_dir or "data"
+        self.theme_colors = theme_colors or {}
+        self.current_inventory_data = []
+        self.is_loading_data = False
+        self.container_selection_path = []
         self._init_ui()
         self._load_categories()
+        if self.theme_colors:
+            self.update_theme(self.theme_colors)
+
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
+        mode_toggle_container = QWidget()
+        mode_toggle_container.setObjectName("InventoryModeToggleContainer")
+        mode_toggle_layout = QHBoxLayout(mode_toggle_container)
+        mode_toggle_layout.setContentsMargins(5, 5, 5, 5)
+        mode_toggle_layout.setSpacing(10)
+        self.mode_toggle_group = QButtonGroup(self)
+        self.references_btn = QPushButton("References")
+        self.references_btn.setObjectName("InventoryReferencesToggleButton")
+        self.references_btn.setCheckable(True)
+        self.references_btn.setChecked(True)
+        self.references_btn.setMinimumHeight(30)
+        self.references_btn.setFont(QFont('Consolas', 10))
+        self.references_btn.setFocusPolicy(Qt.NoFocus)
+        self.instances_btn = QPushButton("Instances")
+        self.instances_btn.setObjectName("InventoryInstancesToggleButton")
+        self.instances_btn.setCheckable(True)
+        self.instances_btn.setMinimumHeight(30)
+        self.instances_btn.setFont(QFont('Consolas', 10))
+        self.instances_btn.setFocusPolicy(Qt.NoFocus)
+        self.mode_toggle_group.addButton(self.references_btn)
+        self.mode_toggle_group.addButton(self.instances_btn)
+        mode_toggle_layout.addWidget(self.references_btn)
+        mode_toggle_layout.addWidget(self.instances_btn)
+        main_layout.addWidget(mode_toggle_container)
+        self.content_stack = QStackedWidget()
+        self.content_stack.setObjectName("InventoryContentStack")
+        self.references_widget = QWidget()
+        references_layout = QVBoxLayout(self.references_widget)
+        references_layout.setContentsMargins(0, 0, 0, 0)
         tab_management_layout = QHBoxLayout()
         self.categories_label = QLabel("Categories:")
         self.categories_label.setObjectName("InventoryTabHeaderLabel")
@@ -536,7 +926,7 @@ class InventoryManagerWidget(QWidget):
         self.remove_tab_button.clicked.connect(self._remove_category)
         tab_management_layout.addWidget(self.add_tab_button)
         tab_management_layout.addWidget(self.remove_tab_button)
-        main_layout.addLayout(tab_management_layout)
+        references_layout.addLayout(tab_management_layout)
         self.tab_widget = QTabWidget()
         self.tab_widget.setObjectName("InventoryTabWidget")
         tab_bar = self.tab_widget.tabBar()
@@ -544,8 +934,1374 @@ class InventoryManagerWidget(QWidget):
         tab_bar.setElideMode(Qt.ElideNone)
         tab_bar.setUsesScrollButtons(True)
         self.tab_widget.currentChanged.connect(self._play_tab_switch_sound)
-        main_layout.addWidget(self.tab_widget)
+        references_layout.addWidget(self.tab_widget)
+        self.instances_widget = QWidget()
+        instances_main_layout = QVBoxLayout(self.instances_widget)
+        instances_main_layout.setContentsMargins(0, 0, 0, 0)
+        instances_main_layout.setSpacing(0)
+        self.instances_splitter = QSplitter(Qt.Vertical)
+        self.instances_splitter.setObjectName("InventoryInstancesSplitter")
+        lists_container = QWidget()
+        lists_layout = QHBoxLayout(lists_container)
+        lists_layout.setContentsMargins(10, 10, 10, 10)
+        lists_layout.setSpacing(10)
+        settings_col = QVBoxLayout()
+        settings_col.setSpacing(5)
+        settings_label = QLabel("Settings")
+        settings_label.setObjectName("InventoryInstancesSettingsLabel")
+        settings_label.setAlignment(Qt.AlignCenter)
+        settings_label.setFont(QFont('Consolas', 10, QFont.Bold))
+        self.settings_search = QLineEdit()
+        self.settings_search.setObjectName("TimerRulesFilterInput")
+        self.settings_search.setPlaceholderText("Search settings...")
+        self.settings_search.setMinimumHeight(24)
+        self.settings_search.setFont(QFont('Consolas', 10))
+        self.settings_list = QListWidget()
+        self.settings_list.setObjectName("RulesList")
+        self.settings_list.setAlternatingRowColors(True)
+        self.settings_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.settings_list.setFocusPolicy(Qt.NoFocus)
+        self.settings_list.setFont(QFont('Consolas', 10))
+        self.settings_list.itemSelectionChanged.connect(self._on_instances_selection_changed)
+        settings_col.addWidget(settings_label)
+        settings_col.addWidget(self.settings_search)
+        settings_col.addWidget(self.settings_list, 1)
+        lists_layout.addLayout(settings_col, 1)
+        actors_col = QVBoxLayout()
+        actors_col.setSpacing(5)
+        actors_label = QLabel("Actors")
+        actors_label.setObjectName("InventoryInstancesActorsLabel")
+        actors_label.setAlignment(Qt.AlignCenter)
+        actors_label.setFont(QFont('Consolas', 10, QFont.Bold))
+        self.actors_search = QLineEdit()
+        self.actors_search.setObjectName("TimerRulesFilterInput")
+        self.actors_search.setPlaceholderText("Search actors...")
+        self.actors_search.setMinimumHeight(24)
+        self.actors_search.setFont(QFont('Consolas', 10))
+        self.actors_list = QListWidget()
+        self.actors_list.setObjectName("RulesList")
+        self.actors_list.setAlternatingRowColors(True)
+        self.actors_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.actors_list.setFocusPolicy(Qt.NoFocus)
+        self.actors_list.setFont(QFont('Consolas', 10))
+        self.actors_list.itemSelectionChanged.connect(self._on_instances_selection_changed)
+        actors_col.addWidget(actors_label)
+        actors_col.addWidget(self.actors_search)
+        actors_col.addWidget(self.actors_list, 1)
+        lists_layout.addLayout(actors_col, 1)
+        lists_container.setLayout(lists_layout)
+        self.instances_splitter.addWidget(lists_container)
+        self.instances_bottom_widget = QWidget()
+        self.instances_bottom_widget.setObjectName("InventoryInstancesBottomWidget")
+        self.instances_bottom_widget.setMinimumHeight(100)
+        bottom_layout = QVBoxLayout(self.instances_bottom_widget)
+        bottom_layout.setContentsMargins(10, 10, 10, 10)
+        table_header_layout = QHBoxLayout()
+        self.inventory_title_label = QLabel("Items in (selected item):")
+        self.inventory_title_label.setObjectName("InventoryInstancesTitleLabel")
+        self.inventory_title_label.setAlignment(Qt.AlignCenter)
+        self.inventory_title_label.setFont(QFont('Consolas', 10, QFont.Bold))
+        table_header_layout.addWidget(self.inventory_title_label)
+        table_header_layout.addStretch()
+        self.add_instance_btn = QPushButton("+")
+        self.add_instance_btn.setObjectName("AddButton")
+        self.add_instance_btn.setToolTip("Add Item Instance")
+        self.add_instance_btn.setMaximumWidth(30)
+        self.add_instance_btn.clicked.connect(self._add_instance_row)
+        table_header_layout.addWidget(self.add_instance_btn)
+        self.remove_instance_btn = QPushButton("-")
+        self.remove_instance_btn.setObjectName("RemoveButton")
+        self.remove_instance_btn.setToolTip("Remove Selected Item Instance")
+        self.remove_instance_btn.setMaximumWidth(30)
+        self.remove_instance_btn.clicked.connect(self._remove_instance_row)
+        table_header_layout.addWidget(self.remove_instance_btn)
+        bottom_layout.addLayout(table_header_layout)
+        self.instances_table = QTableWidget()
+        self.instances_table.setObjectName("SettingManagerTable")
+        self.instances_table.setColumnCount(6)
+        self.instances_table.setHorizontalHeaderLabels(["Item ID", "Name", "Quantity", "Owner", "Description", "Location"])
+        header = self.instances_table.horizontalHeader()
+        header.setObjectName("SettingManagerTableHeader")
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.Stretch)
+        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        self.instances_table.setColumnWidth(0, 80)
+        self.instances_table.setColumnWidth(2, 80)
+        self.instances_table.setColumnWidth(3, 100)
+        self.instances_table.verticalHeader().setVisible(False)
+        self.instances_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.instances_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.instances_table.setAlternatingRowColors(True)
+        self.instances_table.setFocusPolicy(Qt.NoFocus)
+        self.instances_table.setMinimumHeight(150)
+        self.instances_table.itemChanged.connect(self._on_instance_item_changed)
+        self.instances_table.itemSelectionChanged.connect(self._on_instances_selection_changed)
+        bottom_layout.addWidget(self.instances_table)
+        self.containers_label = QLabel("Containers:")
+        self.containers_label.setObjectName("InventoryInstancesContainersLabel")
+        self.containers_label.setAlignment(Qt.AlignCenter)
+        self.containers_label.setFont(QFont('Consolas', 10, QFont.Bold))
+        bottom_layout.addWidget(self.containers_label)
+        self.containers_scroll_area = QScrollArea()
+        self.containers_scroll_area.setObjectName("InventoryContainersScrollArea")
+        self.containers_scroll_area.setWidgetResizable(True)
+        self.containers_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.containers_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.containers_widget = QWidget()
+        self.containers_widget.setObjectName("InventoryContainersWidget")
+        self.containers_layout = QVBoxLayout(self.containers_widget)
+        self.containers_layout.setContentsMargins(5, 5, 5, 5)
+        self.containers_layout.setSpacing(5)
+        self.default_container_label = QLabel("Either no item selected, or selected item does not have containers.")
+        self.default_container_label.setObjectName("InventoryDefaultContainerLabel")
+        self.default_container_label.setAlignment(Qt.AlignCenter)
+        self.default_container_label.setFont(QFont('Consolas', 9))
+        self.containers_layout.addWidget(self.default_container_label)
+        self.containers_scroll_area.setWidget(self.containers_widget)
+        bottom_layout.addWidget(self.containers_scroll_area, 1)
+        self.instances_splitter.addWidget(self.instances_bottom_widget)
+        self.instances_splitter.setStretchFactor(0, 1)
+        self.instances_splitter.setStretchFactor(1, 2)
+        instances_main_layout.addWidget(self.instances_splitter, 1)
+        self.settings_search.textChanged.connect(self._on_settings_search)
+        self.actors_search.textChanged.connect(self._on_actors_search)
+        self._populate_instances_lists()
+        self.content_stack.addWidget(self.references_widget)
+        self.content_stack.addWidget(self.instances_widget)
+        self.content_stack.setCurrentIndex(0)
+        main_layout.addWidget(self.content_stack, 1)
+        self.references_btn.toggled.connect(self._on_references_toggle)
+        self.instances_btn.toggled.connect(self._on_instances_toggle)
         self.setLayout(main_layout)
+
+    def update_theme(self, theme_colors):
+        base_color = theme_colors.get('base_color', '#00FF66')
+        bg_color = theme_colors.get('bg_color', '#2B2B2B')
+        darker_bg = theme_colors.get('darker_bg', '#1E1E1E')
+        highlight = theme_colors.get('highlight', 'rgba(0,255,102,0.6)')
+        from core.apply_stylesheet import generate_and_apply_stylesheet
+        generate_and_apply_stylesheet(self, theme_colors)
+        containers_style = f"""
+            QScrollArea#InventoryContainersScrollArea {{
+                background-color: {darker_bg};
+                border: 1px solid {base_color};
+                border-radius: 3px;
+            }}
+            QWidget#InventoryContainersWidget {{
+                background-color: {darker_bg};
+            }}
+            QLabel#InventoryDefaultContainerLabel {{
+                color: {base_color};
+                font: 9pt 'Consolas';
+                background-color: {darker_bg};
+                padding: 10px;
+                border: 1px solid {base_color};
+                border-radius: 3px;
+            }}
+            QLabel#InventoryContainerHeaderLabel {{
+                color: {base_color};
+                font: 9pt 'Consolas' bold;
+                background-color: {darker_bg};
+                padding: 5px;
+                border: 1px solid {base_color};
+                border-radius: 3px;
+            }}
+        """
+        self.containers_scroll_area.setStyleSheet(containers_style)
+        
+        self._update_all_container_table_styles()
+
+    def _update_all_container_table_styles(self):
+        base_color = self.theme_colors.get('base_color', '#00FF66') if self.theme_colors else '#00FF66'
+        selection_color = f"rgba({int(base_color[1:3], 16)}, {int(base_color[3:5], 16)}, {int(base_color[5:7], 16)}, 0.3)"
+        table_style = f"""
+            QTableWidget::item:selected {{
+                background-color: {selection_color};
+                color: {base_color};
+            }}
+            QTableWidget::item:selected:active {{
+                background-color: {selection_color};
+                color: {base_color};
+            }}
+            QTableWidget::item:selected:!active {{
+                background-color: {selection_color};
+                color: {base_color};
+            }}
+        """
+        
+        def update_table_styles_recursively(widget):
+            if hasattr(widget, 'container_table'):
+                widget.container_table.setStyleSheet(table_style)
+            if hasattr(widget, 'layout') and widget.layout():
+                for i in range(widget.layout().count()):
+                    child_item = widget.layout().itemAt(i)
+                    if child_item and child_item.widget():
+                        update_table_styles_recursively(child_item.widget())
+        for i in range(self.containers_layout.count()):
+            item = self.containers_layout.itemAt(i)
+            if item and item.widget():
+                update_table_styles_recursively(item.widget())
+
+    def _on_instance_item_changed(self, item):
+        if not item or self.is_loading_data:
+            return
+        row = item.row()
+        col = item.column()
+        if col == 1:
+            name_item = self.instances_table.item(row, 1)
+            if name_item and name_item.text().strip():
+                item_name = name_item.text().strip()
+                containers = self._get_containers_for_item(item_name)
+                if containers:
+                    self._ensure_container_widgets_exist_for_item(item_name, containers)
+        self._update_instance_item_in_memory(row)
+        self._save_current_inventory()
+
+    def _update_instance_item_in_memory(self, row):
+        if not hasattr(self, 'current_inventory_data'):
+            self.current_inventory_data = []
+        if row >= len(self.current_inventory_data):
+            while len(self.current_inventory_data) <= row:
+                self.current_inventory_data.append({
+                    'item_id': '',
+                    'name': '',
+                    'quantity': 1,
+                    'owner': '',
+                    'description': '',
+                    'location': '',
+                    'containers': {}
+                })
+        item_id = self.instances_table.item(row, 0)
+        name = self.instances_table.item(row, 1)
+        quantity = self.instances_table.item(row, 2)
+        owner = self.instances_table.item(row, 3)
+        description = self.instances_table.item(row, 4)
+        location = self.instances_table.item(row, 5)
+        if not item_id or not item_id.text().strip():
+            return
+        item_id_text = item_id.text().strip()
+        item_name = name.text().strip() if name else ''
+        quantity_value = int(quantity.text().strip()) if quantity and quantity.text().strip().isdigit() else 1
+        owner_text = owner.text().strip() if owner else ''
+        description_text = description.text().strip() if description else ''
+        location_text = location.text().strip() if location else ''
+        updated_item = {
+            'item_id': item_id_text,
+            'name': item_name,
+            'quantity': quantity_value,
+            'owner': owner_text,
+            'description': description_text,
+            'location': location_text,
+            'containers': {}
+        }
+        if item_name:
+            containers = self._get_containers_for_item(item_name)
+            for container_name in containers:
+                container_items = self._get_container_items_recursive(1, item_name, container_name)
+                if container_items:
+                    updated_item['containers'][container_name] = container_items
+        
+        self.current_inventory_data[row] = updated_item
+
+    def _save_current_inventory(self):
+        selected_setting = self.settings_list.currentItem()
+        selected_actor = self.actors_list.currentItem()
+        if not selected_setting and not selected_actor:
+            return
+        inventory_data = self._get_inventory_from_table()
+        self.current_inventory_data = inventory_data
+        if selected_setting:
+            self._save_inventory_to_setting(selected_setting.data(Qt.UserRole), inventory_data)
+        elif selected_actor:
+            self._save_inventory_to_actor(selected_actor.data(Qt.UserRole), inventory_data)
+
+    def _get_inventory_from_table(self):
+        def collect_container_data_from_widgets(level, item_name, container_name):
+            container_widget = self._find_container_level_widget(level, item_name, container_name)
+            if not container_widget or not hasattr(container_widget, 'container_table'):
+                return []
+            container_items = []
+            container_table = container_widget.container_table
+            for row in range(container_table.rowCount()):
+                item_id_item = container_table.item(row, 0)
+                name_item = container_table.item(row, 1)
+                quantity_item = container_table.item(row, 2)
+                owner_item = container_table.item(row, 3)
+                description_item = container_table.item(row, 4)
+                location_item = container_table.item(row, 5)
+                if item_id_item and item_id_item.text().strip():
+                    container_item = {
+                        'item_id': item_id_item.text().strip(),
+                        'name': name_item.text().strip() if name_item else '',
+                        'quantity': int(quantity_item.text().strip()) if quantity_item and quantity_item.text().strip().isdigit() else 1,
+                        'owner': owner_item.text().strip() if owner_item else '',
+                        'description': description_item.text().strip() if description_item else '',
+                        'location': location_item.text().strip() if location_item else '',
+                        'containers': {}
+                    }
+                    container_item_name = name_item.text().strip() if name_item else ''
+                    if container_item_name:
+                        reference_containers = self._get_containers_for_item(container_item_name)
+                        for ref_container_name in reference_containers:
+                            nested_items = collect_container_data_from_widgets(level + 1, container_item_name, ref_container_name)
+                            if not nested_items:
+                                nested_items = collect_container_data_from_memory(level + 1, container_item_name, ref_container_name)
+                            if nested_items:
+                                container_item['containers'][ref_container_name] = nested_items
+                    container_items.append(container_item)
+            return container_items
+
+        def collect_container_data_from_memory(level, item_name, container_name):
+            if not hasattr(self, 'current_inventory_data') or not self.current_inventory_data:
+                return []
+            
+            def find_container_at_level(data, current_level, target_level, target_item_name, target_container_name):
+                if current_level == target_level:
+                    for item in data:
+                        if item.get('name') == target_item_name:
+                            containers = item.get('containers', {})
+                            if target_container_name in containers:
+                                return containers[target_container_name]
+                    return None
+                else:
+                    for item in data:
+                        containers = item.get('containers', {})
+                        for container_name, container_items in containers.items():
+                            result = find_container_at_level(container_items, current_level + 1, target_level, target_item_name, target_container_name)
+                            if result is not None:
+                                return result
+                    return None
+            container_items = find_container_at_level(self.current_inventory_data, 1, level, item_name, container_name)
+            if container_items is None:
+                return []
+            result_items = []
+            for container_item in container_items:
+                if isinstance(container_item, dict):
+                    result_item = container_item.copy()
+                    container_item_name = container_item.get('name', '')
+                    if container_item_name:
+                        reference_containers = self._get_containers_for_item(container_item_name)
+                        for ref_container_name in reference_containers:
+                            nested_items = collect_container_data_from_memory(level + 1, container_item_name, ref_container_name)
+                            if nested_items:
+                                result_item['containers'][ref_container_name] = nested_items
+                    result_items.append(result_item)
+            return result_items
+        inventory = []
+        for row in range(self.instances_table.rowCount()):
+            item_id = self.instances_table.item(row, 0)
+            name = self.instances_table.item(row, 1)
+            quantity = self.instances_table.item(row, 2)
+            owner = self.instances_table.item(row, 3)
+            description = self.instances_table.item(row, 4)
+            location = self.instances_table.item(row, 5)
+            if item_id and item_id.text().strip():
+                item_data = {
+                    'item_id': item_id.text().strip(),
+                    'name': name.text().strip() if name else '',
+                    'quantity': int(quantity.text().strip()) if quantity and quantity.text().strip().isdigit() else 1,
+                    'owner': owner.text().strip() if owner else '',
+                    'description': description.text().strip() if description else '',
+                    'location': location.text().strip() if location else '',
+                    'containers': {}
+                }
+                item_name = name.text().strip() if name else ''
+                if item_name:
+                    containers = self._get_containers_for_item(item_name)
+                    for container_name in containers:
+                        container_items = collect_container_data_from_widgets(1, item_name, container_name)
+                        if not container_items:
+                            container_items = collect_container_data_from_memory(1, item_name, container_name)
+                        if container_items:
+                            item_data['containers'][container_name] = container_items
+                
+                inventory.append(item_data)
+        return inventory
+
+    def _get_container_items_recursive(self, level, item_name, container_name):
+        def find_container_at_level(data, current_level, target_level, target_item_name, target_container_name):
+            if current_level == target_level:
+                for item in data:
+                    if item.get('name') == target_item_name:
+                        containers = item.get('containers', {})
+                        if target_container_name in containers:
+                            return containers[target_container_name]
+                return None
+            else:
+                for item in data:
+                    containers = item.get('containers', {})
+                    for container_name, container_items in containers.items():
+                        result = find_container_at_level(container_items, current_level + 1, target_level, target_item_name, target_container_name)
+                        if result is not None:
+                            return result
+                return None
+        container_items = find_container_at_level(self.current_inventory_data, 1, level, item_name, container_name)
+        if container_items is None:
+            return []
+        result_items = []
+        for container_item in container_items:
+            if isinstance(container_item, dict):
+                result_item = container_item.copy()
+                container_item_name = container_item.get('name', '')
+                if container_item_name:
+                    reference_containers = self._get_containers_for_item(container_item_name)
+                    if reference_containers:
+                        for ref_container_name in reference_containers:
+                            nested_items = self._get_container_items_recursive(level + 1, container_item_name, ref_container_name)
+                            if nested_items:
+                                result_item['containers'][ref_container_name] = nested_items
+                result_items.append(result_item)
+        return result_items
+
+    def _save_inventory_to_setting(self, setting_file_path, inventory_data):
+        if not setting_file_path or not os.path.exists(setting_file_path):
+            return
+        try:
+            with open(setting_file_path, 'r', encoding='utf-8') as f:
+                setting_data = json.load(f)
+            setting_data['inventory'] = inventory_data
+            with open(setting_file_path, 'w', encoding='utf-8') as f:
+                json.dump(setting_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            pass
+
+    def _save_inventory_to_actor(self, actor_file_path, inventory_data):
+        if not actor_file_path or not os.path.exists(actor_file_path):
+            return
+        try:
+            with open(actor_file_path, 'r', encoding='utf-8') as f:
+                actor_data = json.load(f)
+            actor_data['inventory'] = inventory_data
+            with open(actor_file_path, 'w', encoding='utf-8') as f:
+                json.dump(actor_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            pass
+
+    def _load_inventory_for_setting(self, setting_file_path):
+        if not setting_file_path or not os.path.exists(setting_file_path):
+            self._clear_instances_table()
+            return
+        try:
+            with open(setting_file_path, 'r', encoding='utf-8') as f:
+                setting_data = json.load(f)
+            self.current_inventory_data = setting_data.get('inventory', [])
+            self._clear_containers()
+            self._populate_instances_table(self.current_inventory_data)
+        except Exception as e:
+            self._clear_instances_table()
+
+    def _load_inventory_for_actor(self, actor_file_path):
+        if not actor_file_path or not os.path.exists(actor_file_path):
+            self._clear_instances_table()
+            return
+        try:
+            with open(actor_file_path, 'r', encoding='utf-8') as f:
+                actor_data = json.load(f)
+            self.current_inventory_data = actor_data.get('inventory', [])
+            self._clear_containers()
+            self._populate_instances_table(self.current_inventory_data)
+        except Exception as e:
+            self._clear_instances_table()
+
+    def _populate_instances_table(self, inventory_data):
+        self.is_loading_data = True
+        self.instances_table.blockSignals(True)
+        self.instances_table.setRowCount(0)
+        if not inventory_data:
+            self.instances_table.blockSignals(False)
+            self.is_loading_data = False
+            return
+        
+        for item in inventory_data:
+            if isinstance(item, dict):
+                row = self.instances_table.rowCount()
+                self.instances_table.insertRow(row)
+                self.instances_table.setItem(row, 0, QTableWidgetItem(item.get('item_id', generate_item_id())))
+                self.instances_table.setItem(row, 1, QTableWidgetItem(item.get('name', '')))
+                self.instances_table.setItem(row, 2, QTableWidgetItem(str(item.get('quantity', '1'))))
+                self.instances_table.setItem(row, 3, QTableWidgetItem(item.get('owner', '')))
+                self.instances_table.setItem(row, 4, QTableWidgetItem(item.get('description', '')))
+                self.instances_table.setItem(row, 5, QTableWidgetItem(item.get('location', '')))
+            elif isinstance(item, str):
+                row = self.instances_table.rowCount()
+                self.instances_table.insertRow(row)
+                self.instances_table.setItem(row, 0, QTableWidgetItem(generate_item_id()))
+                self.instances_table.setItem(row, 1, QTableWidgetItem(item))
+                self.instances_table.setItem(row, 2, QTableWidgetItem('1'))
+                self.instances_table.setItem(row, 3, QTableWidgetItem(''))
+                self.instances_table.setItem(row, 4, QTableWidgetItem(''))
+                self.instances_table.setItem(row, 5, QTableWidgetItem(''))
+        
+        self.instances_table.blockSignals(False)
+        if self.instances_table.rowCount() > 0:
+            self.instances_table.setCurrentCell(0, 0)
+            self.instances_table.selectRow(0)
+            if self.instances_table.rowCount() == 1:
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(10, self._handle_single_item_selection)
+        else:
+            self._clear_containers()
+        self.is_loading_data = False
+
+    def _clear_instances_table(self):
+        self.instances_table.setRowCount(0)
+        self._clear_containers()
+
+    def _clear_containers(self):
+        for i in reversed(range(self.containers_layout.count())):
+            item = self.containers_layout.itemAt(i)
+            if item and item.widget():
+                item.widget().deleteLater()
+        self.default_container_label = QLabel("Either no item selected, or selected item does not have containers.")
+        self.default_container_label.setObjectName("InventoryDefaultContainerLabel")
+        self.default_container_label.setAlignment(Qt.AlignCenter)
+        self.default_container_label.setFont(QFont('Consolas', 9))
+        self.containers_layout.addWidget(self.default_container_label)
+        self._update_containers_label("")
+
+    def _create_container_level_widget(self, level, item_name, container_name):
+        level_widget = QWidget()
+        level_layout = QVBoxLayout(level_widget)
+        level_layout.setContentsMargins(5, 5, 5, 5)
+        level_layout.setSpacing(2)
+        level_header = QLabel(f"Level {level}: {item_name} → {container_name}")
+        level_header.setObjectName("InventoryContainerHeaderLabel")
+        level_header.setAlignment(Qt.AlignCenter)
+        level_header.setFont(QFont('Consolas', 9, QFont.Bold))
+        level_layout.addWidget(level_header)
+        table_header_layout = QHBoxLayout()
+        table_header_layout.addWidget(QLabel(f"Items in {item_name}, {container_name}:"))
+        table_header_layout.addStretch()
+        level_layout.addLayout(table_header_layout)
+        container_table = QTableWidget()
+        container_table.setObjectName("SettingManagerTable")
+        container_table.setColumnCount(6)
+        container_table.setHorizontalHeaderLabels(["Item ID", "Name", "Quantity", "Owner", "Description", "Location"])
+        header = container_table.horizontalHeader()
+        header.setObjectName("SettingManagerTableHeader")
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.Stretch)
+        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        container_table.setColumnWidth(0, 80)
+        container_table.setColumnWidth(2, 80)
+        container_table.setColumnWidth(3, 100)
+        container_table.verticalHeader().setVisible(False)
+        container_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        container_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        container_table.setAlternatingRowColors(True)
+        container_table.setFocusPolicy(Qt.StrongFocus)
+        container_table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
+        container_table.setMinimumHeight(120)
+        container_table.setMinimumWidth(300)
+        
+        base_color = self.theme_colors.get('base_color', '#00FF66') if self.theme_colors else '#00FF66'
+        selection_color = f"rgba({int(base_color[1:3], 16)}, {int(base_color[3:5], 16)}, {int(base_color[5:7], 16)}, 0.3)"
+        container_table.setStyleSheet(f"""
+            QTableWidget::item:selected {{
+                background-color: {selection_color};
+                color: {base_color};
+            }}
+            QTableWidget::item:selected:active {{
+                background-color: {selection_color};
+                color: {base_color};
+            }}
+            QTableWidget::item:selected:!active {{
+                background-color: {selection_color};
+                color: {base_color};
+            }}
+        """)
+        container_table.itemChanged.connect(self._on_container_item_changed)
+        container_table.itemSelectionChanged.connect(self._on_container_table_selection_changed)
+        container_table.level = level
+        container_table.item_name = item_name
+        container_table.container_name = container_name
+        add_container_item_btn = QPushButton("+")
+        add_container_item_btn.setObjectName("AddButton")
+        add_container_item_btn.setToolTip("Add Item to Container")
+        add_container_item_btn.setMaximumWidth(30)
+        add_container_item_btn.clicked.connect(self._add_container_item_row)
+        add_container_item_btn.container_table = container_table
+        add_container_item_btn.level = level
+        add_container_item_btn.item_name = item_name
+        add_container_item_btn.container_name = container_name
+        table_header_layout.addWidget(add_container_item_btn)
+        remove_container_item_btn = QPushButton("-")
+        remove_container_item_btn.setObjectName("RemoveButton")
+        remove_container_item_btn.setToolTip("Remove Selected Item from Container")
+        remove_container_item_btn.setMaximumWidth(30)
+        remove_container_item_btn.clicked.connect(self._remove_container_item_row)
+        remove_container_item_btn.container_table = container_table
+        table_header_layout.addWidget(remove_container_item_btn)
+        level_layout.addWidget(container_table)
+        level_widget.level = level
+        level_widget.item_name = item_name
+        level_widget.container_name = container_name
+        level_widget.container_table = container_table
+        level_widget.setMinimumWidth(320)
+        return level_widget
+
+    def _create_container_table(self, container_name):
+        return self._create_container_level_widget(1, "Main Item", container_name)
+
+    def _on_container_item_changed(self, item):
+        if not item or self.is_loading_data:
+            return
+        table = item.tableWidget()
+        if not table or not hasattr(table, 'level'):
+            return
+        row = item.row()
+        col = item.column()
+        
+        if col == 1:
+            name_item = table.item(row, 1)
+            if name_item and name_item.text().strip():
+                item_name = name_item.text().strip()
+                level = table.level
+                parent_item_name = table.item_name
+                parent_container_name = table.container_name
+                containers = self._get_containers_for_item(item_name)
+                if containers:
+                    self._ensure_nested_container_widgets_exist(level + 1, item_name, containers, parent_item_name, parent_container_name)
+        
+        self._update_container_item_in_memory(table, row)
+        self._save_current_inventory()
+
+    def _update_container_item_in_memory(self, table, row):
+        if not hasattr(table, 'level') or not hasattr(table, 'item_name') or not hasattr(table, 'container_name'):
+            return
+        
+        level = table.level
+        parent_item_name = table.item_name
+        parent_container_name = table.container_name
+        
+        item_id_item = table.item(row, 0)
+        name_item = table.item(row, 1)
+        quantity_item = table.item(row, 2)
+        owner_item = table.item(row, 3)
+        description_item = table.item(row, 4)
+        location_item = table.item(row, 5)
+        
+        if not item_id_item or not item_id_item.text().strip():
+            return
+        
+        item_id = item_id_item.text().strip()
+        item_name = name_item.text().strip() if name_item else ''
+        quantity = int(quantity_item.text().strip()) if quantity_item and quantity_item.text().strip().isdigit() else 1
+        owner = owner_item.text().strip() if owner_item else ''
+        description = description_item.text().strip() if description_item else ''
+        location = location_item.text().strip() if location_item else ''
+        
+        updated_item = {
+            'item_id': item_id,
+            'name': item_name,
+            'quantity': quantity,
+            'owner': owner,
+            'description': description,
+            'location': location,
+            'containers': {}
+        }
+        
+        if item_name:
+            reference_containers = self._get_containers_for_item(item_name)
+            for ref_container_name in reference_containers:
+                nested_items = self._get_container_items_recursive(level + 1, item_name, ref_container_name)
+                if nested_items:
+                    updated_item['containers'][ref_container_name] = nested_items
+        
+        def update_container_at_level(data, current_level, target_level, target_parent_name, target_container_name, target_item_id, new_item_data):
+            if current_level == target_level:
+                for item in data:
+                    if item.get('name') == target_parent_name:
+                        containers = item.get('containers', {})
+                        if target_container_name in containers:
+                            for i, container_item in enumerate(containers[target_container_name]):
+                                if container_item.get('item_id') == target_item_id:
+                                    containers[target_container_name][i] = new_item_data
+                                    return True
+                return False
+            else:
+                for item in data:
+                    containers = item.get('containers', {})
+                    for container_name, container_items in containers.items():
+                        if update_container_at_level(container_items, current_level + 1, target_level, target_parent_name, target_container_name, target_item_id, new_item_data):
+                            return True
+                return False
+        
+        if hasattr(self, 'current_inventory_data') and self.current_inventory_data:
+            update_container_at_level(self.current_inventory_data, 1, level, parent_item_name, parent_container_name, item_id, updated_item)
+
+    def _ensure_nested_container_widgets_exist(self, level, item_name, containers, parent_item_name, parent_container_name):
+        existing_widgets = []
+        for i in range(self.containers_layout.count()):
+            item = self.containers_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if hasattr(widget, 'layout') and widget.layout():
+                    for j in range(widget.layout().count()):
+                        child_item = widget.layout().itemAt(j)
+                        if child_item and child_item.widget():
+                            child_widget = child_item.widget()
+                            if (hasattr(child_widget, 'item_name') and 
+                                child_widget.item_name == item_name and
+                                hasattr(child_widget, 'level') and 
+                                child_widget.level == level):
+                                existing_widgets.append(child_widget)
+                elif (hasattr(widget, 'item_name') and 
+                      widget.item_name == item_name and
+                      hasattr(widget, 'level') and 
+                      widget.level == level):
+                    existing_widgets.append(widget)
+        if not existing_widgets:
+            all_containers = self._get_containers_for_item(item_name)
+            if all_containers:
+                level_row_widget = QWidget()
+                level_row_layout = QHBoxLayout(level_row_widget)
+                level_row_layout.setContentsMargins(5, 5, 5, 5)
+                level_row_layout.setSpacing(10)
+                for container in all_containers:
+                    level_widget = self._create_container_level_widget(level, item_name, container)
+                    level_row_layout.addWidget(level_widget)
+                self.containers_layout.addWidget(level_row_widget)
+
+    def _on_container_table_selection_changed(self):
+        table = self.sender()
+        if not table or not hasattr(table, 'level'):
+            return
+        current_row = table.currentRow()
+        if current_row < 0:
+            self._remove_container_widgets_deeper_than(table.level)
+            return
+        self._clear_other_container_selections_in_row(table)
+        level = table.level
+        parent_item_name = table.item_name
+        parent_container_name = table.container_name
+        name_item = table.item(current_row, 1)
+        if not name_item:
+            self._remove_container_widgets_deeper_than(level)
+            return
+        item_name = name_item.text().strip()
+        if not item_name:
+            self._remove_container_widgets_deeper_than(level)
+            return
+        reference_containers = self._get_containers_for_item(item_name)
+        if not reference_containers:
+            self._remove_container_widgets_deeper_than(level)
+            return
+        item_data = self._find_item_data_in_container(level, parent_item_name, parent_container_name, item_name)
+        containers_data = item_data.get('containers', {}) if item_data else {}
+        if not containers_data:
+            containers_data = {container: [] for container in reference_containers}
+        self._remove_container_widgets_deeper_than(level)
+        self._expand_container_item(level + 1, item_name, containers_data)
+
+    def _clear_other_container_selections_in_row(self, selected_table):
+        if not selected_table or not hasattr(selected_table, 'level'):
+            return
+        level = selected_table.level
+        item_name = selected_table.item_name
+        for i in range(self.containers_layout.count()):
+            item = self.containers_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if hasattr(widget, 'layout') and widget.layout():
+                    for j in range(widget.layout().count()):
+                        child_item = widget.layout().itemAt(j)
+                        if child_item and child_item.widget():
+                            child_widget = child_item.widget()
+                            if (hasattr(child_widget, 'container_table') and 
+                                hasattr(child_widget, 'level') and 
+                                hasattr(child_widget, 'item_name') and
+                                child_widget.level == level and 
+                                child_widget.item_name == item_name and
+                                child_widget.container_table != selected_table):
+                                child_widget.container_table.clearSelection()
+                elif (hasattr(widget, 'container_table') and 
+                      hasattr(widget, 'level') and 
+                      hasattr(widget, 'item_name') and
+                      widget.level == level and 
+                      widget.item_name == item_name and
+                      widget.container_table != selected_table):
+                    widget.container_table.clearSelection()
+
+    def _on_container_item_double_clicked(self, level, parent_item_name, parent_container_name, item, col):
+        if col == 1:
+            item_name = item.text().strip()
+            if item_name:
+                item_data = self._find_item_data_in_container(level, parent_item_name, parent_container_name, item_name)
+                containers_data = item_data.get('containers', {}) if item_data else {}
+                reference_containers = self._get_containers_for_item(item_name)
+                if reference_containers:
+                    if not containers_data:
+                        containers_data = {container: [] for container in reference_containers}
+                    self._expand_container_item(level + 1, item_name, containers_data)
+
+    def _find_item_data_in_container(self, level, parent_item_name, parent_container_name, item_name):
+        def find_container_at_level(data, current_level, target_level, target_parent_name, target_container_name):
+            if current_level == target_level:
+                for item in data:
+                    if item.get('name') == target_parent_name:
+                        containers = item.get('containers', {})
+                        if target_container_name in containers:
+                            return containers[target_container_name]
+                return None
+            else:
+                for item in data:
+                    containers = item.get('containers', {})
+                    for container_name, container_items in containers.items():
+                        result = find_container_at_level(container_items, current_level + 1, target_level, target_parent_name, target_container_name)
+                        if result is not None:
+                            return result
+                return None
+        target_container = find_container_at_level(self.current_inventory_data, 1, level, parent_item_name, parent_container_name)
+        if target_container is not None:
+            for item in target_container:
+                if item.get('name') == item_name:
+                    return item
+        return None
+
+    def _expand_container_item(self, level, item_name, containers_data):
+        level_row_widget = QWidget()
+        level_row_layout = QHBoxLayout(level_row_widget)
+        level_row_layout.setContentsMargins(5, 5, 5, 5)
+        level_row_layout.setSpacing(10)
+        all_containers = self._get_containers_for_item(item_name)
+        sorted_containers = sorted(all_containers)
+        for container_name in sorted_containers:
+            level_widget = self._create_container_level_widget(level, item_name, container_name)
+            level_row_layout.addWidget(level_widget)
+            container_items = containers_data.get(container_name, [])
+            container_table = level_widget.container_table
+            container_table.blockSignals(True)
+            container_table.setRowCount(0)
+            for container_item in container_items:
+                if isinstance(container_item, dict):
+                    row = container_table.rowCount()
+                    container_table.insertRow(row)
+                    item_id_item = QTableWidgetItem(container_item.get('item_id', generate_item_id()))
+                    item_id_item.setFlags(item_id_item.flags() | Qt.ItemIsEditable)
+                    container_table.setItem(row, 0, item_id_item)
+                    name_item = QTableWidgetItem(container_item.get('name', ''))
+                    name_item.setFlags(name_item.flags() | Qt.ItemIsEditable)
+                    container_table.setItem(row, 1, name_item)
+                    quantity_item = QTableWidgetItem(str(container_item.get('quantity', '1')))
+                    quantity_item.setFlags(quantity_item.flags() | Qt.ItemIsEditable)
+                    container_table.setItem(row, 2, quantity_item)
+                    owner_item = QTableWidgetItem(container_item.get('owner', ''))
+                    owner_item.setFlags(owner_item.flags() | Qt.ItemIsEditable)
+                    container_table.setItem(row, 3, owner_item)
+                    description_item = QTableWidgetItem(container_item.get('description', ''))
+                    description_item.setFlags(description_item.flags() | Qt.ItemIsEditable)
+                    container_table.setItem(row, 4, description_item)
+                    location_item = QTableWidgetItem(container_item.get('location', ''))
+                    location_item.setFlags(location_item.flags() | Qt.ItemIsEditable)
+                    container_table.setItem(row, 5, location_item)
+            container_table.blockSignals(False)
+            if container_table.rowCount() == 1:
+                container_table.setCurrentCell(0, 0)
+                container_table.selectRow(0)
+        insert_position = level - 1
+        if insert_position < 0:
+            insert_position = 0
+        if insert_position >= self.containers_layout.count():
+            self.containers_layout.addWidget(level_row_widget)
+        else:
+            self.containers_layout.insertWidget(insert_position, level_row_widget)
+    def _add_container_item_row(self):
+        button = self.sender()
+        if not button or not hasattr(button, 'container_table'):
+            return
+        container_table = button.container_table
+        row = container_table.rowCount()
+        new_item_id = generate_item_id()
+        new_item = {
+            'item_id': new_item_id,
+            'name': '',
+            'quantity': 1,
+            'owner': '',
+            'description': '',
+            'location': '',
+            'containers': {}
+        }
+        level = getattr(container_table, 'level', 1)
+        parent_item_name = getattr(container_table, 'item_name', '')
+        parent_container_name = getattr(container_table, 'container_name', '')
+        success = self._add_item_to_container_data(level, parent_item_name, parent_container_name, new_item)
+        if success:
+            container_table.insertRow(row)
+            item_id_item = QTableWidgetItem(new_item_id)
+            item_id_item.setFlags(item_id_item.flags() | Qt.ItemIsEditable)
+            container_table.setItem(row, 0, item_id_item)
+            name_item = QTableWidgetItem("")
+            name_item.setFlags(name_item.flags() | Qt.ItemIsEditable)
+            container_table.setItem(row, 1, name_item)
+            quantity_item = QTableWidgetItem("1")
+            quantity_item.setFlags(quantity_item.flags() | Qt.ItemIsEditable)
+            container_table.setItem(row, 2, quantity_item)
+            owner_item = QTableWidgetItem("")
+            owner_item.setFlags(owner_item.flags() | Qt.ItemIsEditable)
+            container_table.setItem(row, 3, owner_item)
+            description_item = QTableWidgetItem("")
+            description_item.setFlags(description_item.flags() | Qt.ItemIsEditable)
+            container_table.setItem(row, 4, description_item)
+            location_item = QTableWidgetItem("")
+            location_item.setFlags(location_item.flags() | Qt.ItemIsEditable)
+            container_table.setItem(row, 5, location_item)
+            self._save_current_inventory()
+            if container_table.rowCount() == 1:
+                container_table.setCurrentCell(0, 0)
+                container_table.selectRow(0)
+            main_ui = self._get_main_ui()
+            if main_ui and hasattr(main_ui, 'add_rule_sound') and main_ui.add_rule_sound:
+                try:
+                    main_ui.add_rule_sound.play()
+                except Exception:
+                    main_ui.add_rule_sound = None
+        else:
+            QMessageBox.warning(self, "Add Failed", f"Failed to add item to data structure.")
+
+    def _remove_container_item_row(self):
+        button = self.sender()
+        if not button or not hasattr(button, 'container_table'):
+            return
+        container_table = button.container_table
+        current_row = container_table.currentRow()
+        if current_row >= 0:
+            item_id_item = container_table.item(current_row, 0)
+            item_name_item = container_table.item(current_row, 1)
+            if item_id_item and item_name_item:
+                item_id = item_id_item.text().strip()
+                item_name = item_name_item.text().strip()
+                level = getattr(container_table, 'level', 1)
+                parent_item_name = getattr(container_table, 'item_name', '')
+                parent_container_name = getattr(container_table, 'container_name', '')
+                self._cleanup_container_widgets_for_item(item_name, level, parent_item_name, parent_container_name)
+                success = self._remove_item_from_container_data(level, parent_item_name, parent_container_name, item_id, item_name)
+                if success:
+                    container_table.removeRow(current_row)
+                    self._save_current_inventory()
+                    if container_table.rowCount() == 1:
+                        from PyQt5.QtCore import QTimer
+                        QTimer.singleShot(10, self._on_container_table_selection_changed)
+                    main_ui = self._get_main_ui()
+                    if main_ui and hasattr(main_ui, 'delete_rule_sound') and main_ui.delete_rule_sound:
+                        try:
+                            main_ui.delete_rule_sound.play()
+                        except Exception:
+                            main_ui.delete_rule_sound = None
+                else:
+                    QMessageBox.warning(self, "Remove Failed", f"Failed to remove item '{item_name}' from data structure.")
+
+    def _cleanup_container_widgets_for_item(self, item_name, level=None, parent_item_name=None, parent_container_name=None):
+        def remove_widget_recursively(widget):
+            if hasattr(widget, 'layout') and widget.layout():
+                for i in range(widget.layout().count()):
+                    child_item = widget.layout().itemAt(i)
+                    if child_item and child_item.widget():
+                        remove_widget_recursively(child_item.widget())
+            widget.deleteLater()
+        
+        def find_and_remove_widgets_recursively(parent_widget, target_item_name, target_level):
+            widgets_to_remove = []
+            if hasattr(parent_widget, 'layout') and parent_widget.layout():
+                for i in range(parent_widget.layout().count()):
+                    child_item = parent_widget.layout().itemAt(i)
+                    if child_item and child_item.widget():
+                        child_widget = child_item.widget()
+                        if (hasattr(child_widget, 'item_name') and 
+                            child_widget.item_name == target_item_name and
+                            hasattr(child_widget, 'level') and 
+                            child_widget.level == target_level):
+                            widgets_to_remove.append((i, child_widget))
+                        else:
+                            widgets_to_remove.extend(find_and_remove_widgets_recursively(child_widget, target_item_name, target_level))
+            return widgets_to_remove
+        if level is None:
+            return
+        target_level = level + 1
+        widgets_to_remove = []
+        for i in range(self.containers_layout.count()):
+            item = self.containers_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                found_widgets = find_and_remove_widgets_recursively(widget, item_name, target_level)
+                for layout_index, found_widget in found_widgets:
+                    widgets_to_remove.append((i, layout_index, found_widget))
+        for row_index, layout_index, widget in sorted(widgets_to_remove, key=lambda x: (x[0], x[1]), reverse=True):
+            row_widget = self.containers_layout.itemAt(row_index).widget()
+            if row_widget and hasattr(row_widget, 'layout') and row_widget.layout():
+                row_widget.layout().takeAt(layout_index)
+                remove_widget_recursively(widget)
+                if row_widget.layout().count() == 0:
+                    self.containers_layout.takeAt(row_index)
+                    row_widget.deleteLater()
+        if level is not None:
+            self.container_selection_path = [entry for entry in self.container_selection_path if entry[0] < level]
+
+    def _ensure_container_widgets_exist_for_item(self, item_name, containers):
+        existing_widgets = []
+        for i in range(self.containers_layout.count()):
+            item = self.containers_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if hasattr(widget, 'layout') and widget.layout():
+                    for j in range(widget.layout().count()):
+                        child_item = widget.layout().itemAt(j)
+                        if child_item and child_item.widget():
+                            child_widget = child_item.widget()
+                            if (hasattr(child_widget, 'item_name') and 
+                                child_widget.item_name == item_name and
+                                hasattr(child_widget, 'level') and 
+                                child_widget.level == 1):
+                                existing_widgets.append(child_widget)
+                elif (hasattr(widget, 'item_name') and 
+                      widget.item_name == item_name and
+                      hasattr(widget, 'level') and 
+                      widget.level == 1):
+                    existing_widgets.append(widget)
+        if not existing_widgets:
+            level1_row_widget = QWidget()
+            level1_row_layout = QHBoxLayout(level1_row_widget)
+            level1_row_layout.setContentsMargins(5, 5, 5, 5)
+            level1_row_layout.setSpacing(10)
+            for container in containers:
+                container_widget = self._create_container_level_widget(1, item_name, container)
+                level1_row_layout.addWidget(container_widget)
+            self.containers_layout.addWidget(level1_row_widget)
+
+    def _update_containers_for_item(self, item_name):
+        if self.is_loading_data:
+            return
+        for i in reversed(range(self.containers_layout.count())):
+            item = self.containers_layout.itemAt(i)
+            if item and item.widget():
+                item.widget().deleteLater()
+        self.container_selection_path = []
+        containers = self._get_containers_for_item(item_name)
+        if not containers:
+            self.default_container_label = QLabel("Either no item selected, or selected item does not have containers.")
+            self.default_container_label.setObjectName("InventoryDefaultContainerLabel")
+            self.default_container_label.setAlignment(Qt.AlignCenter)
+            self.default_container_label.setFont(QFont('Consolas', 9))
+            self.containers_layout.addWidget(self.default_container_label)
+            return
+        level1_row_widget = QWidget()
+        level1_row_layout = QHBoxLayout(level1_row_widget)
+        level1_row_layout.setContentsMargins(5, 5, 5, 5)
+        level1_row_layout.setSpacing(10)
+        for container in containers:
+            container_widget = self._create_container_level_widget(1, item_name, container)
+            level1_row_layout.addWidget(container_widget)
+        self.containers_layout.addWidget(level1_row_widget)
+        self._update_containers_label(item_name)
+
+    def _get_containers_for_item(self, item_name):
+        containers = []
+        for i in range(self.tab_widget.count()):
+            page = self.tab_widget.widget(i)
+            if hasattr(page, 'item_table_widget'):
+                for row in range(page.item_table_widget.rowCount()):
+                    name_item = page.item_table_widget.item(row, 0)
+                    if name_item and name_item.text() == item_name:
+                        containers_widget = page.item_table_widget.cellWidget(row, 2)
+                        if containers_widget and hasattr(containers_widget, 'containers'):
+                            containers = containers_widget.containers.copy()
+                            break
+                if containers:
+                    break
+        if not containers:
+            for item_data in self.current_inventory_data:
+                if item_data.get('name') == item_name:
+                    item_containers = item_data.get('containers', {})
+                    if item_containers:
+                        containers = list(item_containers.keys())
+                        break
+        return sorted(containers)
+
+    def _find_container_level_widget(self, level, item_name, container_name):
+        for i in range(self.containers_layout.count()):
+            item = self.containers_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if hasattr(widget, 'level') and hasattr(widget, 'item_name') and hasattr(widget, 'container_name'):
+                    if widget.level == level and widget.item_name == item_name and widget.container_name == container_name:
+                        return widget
+                elif hasattr(widget, 'layout') and widget.layout():
+                    for j in range(widget.layout().count()):
+                        child_item = widget.layout().itemAt(j)
+                        if child_item and child_item.widget():
+                            child_widget = child_item.widget()
+                            if hasattr(child_widget, 'level') and hasattr(child_widget, 'item_name') and hasattr(child_widget, 'container_name'):
+                                if child_widget.level == level and child_widget.item_name == item_name and child_widget.container_name == container_name:
+                                    return child_widget
+        return None
+
+    def _find_container_widget(self, container_name):
+        for i in range(self.containers_layout.count()):
+            item = self.containers_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if hasattr(widget, 'container_name') and widget.container_name == container_name:
+                    return widget
+                elif hasattr(widget, 'layout') and widget.layout():
+                    for j in range(widget.layout().count()):
+                        child_item = widget.layout().itemAt(j)
+                        if child_item and child_item.widget():
+                            child_widget = child_item.widget()
+                            if hasattr(child_widget, 'container_name') and child_widget.container_name == container_name:
+                                return child_widget
+        return None
+
+    def _delayed_load_containers(self, item_name, containers_data):
+        self._load_containers_for_item(item_name, containers_data)
+
+    def _load_containers_for_item(self, item_name, containers_data):
+        def collect_all_container_data_recursive(level, parent_item_name, parent_container_name, container_items, all_containers):
+            for container_item in container_items:
+                if not isinstance(container_item, dict):
+                    continue
+                container_item_name = container_item.get('name', '')
+                if not container_item_name:
+                    continue
+                container_item_containers = container_item.get('containers', {})
+                if container_item_containers:
+                    for container_name, nested_items in container_item_containers.items():
+                        all_containers.append((level + 1, container_item_name, container_name, nested_items))
+                        collect_all_container_data_recursive(level + 1, container_item_name, container_name, nested_items, all_containers)
+        
+        def load_containers_in_level_order():
+            all_containers = []
+            containers = self._get_containers_for_item(item_name)
+            for container_name in containers:
+                container_items = containers_data.get(container_name, [])
+                collect_all_container_data_recursive(1, item_name, container_name, container_items, all_containers)
+            max_level = max([level for level, _, _, _ in all_containers]) if all_containers else 0
+            for level in range(2, max_level + 1):
+                level_containers = [(l, item, container, items) for l, item, container, items in all_containers if l == level]
+                for level_container in level_containers:
+                    level_num, item_name_level, container_name_level, container_items_level = level_container
+                    existing_widget = self._find_container_level_widget(level_num, item_name_level, container_name_level)
+                    if not existing_widget:
+                        containers_data_for_level = {container_name_level: container_items_level}
+                        self._expand_container_item(level_num, item_name_level, containers_data_for_level)
+            for level, item_name_level, container_name_level, container_items_level in all_containers:
+                container_widget = self._find_container_level_widget(level, item_name_level, container_name_level)
+                if container_widget:
+                    container_table = container_widget.container_table
+                    container_table.blockSignals(True)
+                    container_table.setRowCount(0)
+                    for container_item in container_items_level:
+                        if isinstance(container_item, dict):
+                            row = container_table.rowCount()
+                            container_table.insertRow(row)
+                            item_id_item = QTableWidgetItem(container_item.get('item_id', generate_item_id()))
+                            item_id_item.setFlags(item_id_item.flags() | Qt.ItemIsEditable)
+                            container_table.setItem(row, 0, item_id_item)
+                            name_item = QTableWidgetItem(container_item.get('name', ''))
+                            name_item.setFlags(name_item.flags() | Qt.ItemIsEditable)
+                            container_table.setItem(row, 1, name_item)
+                            quantity_item = QTableWidgetItem(str(container_item.get('quantity', '1')))
+                            quantity_item.setFlags(quantity_item.flags() | Qt.ItemIsEditable)
+                            container_table.setItem(row, 2, quantity_item)
+                            owner_item = QTableWidgetItem(container_item.get('owner', ''))
+                            owner_item.setFlags(owner_item.flags() | Qt.ItemIsEditable)
+                            container_table.setItem(row, 3, owner_item)
+                            description_item = QTableWidgetItem(container_item.get('description', ''))
+                            description_item.setFlags(description_item.flags() | Qt.ItemIsEditable)
+                            container_table.setItem(row, 4, description_item)
+                            location_item = QTableWidgetItem(container_item.get('location', ''))
+                            location_item.setFlags(location_item.flags() | Qt.ItemIsEditable)
+                            container_table.setItem(row, 5, location_item)
+                    container_table.blockSignals(False)
+                    container_widget.show()
+                    container_table.show()
+        containers = self._get_containers_for_item(item_name)
+        for container_name in containers:
+            container_widget = self._find_container_level_widget(1, item_name, container_name)
+            if container_widget:
+                container_items = containers_data.get(container_name, [])
+                container_table = container_widget.container_table
+                container_table.blockSignals(True)
+                container_table.setRowCount(0)
+                for container_item in container_items:
+                    if isinstance(container_item, dict):
+                        row = container_table.rowCount()
+                        container_table.insertRow(row)
+                        item_id = container_item.get('item_id', generate_item_id())
+                        item_name = container_item.get('name', '')
+                        item_quantity = str(container_item.get('quantity', '1'))
+                        item_owner = container_item.get('owner', '')
+                        item_description = container_item.get('description', '')
+                        item_location = container_item.get('location', '')
+                        item_id_item = QTableWidgetItem(item_id)
+                        item_id_item.setFlags(item_id_item.flags() | Qt.ItemIsEditable)
+                        container_table.setItem(row, 0, item_id_item)
+                        name_item = QTableWidgetItem(item_name)
+                        name_item.setFlags(name_item.flags() | Qt.ItemIsEditable)
+                        container_table.setItem(row, 1, name_item)
+                        quantity_item = QTableWidgetItem(item_quantity)
+                        quantity_item.setFlags(quantity_item.flags() | Qt.ItemIsEditable)
+                        container_table.setItem(row, 2, quantity_item)
+                        owner_item = QTableWidgetItem(item_owner)
+                        owner_item.setFlags(owner_item.flags() | Qt.ItemIsEditable)
+                        container_table.setItem(row, 3, owner_item)
+                        description_item = QTableWidgetItem(item_description)
+                        description_item.setFlags(description_item.flags() | Qt.ItemIsEditable)
+                        container_table.setItem(row, 4, description_item)
+                        location_item = QTableWidgetItem(item_location)
+                        location_item.setFlags(location_item.flags() | Qt.ItemIsEditable)
+                        container_table.setItem(row, 5, location_item)
+                container_table.blockSignals(False)
+                container_widget.show()
+                container_table.show()
+        load_containers_in_level_order()
+
+
+
+    def _update_containers_label(self, item_name):
+        if item_name:
+            self.containers_label.setText(f"{item_name} Containers:")
+        else:
+            self.containers_label.setText("Containers:")
+
+    def _on_settings_search(self, text):
+        self._populate_settings_list(search=text)
+
+    def _on_actors_search(self, text):
+        self._populate_actors_list(search=text)
+
+    def _on_instances_selection_changed(self):
+        sender = self.sender()
+        if sender == self.settings_list:
+            selected_item = self.settings_list.currentItem()
+            if selected_item:
+                self.actors_list.blockSignals(True)
+                self.actors_list.clearSelection()
+                self.actors_list.blockSignals(False)
+                self.inventory_title_label.setText(f"Items in {selected_item.text()}:")
+                self._load_inventory_for_setting(selected_item.data(Qt.UserRole))
+        elif sender == self.actors_list:
+            selected_item = self.actors_list.currentItem()
+            if selected_item:
+                self.settings_list.blockSignals(True)
+                self.settings_list.clearSelection()
+                self.settings_list.blockSignals(False)
+                self.inventory_title_label.setText(f"{selected_item.text()}'s Items:")
+                self._load_inventory_for_actor(selected_item.data(Qt.UserRole))
+        elif sender == self.instances_table:
+            current_row = self.instances_table.currentRow()
+            if current_row < 0:
+                self._clear_containers()
+                return
+            name_item = self.instances_table.item(current_row, 1)
+            if not name_item or not name_item.text().strip():
+                self._clear_containers()
+                return
+            item_name = name_item.text().strip()
+            
+            self._save_current_inventory()
+            
+            containers_data = {}
+            for item_data in self.current_inventory_data:
+                if item_data.get('name') == item_name:
+                    containers_data = item_data.get('containers', {})
+                    break
+            
+            self._update_containers_for_item(item_name)
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(5, lambda: self._delayed_load_containers(item_name, containers_data))
+            self._update_containers_label(item_name)
+
+    def _populate_settings_list(self, search=""):
+        self.settings_list.clear()
+        items = []
+        search_dirs = [
+            os.path.join(self.workflow_data_dir, "resources", "data files", "settings")
+        ]
+        for base_dir in search_dirs:
+            if os.path.isdir(base_dir):
+                for root, dirs, files in os.walk(base_dir):
+                    dirs[:] = [d for d in dirs if d.lower() != 'saves']
+                    for filename in files:
+                        if filename.lower().endswith('_setting.json'):
+                            try:
+                                file_path = os.path.join(root, filename)
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    setting_data = json.load(f)
+                                    setting_name = setting_data.get('name', filename.replace('_setting.json', '').replace('_', ' ').title())
+                                    if setting_name.lower() == "default setting":
+                                        continue
+                                    if search.lower() in setting_name.lower():
+                                        items.append((setting_name, file_path))
+                            except Exception:
+                                continue
+        for display_name, file_path in sorted(items, key=lambda x: x[0].lower()):
+            item = QListWidgetItem(display_name)
+            item.setData(Qt.UserRole, file_path)
+            self.settings_list.addItem(item)
+        if self.settings_list.count() > 0:
+            self.settings_list.setCurrentRow(0)
+
+    def _populate_actors_list(self, search=""):
+        self.actors_list.clear()
+        items = []
+        base_dir = os.path.join(self.workflow_data_dir, "resources", "data files", "actors")
+        if os.path.isdir(base_dir):
+            for fname in os.listdir(base_dir):
+                if fname.lower().endswith(".json"):
+                    actor_name = fname.replace('.json', '').replace('_', ' ').title()
+                    if search.lower() in actor_name.lower():
+                        items.append((actor_name, os.path.join(base_dir, fname)))
+        for display_name, file_path in sorted(items, key=lambda x: x[0].lower()):
+            item = QListWidgetItem(display_name)
+            item.setData(Qt.UserRole, file_path)
+            self.actors_list.addItem(item)
+        if self.actors_list.count() > 0:
+            self.actors_list.setCurrentRow(0)
+
+    def _populate_instances_lists(self):
+        self._populate_settings_list()
+        self._populate_actors_list()
+        if self.settings_list.count() > 0:
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(100, self._load_initial_selection)
+
+    def _load_initial_selection(self):
+        if self.settings_list.count() > 0:
+            selected_item = self.settings_list.currentItem()
+            if selected_item:
+                self.inventory_title_label.setText(f"Items in {selected_item.text()}:")
+                self._load_inventory_for_setting(selected_item.data(Qt.UserRole))
+
+    def _handle_single_item_selection(self):
+        current_row = self.instances_table.currentRow()
+        if current_row < 0:
+            self._clear_containers()
+            return
+        name_item = self.instances_table.item(current_row, 1)
+        if not name_item or not name_item.text().strip():
+            self._clear_containers()
+            return
+        item_name = name_item.text().strip()
+        
+        self._save_current_inventory()
+        
+        containers_data = {}
+        for item_data in self.current_inventory_data:
+            if item_data.get('name') == item_name:
+                containers_data = item_data.get('containers', {})
+                break
+        
+        self._update_containers_for_item(item_name)
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(5, lambda: self._delayed_load_containers(item_name, containers_data))
+        self._update_containers_label(item_name)
+
     def _load_categories(self):
         categories = set()
         resource_items_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'items')
@@ -563,13 +2319,15 @@ class InventoryManagerWidget(QWidget):
                     display_name = folder_name.replace('_', ' ').title()
                     categories.add(display_name)
         if not categories:
-            categories = {"All", "Weapons", "Armor", "Consumables"}
+            categories = {"All", "Weapons", "Armor", "Sumables"}
         for category in sorted(categories):
             self._create_category_tab(category)
+
     def _create_category_tab(self, category_name):
         page_widget = InventoryCategoryPage(category_name, self)
         self.tab_widget.addTab(page_widget, category_name)
         page_widget._load_items_from_disk()
+
     def _add_category(self):
         category_name, ok = QInputDialog.getText(self, "Add Category", "Enter category name:")
         if not ok or not category_name.strip():
@@ -595,6 +2353,7 @@ class InventoryManagerWidget(QWidget):
                 main_ui.add_rule_sound.play()
             except Exception:
                 main_ui.add_rule_sound = None
+
     def _remove_category(self):
         current_index = self.tab_widget.currentIndex()
         if current_index < 0:
@@ -623,6 +2382,7 @@ class InventoryManagerWidget(QWidget):
                 main_ui.delete_rule_sound.play()
             except Exception:
                 main_ui.delete_rule_sound = None
+
     def _play_tab_switch_sound(self, index):
         try:
             import pygame
@@ -643,6 +2403,7 @@ class InventoryManagerWidget(QWidget):
                 main_ui._eft_splitter_sound = left_splitter_sound
         except Exception as e:
             pass
+
     def _get_main_ui(self):
         parent = self.parentWidget()
         while parent:
@@ -650,3 +2411,172 @@ class InventoryManagerWidget(QWidget):
                 return parent
             parent = parent.parentWidget()
         return None
+
+    def _on_references_toggle(self, checked):
+        if checked:
+            self.content_stack.setCurrentIndex(0)
+            self._play_tab_switch_sound(0)
+
+    def _on_instances_toggle(self, checked):
+        if checked:
+            self.content_stack.setCurrentIndex(1)
+            self._play_tab_switch_sound(1)
+    
+    def select_setting_in_instances(self, setting_name):
+        self.instances_btn.setChecked(True)
+        for i in range(self.settings_list.count()):
+            item = self.settings_list.item(i)
+            if item and item.text() == setting_name:
+                self.settings_list.setCurrentItem(item)
+                return True
+        return False
+    def select_actor_in_instances(self, actor_name):
+        self.instances_btn.setChecked(True)
+        for i in range(self.actors_list.count()):
+            item = self.actors_list.item(i)
+            if item and item.text() == actor_name:
+                self.actors_list.setCurrentItem(item)
+                return True
+        return False
+
+    def _add_instance_row(self):
+        row = self.instances_table.rowCount()
+        self.instances_table.insertRow(row)
+        self.instances_table.setItem(row, 0, QTableWidgetItem(generate_item_id()))
+        self.instances_table.setItem(row, 1, QTableWidgetItem(""))
+        self.instances_table.setItem(row, 2, QTableWidgetItem("1"))
+        self.instances_table.setItem(row, 3, QTableWidgetItem(""))
+        self.instances_table.setItem(row, 4, QTableWidgetItem(""))
+        self.instances_table.setItem(row, 5, QTableWidgetItem(""))
+        
+        if not hasattr(self, 'current_inventory_data'):
+            self.current_inventory_data = []
+        
+        new_item = {
+            'item_id': self.instances_table.item(row, 0).text().strip(),
+            'name': '',
+            'quantity': 1,
+            'owner': '',
+            'description': '',
+            'location': '',
+            'containers': {}
+        }
+        self.current_inventory_data.append(new_item)
+        
+        self._save_current_inventory()
+        main_ui = self._get_main_ui()
+        if main_ui and hasattr(main_ui, 'add_rule_sound') and main_ui.add_rule_sound:
+            try:
+                main_ui.add_rule_sound.play()
+            except Exception:
+                main_ui.add_rule_sound = None
+
+    def _remove_instance_row(self):
+        current_row = self.instances_table.currentRow()
+        if current_row >= 0:
+            if hasattr(self, 'current_inventory_data') and current_row < len(self.current_inventory_data):
+                self.current_inventory_data.pop(current_row)
+            self.instances_table.removeRow(current_row)
+            self._save_current_inventory()
+            if self.instances_table.rowCount() == 1:
+                self.instances_table.setCurrentCell(0, 0)
+                self.instances_table.selectRow(0)
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(10, self._on_instances_selection_changed)
+            main_ui = self._get_main_ui()
+            if main_ui and hasattr(main_ui, 'delete_rule_sound') and main_ui.delete_rule_sound:
+                try:
+                    main_ui.delete_rule_sound.play()
+                except Exception:
+                    main_ui.delete_rule_sound = None
+
+    def _remove_item_from_container_data(self, level, parent_item_name, parent_container_name, item_id, item_name):
+        def find_container_at_level(data, current_level, target_level, target_parent_name, target_container_name):
+            if current_level == target_level:
+                for item in data:
+                    if item.get('name') == target_parent_name:
+                        containers = item.get('containers', {})
+                        if target_container_name in containers:
+                            return containers[target_container_name]
+                return None
+            else:
+                for item in data:
+                    containers = item.get('containers', {})
+                    for container_name, container_items in containers.items():
+                        result = find_container_at_level(container_items, current_level + 1, target_level, target_parent_name, target_container_name)
+                        if result is not None:
+                            return result
+                return None
+        
+        target_container = find_container_at_level(self.current_inventory_data, 1, level, parent_item_name, parent_container_name)
+        if target_container is not None:
+            for i, item in enumerate(target_container):
+                if item.get('item_id') == item_id or item.get('name') == item_name:
+                    target_container.pop(i)
+                    return True
+        return False
+
+    def _add_item_to_container_data(self, level, parent_item_name, parent_container_name, new_item):
+        def find_container_at_level(data, current_level, target_level, target_parent_name, target_container_name):
+            if current_level == target_level:
+                for item in data:
+                    if item.get('name') == target_parent_name:
+                        if 'containers' not in item:
+                            item['containers'] = {}
+                        if target_container_name not in item['containers']:
+                            item['containers'][target_container_name] = []
+                        return item['containers'][target_container_name]
+                return None
+            else:
+                for item in data:
+                    containers = item.get('containers', {})
+                    for container_name, container_items in containers.items():
+                        result = find_container_at_level(container_items, current_level + 1, target_level, target_parent_name, target_container_name)
+                        if result is not None:
+                            return result
+                return None
+        
+        target_container = find_container_at_level(self.current_inventory_data, 1, level, parent_item_name, parent_container_name)
+        if target_container is not None:
+            target_container.append(new_item)
+            return True
+        return False
+
+    def _remove_container_widgets_deeper_than(self, level):
+        def remove_widget_recursively(widget):
+            if hasattr(widget, 'layout') and widget.layout():
+                for i in range(widget.layout().count()):
+                    child_item = widget.layout().itemAt(i)
+                    if child_item and child_item.widget():
+                        remove_widget_recursively(child_item.widget())
+            widget.deleteLater()
+        
+        def find_and_remove_widgets_recursively(parent_widget, target_level):
+            widgets_to_remove = []
+            if hasattr(parent_widget, 'layout') and parent_widget.layout():
+                for i in range(parent_widget.layout().count()):
+                    child_item = parent_widget.layout().itemAt(i)
+                    if child_item and child_item.widget():
+                        child_widget = child_item.widget()
+                        if hasattr(child_widget, 'level') and child_widget.level > target_level:
+                            widgets_to_remove.append((i, child_widget))
+                        else:
+                            widgets_to_remove.extend(find_and_remove_widgets_recursively(child_widget, target_level))
+            return widgets_to_remove
+        widgets_to_remove = []
+        
+        for i in range(self.containers_layout.count()):
+            item = self.containers_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                found_widgets = find_and_remove_widgets_recursively(widget, level)
+                for layout_index, found_widget in found_widgets:
+                    widgets_to_remove.append((i, layout_index, found_widget))
+        for row_index, layout_index, widget in sorted(widgets_to_remove, key=lambda x: (x[0], x[1]), reverse=True):
+            row_widget = self.containers_layout.itemAt(row_index).widget()
+            if row_widget and hasattr(row_widget, 'layout') and row_widget.layout():
+                row_widget.layout().takeAt(layout_index)
+                remove_widget_recursively(widget)
+                if row_widget.layout().count() == 0:
+                    self.containers_layout.takeAt(row_index)
+                    row_widget.deleteLater()
