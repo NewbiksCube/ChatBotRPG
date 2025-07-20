@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QSplitter, QPushButton, QHBoxLayout, QStackedWidget, QScrollArea, QFrame, QGridLayout
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 import json
 import os
@@ -838,36 +838,22 @@ class RightSplitterWidget(QWidget):
     def _update_game_time(self):
         if not hasattr(self, 'game_time_label') or not self.workflow_data_dir:
             return
-        
         try:
             variables_file = os.path.join(self.workflow_data_dir, 'game', 'variables.json')
-            print(f"[GAME TIME] Checking variables file: {variables_file}")
-            
             if os.path.exists(variables_file):
                 with open(variables_file, 'r', encoding='utf-8') as f:
                     content = f.read().strip()
                     if content:
                         variables = json.loads(content)
-                        print(f"[GAME TIME] Variables keys: {list(variables.keys())}")
                         game_time_str = variables.get('datetime') or variables.get('game_datetime')
-                        print(f"[GAME TIME] Found time string: {game_time_str}")
-                        
                         if game_time_str:
                             try:
                                 game_time = datetime.fromisoformat(game_time_str)
-                                time_str = game_time.strftime("%Y-%m-%d %H:%M:%S")
+                                time_str = game_time.strftime("%Y-%m-%d %H:%M")
                                 self.game_time_label.setText(f"Game Time: {time_str}")
-                                print(f"[GAME TIME] Updated to: {time_str}")
                                 return
                             except ValueError as e:
-                                print(f"[GAME TIME] Error parsing time: {e}")
                                 pass
-                    else:
-                        print(f"[GAME TIME] Variables file is empty")
-            else:
-                print(f"[GAME TIME] Variables file not found")
-            
             self.game_time_label.setText("Game Time: --")
         except Exception as e:
-            print(f"[GAME TIME] Error updating game time: {e}")
             self.game_time_label.setText("Game Time: --")
