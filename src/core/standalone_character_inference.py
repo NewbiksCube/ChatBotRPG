@@ -434,6 +434,11 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
             full_history_context.append(save_message_obj)
             current_tab_index = self.tab_widget.currentIndex()
             self._save_context_for_tab(current_tab_index)
+            
+            right_splitter = tab_data.get('right_splitter') if tab_data else None
+            if right_splitter and hasattr(right_splitter, 'update_game_time'):
+                right_splitter.update_game_time()
+            
             if hasattr(self, '_re_enable_input_after_pipeline'):
                 self._re_enable_input_after_pipeline()
             return result_text
