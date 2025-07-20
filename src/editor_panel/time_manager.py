@@ -1,12 +1,10 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, QFrame, QSizePolicy, QRadioButton, QButtonGroup, QLineEdit, QGridLayout, QListWidget, QComboBox, QSpinBox, QDateTimeEdit, QDoubleSpinBox, QScrollArea
-from PyQt5.QtCore import Qt, QDateTime
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, QFrame, QSizePolicy, QRadioButton, QButtonGroup, QLineEdit, QGridLayout, QListWidget, QComboBox, QSpinBox, QScrollArea
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 import json
 import os
 from datetime import datetime
 import re
-
-
 
 class TimeManager(QWidget):
     def __init__(self, theme_colors, parent=None, workflow_data_dir=None, main_ui=None, tab_data=None):
@@ -519,8 +517,6 @@ class TimeManager(QWidget):
         index = self.from_month_combo.findText(current_from_month)
         if index >= 0:
             self.from_month_combo.setCurrentIndex(index)
-        
-        # Update To combo boxes
         current_to_day = self.to_day_combo.currentText()
         self.to_day_combo.clear()
         self.to_day_combo.addItem("Any Day")
