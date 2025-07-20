@@ -619,6 +619,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
             location_mode = action_obj.get('location_mode', 'Setting')
             target_setting = action_obj.get('target_setting', '')
             advance_time = action_obj.get('advance_time', True)
+            speed_multiplier = action_obj.get('speed_multiplier', 1.0)
             if actor_name_str:
                 character_context = character_name_override if character_name_override else actor_for_substitution
                 actor_name_str = self._substitute_placeholders_in_condition_value(actor_name_str, tab_data, character_context)
@@ -636,7 +637,8 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                                            location_mode,
                                            target_setting,
                                            rule_trigger_context_for_move,
-                                           advance_time
+                                           advance_time,
+                                           speed_multiplier
                                           )
             if not move_success:
                 break
@@ -1168,7 +1170,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
         return npc_text_tag_for_character_rule
     return None
 
-def _perform_change_actor_location(self, tab_data, actor_string, mode, target_setting_name, rule_trigger_context=None, advance_time=True):
+def _perform_change_actor_location(self, tab_data, actor_string, mode, target_setting_name, rule_trigger_context=None, advance_time=True, speed_multiplier=1.0):
     if not tab_data:
         return False
     if '_BLOCK_ALL_NPC_INFERENCE_AFTER_FORCED_NARRATOR_LAST' in tab_data:
@@ -1204,7 +1206,8 @@ def _perform_change_actor_location(self, tab_data, actor_string, mode, target_se
             target_setting_name=target_setting_name,
             player_name=player_name,
             tab_data=tab_data,
-            advance_time=advance_time
+            advance_time=advance_time,
+            speed_multiplier=speed_multiplier
         )
         if result.get('success'):
             if result.get('tab_data_updates'):
@@ -1239,7 +1242,8 @@ def _perform_change_actor_location(self, tab_data, actor_string, mode, target_se
             mode='Adjacent',
             context_for_move=rule_trigger_context,
             tab_data=tab_data,
-            advance_time=advance_time
+            advance_time=advance_time,
+            speed_multiplier=speed_multiplier
         )
         if result.get('success'):
             if result.get('tab_data_updates'):
