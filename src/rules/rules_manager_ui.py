@@ -1109,8 +1109,33 @@ def create_pair_widget(tab_data):
         advance_time_checkbox.setChecked(True)
         advance_time_checkbox.setToolTip("When enabled, game time will advance based on the path length and map scale settings")
         time_advancement_layout.addWidget(advance_time_checkbox)
+        
+        speed_multiplier_label = QLabel("Speed Multiplier:")
+        speed_multiplier_label.setFont(QFont('Consolas', 9))
+        speed_multiplier_label.setObjectName("ChangeLocationSpeedMultiplierLabel")
+        speed_multiplier_spinner = QDoubleSpinBox()
+        speed_multiplier_spinner.setObjectName("ChangeLocationSpeedMultiplierSpinner")
+        speed_multiplier_spinner.setFont(QFont('Consolas', 9))
+        speed_multiplier_spinner.setMinimum(0.01)
+        speed_multiplier_spinner.setMaximum(100.0)
+        speed_multiplier_spinner.setValue(1.0)
+        speed_multiplier_spinner.setSingleStep(0.1)
+        speed_multiplier_spinner.setDecimals(2)
+        speed_multiplier_spinner.setToolTip("Multiplier for travel speed (1.0 = normal speed, 2.0 = twice as fast, 0.5 = half speed)")
+        speed_multiplier_spinner.setMaximumWidth(80)
+        
+        time_advancement_layout.addWidget(speed_multiplier_label)
+        time_advancement_layout.addWidget(speed_multiplier_spinner)
         time_advancement_layout.addStretch()
         change_location_layout.addLayout(time_advancement_layout)
+        
+        def update_speed_multiplier_visibility():
+            is_checked = advance_time_checkbox.isChecked()
+            speed_multiplier_label.setVisible(is_checked)
+            speed_multiplier_spinner.setVisible(is_checked)
+        
+        advance_time_checkbox.toggled.connect(update_speed_multiplier_visibility)
+        update_speed_multiplier_visibility()
         
         change_location_widget.setVisible(False)
         top_h_layout.addWidget(change_location_widget)
@@ -2027,6 +2052,7 @@ def create_pair_widget(tab_data):
             'mode_setting_radio': mode_setting_radio,
             'target_setting_input': target_setting_input,
             'advance_time_checkbox': advance_time_checkbox,
+            'speed_multiplier_spinner': speed_multiplier_spinner,
             'add_btn': add_btn,
             'remove_btn': remove_btn,
             'move_up_btn': move_up_btn,
@@ -2401,6 +2427,7 @@ def create_pair_widget(tab_data):
         mode = data.get('location_mode', 'Setting')
         target_setting = data.get('target_setting', '')
         advance_time = data.get('advance_time', True)
+        speed_multiplier = data.get('speed_multiplier', 1.0)
         actor_input = row.get('actor_input')
         if actor_input and is_valid_widget(actor_input):
             actor_input.setText(actor_name)
@@ -2418,6 +2445,9 @@ def create_pair_widget(tab_data):
         advance_time_checkbox = row.get('advance_time_checkbox')
         if advance_time_checkbox and is_valid_widget(advance_time_checkbox):
             advance_time_checkbox.setChecked(advance_time)
+        speed_multiplier_spinner = row.get('speed_multiplier_spinner')
+        if speed_multiplier_spinner and is_valid_widget(speed_multiplier_spinner):
+            speed_multiplier_spinner.setValue(speed_multiplier)
 
     def populate_generate_character(data, row, row_widget):
         generate_character_widget = row.get('generate_character_widget')
