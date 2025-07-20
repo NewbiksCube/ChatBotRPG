@@ -916,12 +916,10 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
         target_type = obj.get('target_type', 'Setting')
         target_name = obj.get('target_name', '')
         generate = obj.get('generate', False)
-        
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if not workflow_data_dir:
             print(f"ERROR: Cannot process Add Item - workflow_data_dir not found")
             return
-        
         target_file_path = None
         if target_type == 'Setting':
             target_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, target_name)
@@ -932,7 +930,6 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 pass
             dummy_self = DummySelf()
             target_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, target_name)
-        
         rule_id = rule.get('id', 'Unknown') if rule else 'Unknown'
         print(f"  >> Rule '{rule_id}' Action: Add Item called - Item: '{item_name}', Quantity: {quantity}, Target Type: {target_type}, Target Name: '{target_name}' ({target_file_path}), Generate: {generate}")
     
@@ -941,12 +938,10 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
         quantity = obj.get('quantity', '1')
         target_type = obj.get('target_type', 'Setting')
         target_name = obj.get('target_name', '')
-        
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if not workflow_data_dir:
             print(f"ERROR: Cannot process Remove Item - workflow_data_dir not found")
             return
-        
         target_file_path = None
         if target_type == 'Setting':
             target_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, target_name)
@@ -957,7 +952,6 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 pass
             dummy_self = DummySelf()
             target_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, target_name)
-        
         rule_id = rule.get('id', 'Unknown') if rule else 'Unknown'
         print(f"  >> Rule '{rule_id}' Action: Remove Item called - Item: '{item_name}', Quantity: {quantity}, Target Type: {target_type}, Target Name: '{target_name}' ({target_file_path})")
     
@@ -968,12 +962,10 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
         from_name = obj.get('from_name', '')
         to_type = obj.get('to_type', '')
         to_name = obj.get('to_name', '')
-        
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if not workflow_data_dir:
             print(f"ERROR: Cannot process Move Item - workflow_data_dir not found")
             return
-        
         player_name = _get_player_character_name(workflow_data_dir)
         current_setting_name = _get_player_current_setting_name(workflow_data_dir)
         if from_name == "(Player)" and player_name:
@@ -984,10 +976,8 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
             to_name = player_name
         elif not to_name and current_setting_name:
             to_name = current_setting_name
-        
         from_file_path = None
         to_file_path = None
-        
         if from_type == 'Setting':
             from_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, from_name)
             if isinstance(from_file_path, tuple):
@@ -997,7 +987,6 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 pass
             dummy_self = DummySelf()
             from_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, from_name)
-        
         if to_type == 'Setting':
             to_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, to_name)
             if isinstance(to_file_path, tuple):
@@ -1007,7 +996,6 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 pass
             dummy_self = DummySelf()
             to_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, to_name)
-        
         rule_id = rule.get('id', 'Unknown') if rule else 'Unknown'
         print(f"  >> Rule '{rule_id}' Action: Move Item called - Item: '{item_name}', Quantity: {quantity}, From: {from_type} '{from_name}' ({from_file_path}), To: {to_type} '{to_name}' ({to_file_path})")
     
@@ -1026,7 +1014,136 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
             print(f"  >> Rule '{rule_id}' Action: Error triggering Game Over: {e}")
             import traceback
             traceback.print_exc()
+
+    elif obj_type == 'Advance Time':
+        advance_amount = obj.get('advance_amount', '')
+        if not advance_amount:
+            print(f"ERROR: Cannot advance time - advance_amount is empty")
+            return
+        workflow_data_dir = tab_data.get('workflow_data_dir')
+        if not workflow_data_dir:
+            print(f"ERROR: Cannot advance time - workflow_data_dir not found")
+            return
+        try:
+            from datetime import datetime, timedelta
+            import re
+            current_time_str = None
+            variables_file = tab_data.get('variables_file')
+            if variables_file and os.path.exists(variables_file):
+                try:
+                    with open(variables_file, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        if content:
+                            variables = json.loads(content)
+                            current_time_str = variables.get('datetime')
+                except Exception as e:
+                    print(f"Error loading variables for time advancement: {e}")
+            if not current_time_str:
+                print(f"ERROR: Cannot advance time - no current datetime found in variables")
+                return
+            current_time = datetime.fromisoformat(current_time_str)
+            print(f"[ADVANCE TIME] Current time: {current_time.isoformat()}")
+            total_seconds = 0
+            advance_amount_lower = advance_amount.lower().replace(' ', '')
+            time_patterns = [
+                (r'(\d+)d', lambda m: int(m.group(1)) * 24 * 3600),
+                (r'(\d+)h', lambda m: int(m.group(1)) * 3600),
+                (r'(\d+)m', lambda m: int(m.group(1)) * 60),
+                (r'(\d+)s', lambda m: int(m.group(1)))
+            ]
+            for pattern, converter in time_patterns:
+                matches = re.finditer(pattern, advance_amount_lower)
+                for match in matches:
+                    total_seconds += converter(match)
+            if total_seconds == 0:
+                print(f"ERROR: Could not parse time advancement amount: {advance_amount}")
+                return
+            advancement_mode = 'static'
+            time_passage_file = os.path.join(workflow_data_dir, "resources", "data files", "settings", "time_passage.json")
+            if os.path.exists(time_passage_file):
+                try:
+                    with open(time_passage_file, 'r', encoding='utf-8') as f:
+                        time_passage_data = json.load(f)
+                        advancement_mode = time_passage_data.get('advancement_mode', 'static')
+                except Exception as e:
+                    print(f"Error loading time passage data: {e}")
+            automatic_advancement = timedelta(0)
+            last_real_time = variables.get('_last_real_time_update')
+            if last_real_time and advancement_mode == 'realtime':
+                try:
+                    from datetime import datetime
+                    now = datetime.now()
+                    last_update_dt = datetime.fromisoformat(last_real_time)
+                    real_time_delta = now - last_update_dt
+                    time_multiplier = time_passage_data.get('time_multiplier', 1.0)
+                    if time_multiplier > 0.0:
+                        automatic_advancement = real_time_delta * time_multiplier
+                        print(f"[ADVANCE TIME] Automatic advancement would be: {automatic_advancement}")
+                except Exception as e:
+                    print(f"Error calculating automatic advancement: {e}")
+            total_advancement = automatic_advancement + timedelta(seconds=total_seconds)
+            new_time = current_time + total_advancement
+            print(f"[ADVANCE TIME] Total advancement: {automatic_advancement} + {timedelta(seconds=total_seconds)} = {total_advancement}")
+            print(f"[ADVANCE TIME] Advancing to: {new_time.isoformat()}")
+            if variables_file:
+                try:
+                    with open(variables_file, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        if content:
+                            variables = json.loads(content)
+                        else:
+                            variables = {}
+                except Exception as e:
+                    print(f"Error loading variables file: {e}")
+                    variables = {}
+                variables['datetime'] = new_time.isoformat()
+                variables['game_datetime'] = new_time.isoformat()
+                variables['_last_real_time_update'] = datetime.now().isoformat()
+                variables['_manual_time_advancement'] = True
+                try:
+                    with open(variables_file, 'w', encoding='utf-8') as f:
+                        json.dump(variables, f, indent=2, ensure_ascii=False)
+                    if tab_data:
+                        tab_data['variables'] = variables.copy()
+                    print(f"✓ Successfully advanced time by {advance_amount} to {new_time.isoformat()}")
+                except Exception as e:
+                    print(f"✗ FAILED to save advanced time: {e}")
+        except Exception as e:
+            print(f"ERROR: Failed to advance time: {e}")
+            import traceback
+            traceback.print_exc()
     
+    elif obj_type == 'Change Time Passage':
+        passage_mode = obj.get('passage_mode', 'static')
+        time_multiplier = obj.get('time_multiplier', 1.0)
+        workflow_data_dir = tab_data.get('workflow_data_dir')
+        if not workflow_data_dir:
+            print(f"ERROR: Cannot change time passage - workflow_data_dir not found")
+            return
+        try:
+            settings_dir = os.path.join(workflow_data_dir, "resources", "data files", "settings")
+            os.makedirs(settings_dir, exist_ok=True)
+            time_passage_file = os.path.join(settings_dir, "time_passage.json")
+            time_passage_data = {}
+            if os.path.exists(time_passage_file):
+                try:
+                    with open(time_passage_file, 'r', encoding='utf-8') as f:
+                        time_passage_data = json.load(f)
+                except Exception as e:
+                    print(f"Error loading time passage data: {e}")
+                    time_passage_data = {}
+            time_passage_data['advancement_mode'] = passage_mode
+            time_passage_data['time_multiplier'] = time_multiplier
+            try:
+                with open(time_passage_file, 'w', encoding='utf-8') as f:
+                    json.dump(time_passage_data, f, indent=2, ensure_ascii=False)
+                print(f"✓ Successfully changed time passage mode to {passage_mode} with multiplier {time_multiplier}x")
+            except Exception as e:
+                print(f"✗ FAILED to save time passage settings: {e}")
+        except Exception as e:
+            print(f"ERROR: Failed to change time passage: {e}")
+            import traceback
+            traceback.print_exc()
     else:
         print(f"Warning: Unknown rule side effect type: {obj_type}")
         return
