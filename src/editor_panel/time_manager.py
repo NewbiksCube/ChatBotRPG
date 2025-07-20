@@ -6,78 +6,7 @@ import os
 from datetime import datetime
 import re
 
-def update_time(main_ui, tab_data):
-    if not main_ui or not tab_data:
-        return
-    
-    workflow_data_dir = tab_data.get('workflow_data_dir')
-    if not workflow_data_dir:
-        return
-    
-    time_passage_file = os.path.join(workflow_data_dir, 'resources', 'data files', 'settings', 'time_passage.json')
 
-    if not os.path.exists(time_passage_file):
-        return
-    try:
-        with open(time_passage_file, 'r', encoding='utf-8') as f:
-            time_settings = json.load(f)
-    except Exception:
-        return
-    mode = time_settings.get('mode', 'Game World')
-    
-    if mode == 'Real World (Sync to Clock)':
-        import datetime
-        now = datetime.datetime.now()
-        datetime_str = now.strftime("%Y-%m-%d %H:%M:%S")
-        timemode = "Real World"
-    else:
-        advancement_mode = time_settings.get('advancement_mode', 'Static')
-        if advancement_mode == 'Static':
-            starting_datetime = time_settings.get('starting_datetime', '2024-01-01 12:00:00')
-            datetime_str = starting_datetime
-            timemode = "Static"
-        else:
-            starting_datetime = time_settings.get('starting_datetime', '2024-01-01 12:00:00')
-            last_real_time = time_settings.get('last_real_time')
-            
-            if last_real_time:
-                import datetime
-                try:
-                    last_real = datetime.datetime.fromisoformat(last_real_time)
-                    current_real = datetime.datetime.now()
-                    time_diff = current_real - last_real
-                    game_time = datetime.datetime.strptime(starting_datetime, "%Y-%m-%d %H:%M:%S")
-                    new_game_time = game_time + time_diff
-                    datetime_str = new_game_time.strftime("%Y-%m-%d %H:%M:%S")
-                    time_settings['starting_datetime'] = datetime_str
-                    time_settings['last_real_time'] = current_real.isoformat()
-                    with open(time_passage_file, 'w', encoding='utf-8') as f:
-                        json.dump(time_settings, f, indent=2)
-                except Exception:
-                    datetime_str = starting_datetime
-            else:
-                import datetime
-                current_real = datetime.datetime.now()
-                time_settings['last_real_time'] = current_real.isoformat()
-                with open(time_passage_file, 'w', encoding='utf-8') as f:
-                    json.dump(time_settings, f, indent=2)
-                datetime_str = starting_datetime
-            timemode = "Realtime"
-    
-    try:
-        tab_index = main_ui.tabs_data.index(tab_data) if tab_data in main_ui.tabs_data else -1
-        if tab_index >= 0:
-            variables = main_ui._load_variables(tab_index)
-            variables['datetime'] = datetime_str
-            variables['timemode'] = timemode
-            main_ui._save_variables(tab_index, variables)
-            
-            # Check time-based triggers after updating time
-            time_manager_widget = tab_data.get('time_manager_widget')
-            if time_manager_widget and hasattr(time_manager_widget, '_check_time_triggers'):
-                time_manager_widget._check_time_triggers()
-    except Exception:
-        pass
 
 class TimeManager(QWidget):
     def __init__(self, theme_colors, parent=None, workflow_data_dir=None, main_ui=None, tab_data=None):
@@ -92,6 +21,9 @@ class TimeManager(QWidget):
         self._init_ui()
         self._apply_loaded_settings()
         self._connect_signals()
+    
+    def set_tab_data(self, tab_data):
+        self.tab_data = tab_data
 
     def save_state_on_shutdown(self):
         """Save the current time state when the application is shutting down to prevent data loss."""
@@ -255,6 +187,78 @@ class TimeManager(QWidget):
 
     def _create_datetime_config(self):
         widget = QWidget()
+        widget.setObjectName("DateTimeConfigWidget")
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        
+        title_label = QLabel("Game Time Configuration")
+        title_label.setObjectName("TimeManagerSectionTitle")
+        title_label.setFont(QFont('Consolas', 9, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        datetime_frame = QFrame()
+        datetime_frame.setObjectName("TimeManagerGroup")
+        datetime_layout = QVBoxLayout(datetime_frame)
+        datetime_layout.setContentsMargins(8, 6, 8, 6)
+        
+        starting_datetime_layout = QHBoxLayout()
+        starting_datetime_label = QLabel("Starting DateTime:")
+        starting_datetime_label.setObjectName("TimeManagerFieldLabel")
+        starting_datetime_label.setFont(QFont('Consolas', 8))
+        starting_datetime_layout.addWidget(starting_datetime_label)
+        
+        self.datetime_edit = QDateTimeEdit()
+        self.datetime_edit.setObjectName("TimeManagerDateTimeEdit")
+        self.datetime_edit.setFont(QFont('Consolas', 8))
+        self.datetime_edit.setDisplayFormat("yyyy-MM-dd hh:mm")
+        self.datetime_edit.setDateTime(QDateTime.currentDateTime())
+        starting_datetime_layout.addWidget(self.datetime_edit)
+        starting_datetime_layout.addStretch()
+        datetime_layout.addLayout(starting_datetime_layout)
+        
+        advancement_layout = QHBoxLayout()
+        advancement_label = QLabel("Advancement Mode:")
+        advancement_label.setObjectName("TimeManagerFieldLabel")
+        advancement_label.setFont(QFont('Consolas', 8))
+        advancement_layout.addWidget(advancement_label)
+        
+        self.advancement_group = QButtonGroup(self)
+        self.static_radio = QRadioButton("Static")
+        self.static_radio.setObjectName("TimeManagerAdvancementRadio")
+        self.static_radio.setFont(QFont('Consolas', 8))
+        self.static_radio.setChecked(True)
+        self.advancement_group.addButton(self.static_radio, 0)
+        advancement_layout.addWidget(self.static_radio)
+        
+        self.realtime_radio = QRadioButton("Realtime")
+        self.realtime_radio.setObjectName("TimeManagerAdvancementRadio")
+        self.realtime_radio.setFont(QFont('Consolas', 8))
+        self.advancement_group.addButton(self.realtime_radio, 1)
+        advancement_layout.addWidget(self.realtime_radio)
+        
+        advancement_layout.addSpacing(20)
+        multiplier_label = QLabel("Multiplier:")
+        multiplier_label.setObjectName("TimeManagerFieldLabel")
+        multiplier_label.setFont(QFont('Consolas', 8))
+        advancement_layout.addWidget(multiplier_label)
+        
+        self.time_multiplier_spin = QDoubleSpinBox()
+        self.time_multiplier_spin.setObjectName("TimeManagerDoubleSpinBox")
+        self.time_multiplier_spin.setRange(0.0, 100.0)
+        self.time_multiplier_spin.setSingleStep(0.1)
+        self.time_multiplier_spin.setDecimals(1)
+        self.time_multiplier_spin.setValue(1.0)
+        self.time_multiplier_spin.setSuffix("x")
+        self.time_multiplier_spin.setFont(QFont('Consolas', 8))
+        self.time_multiplier_spin.setSpecialValueText("Static (0.0x)")
+        self.time_multiplier_spin.setToolTip("Game time speed relative to real time\n\n0.0x = Static (no time advancement)\n0.5x = Half speed (1 real hour = 30 game minutes)\n1.0x = Normal speed (1 real hour = 1 game hour)\n2.0x = Double speed (1 real hour = 2 game hours)")
+        advancement_layout.addWidget(self.time_multiplier_spin)
+        advancement_layout.addStretch()
+        datetime_layout.addLayout(advancement_layout)
+        
+        layout.addWidget(datetime_frame)
         return widget
 
     def _create_time_triggers_section(self):
@@ -595,6 +599,10 @@ class TimeManager(QWidget):
             month_input.textChanged.connect(self._save_calendar_data)
         for day_input in self.day_inputs:
             day_input.textChanged.connect(self._save_calendar_data)
+        
+        self.datetime_edit.dateTimeChanged.connect(self._save_starting_datetime)
+        self.advancement_group.buttonClicked.connect(self._save_advancement_mode)
+        self.time_multiplier_spin.valueChanged.connect(self._save_time_multiplier)
 
     def _on_time_mode_changed(self):
         self._update_section_visibility()
@@ -800,69 +808,93 @@ class TimeManager(QWidget):
             except Exception:
                 return {}
         return {}
+    
+    def _load_time_passage_data(self):
+        if not self.workflow_data_dir:
+            return {}
+        file_path = os.path.join(self.workflow_data_dir, "resources", "data files", "settings", "time_passage.json")
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                return data
+            except Exception:
+                return {}
+        return {}
     def _apply_loaded_settings(self):
-        if not self.time_passage_data:
+        if not self.workflow_data_dir or not self.time_passage_data:
             return
-        if 'time_mode' in self.time_passage_data:
-            if self.time_passage_data['time_mode'] == 'real_world':
-                self.sync_computer_radio.setChecked(True)
-            else:
-                self.game_world_radio.setChecked(True)
+        
         datetime_to_use = None
+        
         if 'starting_datetime' in self.time_passage_data:
             try:
-                datetime_to_use = datetime.fromisoformat(self.time_passage_data['starting_datetime'])
+                datetime_str = self.time_passage_data['starting_datetime']
+                datetime_to_use = datetime.fromisoformat(datetime_str)
             except (ValueError, TypeError):
-                pass
-        if datetime_to_use is None:
-            try:
-                variables_file = os.path.join(self.workflow_data_dir, 'game', 'variables.json')
-                if os.path.exists(variables_file):
-                    with open(variables_file, 'r', encoding='utf-8') as f:
-                        variables = json.load(f)
-                    if 'datetime' in variables:
-                        datetime_to_use = datetime.fromisoformat(variables['datetime'])
-            except (ValueError, TypeError, json.JSONDecodeError, IOError):
-                pass
+                datetime_to_use = datetime.now()
+        else:
+            datetime_to_use = datetime.now()
+        
         if datetime_to_use:
             try:
-                # Convert to QDateTime safely
                 timestamp = int(datetime_to_use.timestamp())
                 qdatetime = QDateTime.fromSecsSinceEpoch(timestamp)
                 if qdatetime.isValid():
-                    # self.datetime_edit.setDateTime(qdatetime) # This line is removed
+                    self.datetime_edit.setDateTime(qdatetime)
                     if 'starting_datetime' not in self.time_passage_data:
                         self.time_passage_data['starting_datetime'] = datetime_to_use.isoformat()
                         self._save_time_passage_data()
                 else:
-                    # Fallback to current datetime if invalid
                     print(f"Warning: Invalid datetime {datetime_to_use}, using current datetime")
-                    # self.datetime_edit.setDateTime(QDateTime.currentDateTime()) # This line is removed
+                    self.datetime_edit.setDateTime(QDateTime.currentDateTime())
             except (ValueError, OSError) as e:
                 print(f"Error setting datetime: {e}, using current datetime")
-                # self.datetime_edit.setDateTime(QDateTime.currentDateTime()) # This line is removed
+                self.datetime_edit.setDateTime(QDateTime.currentDateTime())
+        
+        advancement_mode = self.time_passage_data.get('advancement_mode', 'static')
+        if advancement_mode == 'realtime':
+            self.realtime_radio.setChecked(True)
+        else:
+            self.static_radio.setChecked(True)
+        
+        time_multiplier = self.time_passage_data.get('time_multiplier', 1.0)
+        self.time_multiplier_spin.setValue(time_multiplier)
     def _save_time_passage_data(self):
         if not self.workflow_data_dir:
+            print(f"[DEBUG] _save_time_passage_data - no workflow_data_dir")
             return
         settings_dir = os.path.join(self.workflow_data_dir, "resources", "data files", "settings")
         os.makedirs(settings_dir, exist_ok=True)
         file_path = os.path.join(settings_dir, "time_passage.json")
+        print(f"[DEBUG] _save_time_passage_data - saving to: {file_path}")
+        print(f"[DEBUG] _save_time_passage_data - data: {self.time_passage_data}")
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.time_passage_data, f, indent=2, ensure_ascii=False)
+            print(f"[DEBUG] _save_time_passage_data - saved successfully")
         except IOError as e:
-            pass
+            print(f"[DEBUG] _save_time_passage_data - IOError: {e}")
+        except Exception as e:
+            print(f"[DEBUG] _save_time_passage_data - Exception: {e}")
     def _save_time_mode(self):
-        self.time_passage_data['time_mode'] = 'game_world' if self.game_world_radio.isChecked() else 'real_world'
+        time_mode = 'game_world' if self.game_world_radio.isChecked() else 'real_world'
+        print(f"[DEBUG] _save_time_mode called - setting time_mode to: {time_mode}")
+        self.time_passage_data['time_mode'] = time_mode
         self._save_time_passage_data()
     def _save_advancement_mode(self):
-        # This method is no longer relevant as advancement mode is removed.
-        # Keeping it for now to avoid breaking other parts of the code.
-        pass
+        advancement_mode = 'realtime' if self.realtime_radio.isChecked() else 'static'
+        print(f"[DEBUG] _save_advancement_mode called - setting advancement_mode to: {advancement_mode}")
+        self.time_passage_data['advancement_mode'] = advancement_mode
+        self._save_time_passage_data()
+    
     def _save_starting_datetime(self):
-        # This method is no longer relevant as starting datetime is removed.
-        # Keeping it for now to avoid breaking other parts of the code.
-        pass
+        self.time_passage_data['starting_datetime'] = self.datetime_edit.dateTime().toPyDateTime().isoformat()
+        self._save_time_passage_data()
+    
+    def _save_time_multiplier(self):
+        self.time_passage_data['time_multiplier'] = self.time_multiplier_spin.value()
+        self._save_time_passage_data()
     def _save_calendar_data(self):
         months = {}
         for i, month_input in enumerate(self.month_inputs):
@@ -1111,83 +1143,104 @@ class TimeManager(QWidget):
             if child.frameShape() == QFrame.HLine:
                 child.setStyleSheet(f"background-color: {self.theme_colors.get('base_color', '#00E5E5')}; height: 1px; border: none; margin: 5px 0;")
     def update_time(self, main_ui, tab_data):
+        print(f"[DEBUG] TimeManager.update_time called - tab_data: {tab_data is not None}, workflow_data_dir: {self.workflow_data_dir}")
         if not tab_data or not self.workflow_data_dir:
+            print(f"[DEBUG] TimeManager.update_time - missing tab_data or workflow_data_dir")
             return
         self.time_passage_data = self._load_time_passage_data()
         time_mode = self.time_passage_data.get('time_mode', 'game_world')
-        tab_index = main_ui.tabs_data.index(tab_data) if tab_data in main_ui.tabs_data else -1
-        if tab_index < 0:
+        try:
+            tab_index = main_ui.tabs_data.index(tab_data) if tab_data in main_ui.tabs_data else -1
+            if tab_index < 0:
+                return
+        except (ValueError, AttributeError):
             return
         variables = main_ui._load_variables(tab_index)
+        print(f"[DEBUG] Time mode: {time_mode}, advancement_mode: {self.time_passage_data.get('advancement_mode', 'static')}")
         if time_mode == 'real_world':
             current_datetime = datetime.now()
             variables['datetime'] = current_datetime.isoformat()
             variables['timemode'] = 'real_world'
+            print(f"[DEBUG] Real world mode - set datetime to: {variables['datetime']}")
         else:
-            # advancement_mode = self.time_passage_data.get('advancement_mode', 'static') # This line is removed
+            advancement_mode = self.time_passage_data.get('advancement_mode', 'static')
             variables['timemode'] = 'game_world'
-            # if 'datetime' not in variables: # This line is removed
-            #     starting_dt_str = self.time_passage_data.get('starting_datetime') # This line is removed
-            #     if starting_dt_str: # This line is removed
-            #         try: # This line is removed
-            #             starting_dt = datetime.fromisoformat(starting_dt_str) # This line is removed
-            #         except (ValueError, TypeError): # This line is removed
-            #             starting_dt = self.datetime_edit.dateTime().toPyDateTime() # This line is removed
-            #     else: # This line is removed
-            #         starting_dt = self.datetime_edit.dateTime().toPyDateTime() # This line is removed
-            #         self.time_passage_data['starting_datetime'] = starting_dt.isoformat() # This line is removed
-            #         self._save_time_passage_data() # This line is removed
-            #     variables['datetime'] = starting_dt.isoformat() # This line is removed
-            #     variables['_last_real_time_update'] = datetime.now().isoformat() # This line is removed
-            #     # Save immediately to persist timer state # This line is removed
-            #     main_ui._save_variables(tab_index, variables) # This line is removed
-            # else: # This line is removed
-            #     if advancement_mode == 'realtime': # This line is removed
-            #         time_multiplier = self.time_passage_data.get('time_multiplier', 1.0) # This line is removed
-            #         try: # This line is removed
-            #             current_game_time = datetime.fromisoformat(variables['datetime']) # This line is removed
-            #         except (ValueError, TypeError): # This line is removed
-            #             starting_dt_str = self.time_passage_data.get('starting_datetime') # This line is removed
-            #             if starting_dt_str: # This line is removed
-            #                 try: # This line is removed
-            #                     current_game_time = datetime.fromisoformat(starting_dt_str) # This line is removed
-            #                 except (ValueError, TypeError): # This line is removed
-            #                     current_game_time = self.datetime_edit.dateTime().toPyDateTime() # This line is removed
-            #             else: # This line is removed
-            #                 current_game_time = self.datetime_edit.dateTime().toPyDateTime() # This line is removed
-            #         last_real_time = variables.get('_last_real_time_update') # This line is removed
-            #         was_shutdown_graceful = variables.get('_timer_shutdown_graceful', False) # This line is removed
-            #         now = datetime.now() # This line is removed
+            print(f"[DEBUG] Game world mode - advancement_mode: {advancement_mode}")
+            if 'datetime' not in variables:
+                starting_dt_str = self.time_passage_data.get('starting_datetime')
+                if starting_dt_str:
+                    try:
+                        starting_dt = datetime.fromisoformat(starting_dt_str)
+                    except (ValueError, TypeError):
+                        starting_dt = datetime.now()
+                else:
+                    starting_dt = datetime.now()
+                    self.time_passage_data['starting_datetime'] = starting_dt.isoformat()
+                    self._save_time_passage_data()
+                variables['datetime'] = starting_dt.isoformat()
+                variables['_last_real_time_update'] = datetime.now().isoformat()
+                main_ui._save_variables(tab_index, variables)
+            else:
+                if advancement_mode == 'realtime':
+                    time_multiplier = self.time_passage_data.get('time_multiplier', 1.0)
+                    now = datetime.now()
+                    print(f"[DEBUG] Realtime mode - multiplier: {time_multiplier}, current time: {now}")
                     
-            #         # Initialize timer tracking if it doesn't exist # This line is removed
-            #         if not last_real_time: # This line is removed
-            #             variables['_last_real_time_update'] = now.isoformat() # This line is removed
-            #             main_ui._save_variables(tab_index, variables) # This line is removed
-            #             return # This line is removed
+                    try:
+                        current_game_time = datetime.fromisoformat(variables['datetime'])
+                    except (ValueError, TypeError):
+                        starting_dt_str = self.time_passage_data.get('starting_datetime')
+                        if starting_dt_str:
+                            try:
+                                current_game_time = datetime.fromisoformat(starting_dt_str)
+                            except (ValueError, TypeError):
+                                current_game_time = datetime.now()
+                        else:
+                            current_game_time = datetime.now()
                     
-            #         if was_shutdown_graceful: # This line is removed
-            #             variables.pop('_timer_shutdown_graceful', None) # This line is removed
-            #             variables.pop('_timer_shutdown_time', None) # This line is removed
-            #             variables['_last_real_time_update'] = now.isoformat() # This line is removed
-            #             main_ui._save_variables(tab_index, variables) # This line is removed
-            #             return # This line is removed
+                    last_real_time = variables.get('_last_real_time_update')
+                    shutdown_time = variables.get('_timer_shutdown_time')
+                    was_shutdown_graceful = variables.get('_timer_shutdown_graceful', False)
                     
-            #         if time_multiplier > 0.0: # This line is removed
-            #             try: # This line is removed
-            #                 last_update_dt = datetime.fromisoformat(last_real_time) # This line is removed
-            #                 real_time_delta = now - last_update_dt # This line is removed
-            #                 game_time_delta = real_time_delta * time_multiplier # This line is removed
-            #                 new_game_time = current_game_time + game_time_delta # This line is removed
-            #                 variables['datetime'] = new_game_time.isoformat() # This line is removed
-            #             except (ValueError, TypeError): # This line is removed
-            #                 pass # This line is removed
-            #         variables['_last_real_time_update'] = now.isoformat() # This line is removed
-            #         # Save timer state every time we update # This line is removed
-            #         main_ui._save_variables(tab_index, variables) # This line is removed
-        # Save variables for all modes
+                    if not last_real_time:
+                        variables['_last_real_time_update'] = now.isoformat()
+                        main_ui._save_variables(tab_index, variables)
+                        return
+                    
+                    if was_shutdown_graceful and shutdown_time:
+                        try:
+                            shutdown_dt = datetime.fromisoformat(shutdown_time)
+                            real_time_delta = now - shutdown_dt
+                            game_time_delta = real_time_delta * time_multiplier
+                            new_game_time = current_game_time + game_time_delta
+                            variables['datetime'] = new_game_time.isoformat()
+                            variables.pop('_timer_shutdown_graceful', None)
+                            variables.pop('_timer_shutdown_time', None)
+                            print(f"[DEBUG] Shutdown recovery - delta: {real_time_delta}, new time: {new_game_time}")
+                        except (ValueError, TypeError) as e:
+                            print(f"[DEBUG] Shutdown recovery error: {e}")
+                    else:
+                        # Check if time was manually advanced by a rule action
+                        if variables.get('_manual_time_advancement', False):
+                            print(f"[DEBUG] Skipping automatic time advancement - manual advancement detected")
+                            variables.pop('_manual_time_advancement', None)
+                        elif time_multiplier > 0.0:
+                            try:
+                                last_update_dt = datetime.fromisoformat(last_real_time)
+                                real_time_delta = now - last_update_dt
+                                game_time_delta = real_time_delta * time_multiplier
+                                new_game_time = current_game_time + game_time_delta
+                                variables['datetime'] = new_game_time.isoformat()
+                                print(f"[DEBUG] Normal advancement - delta: {real_time_delta}, new time: {new_game_time}")
+                            except (ValueError, TypeError) as e:
+                                print(f"[DEBUG] Normal advancement error: {e}")
+                        else:
+                            print(f"[DEBUG] Time multiplier is 0 or negative: {time_multiplier}")
+                    
+                    variables['_last_real_time_update'] = now.isoformat()
+                    main_ui._save_variables(tab_index, variables)
         main_ui._save_variables(tab_index, variables)
         
-        # Check time-based triggers after updating time
         self._check_time_triggers()
     def _apply_styling(self):
         base_color = self.theme_colors.get('base_color', '#00FF66')
