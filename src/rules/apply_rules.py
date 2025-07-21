@@ -4,6 +4,7 @@ import os
 import random
 import time
 from core.utils import _get_player_current_setting_name, _get_or_create_actor_data, _find_player_character_file, _load_json_safely, _find_setting_file_prioritizing_game_dir, _get_player_character_name, _find_actor_file_path
+from editor_panel.inventory_manager import generate_item_id
 import re
 
 def _apply_string_operation_mode(prev_value, new_value, set_var_mode, delimiter="/"):
@@ -45,7 +46,7 @@ def _find_item_by_name_or_id(inventory, item_identifier):
     for i, item in enumerate(inventory):
         if not isinstance(item, dict):
             continue
-        if item_identifier.startswith('item_') and item.get('item_id') == item_identifier:
+        if item_identifier.lower().startswith('item_') and item.get('item_id', '').lower() == item_identifier.lower():
             return item, i
         if item.get('name') == item_identifier:
             return item, i
@@ -111,7 +112,7 @@ def _move_item_between_containers(inventory, from_item_identifier, from_containe
     if removed_count == 0:
         return 0
     new_item = {
-        'item_id': f"item_{int(time.time() * 1000)}",
+        'item_id': f"item_{generate_item_id()}",
         'name': item_name,
         'quantity': removed_count,
         'owner': '',
@@ -352,10 +353,6 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                             print(f"Successfully stored sampled result in setting variable: {var_name} for {current_setting}")
                         except Exception as e:
                             print(f"Error updating setting data: {e}")
-                    else:
-                        print(f"ERROR: Could not find setting file for {current_setting}")
-                else:
-                    print(f"ERROR: Could not determine current setting")
             
             elif var_scope == 'Scene Characters':
                 if character_name:
@@ -467,7 +464,7 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
         except Exception as e:
             print(f"Error saving gamestate.json: {e}")
     elif obj_type == 'system_message':
-        message_text = obj.get('value', '')
+        message_text = _substitute_variables_in_string(obj.get('value', ''), tab_data, character_name)
         position = obj.get('position', 'prepend')
         sysmsg_position = obj.get('system_message_position', 'first')
         self._cot_system_modifications.append({
@@ -477,7 +474,7 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
             'switch_model': None
         })
     elif obj_type == 'switch_model':
-        model_name = obj.get('value', '')
+        model_name = _substitute_variables_in_string(obj.get('value', ''), tab_data, character_name)
         self._cot_system_modifications.append({
             'action': '',
             'position': rule.get('position', 'prepend'),
@@ -1043,7 +1040,7 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
             if 'inventory' not in target_data:
                 target_data['inventory'] = []
             new_item = {
-                'item_id': f"item_{int(time.time() * 1000)}",
+                'item_id': f"item_{generate_item_id()}",
                 'name': item_name,
                 'quantity': int(quantity) if quantity.isdigit() else 1,
                 'owner': owner,
@@ -1066,13 +1063,13 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
             print(f"ERROR: Failed to add item '{item_name}' to {target_type} '{target_name}': {e}")
     
     elif obj_type == 'Remove Item':
-        item_name = obj.get('item_name', '')
-        quantity = obj.get('quantity', '1')
+        item_name = _substitute_variables_in_string(obj.get('item_name', ''), tab_data, character_name)
+        quantity = _substitute_variables_in_string(obj.get('quantity', '1'), tab_data, character_name)
         target_type = obj.get('target_type', 'Setting')
-        target_name = obj.get('target_name', '')
+        target_name = _substitute_variables_in_string(obj.get('target_name', ''), tab_data, character_name)
         target_container_enabled = obj.get('target_container_enabled', False)
-        target_item_name = obj.get('target_item_name', '')
-        target_container_name = obj.get('target_container_name', '')
+        target_item_name = _substitute_variables_in_string(obj.get('target_item_name', ''), tab_data, character_name)
+        target_container_name = _substitute_variables_in_string(obj.get('target_container_name', ''), tab_data, character_name)
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if not workflow_data_dir:
             print(f"ERROR: Cannot process Remove Item - workflow_data_dir not found")
@@ -1080,6 +1077,14 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
         if not item_name:
             print(f"ERROR: Cannot remove item - item_name is empty")
             return
+        item_identifiers = [identifier.strip() for identifier in item_name.split(',') if identifier.strip()]
+        if not item_identifiers:
+            print(f"ERROR: Cannot remove item - no valid item identifiers found in '{item_name}'")
+            return
+        player_name = _get_player_character_name(workflow_data_dir)
+        current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+        if not target_name and current_setting_name:
+            target_name = current_setting_name
         target_file_path = None
         if target_type == 'Setting':
             target_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, target_name)
@@ -1100,59 +1105,88 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
             if not inventory:
                 print(f"WARNING: No inventory found in {target_type} '{target_name}'")
                 return
-            if target_container_enabled and target_item_name and target_container_name:
-                removed_count = _remove_item_from_container(inventory, target_item_name, target_container_name, item_name, int(quantity) if quantity.isdigit() else 1)
-                if removed_count == 0:
-                    print(f"WARNING: No items '{item_name}' found in container '{target_container_name}' of item '{target_item_name}' in {target_type} '{target_name}'")
-                    return
-                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully removed {removed_count} of item '{item_name}' from container '{target_container_name}' in {target_type} '{target_name}'")
-            else:
-                items_to_remove = int(quantity) if quantity.isdigit() else 1
-                removed_count = 0
-                
-                for i in range(len(inventory) - 1, -1, -1):
-                    item = inventory[i]
-                    if item.get('name') == item_name:
-                        current_quantity = item.get('quantity', 1)
-                        if current_quantity <= items_to_remove:
-                            removed_count += current_quantity
-                            inventory.pop(i)
-                            items_to_remove -= current_quantity
+            total_removed = 0
+            items_to_remove_per_item = int(quantity) if quantity.isdigit() else 1
+            for item_identifier in item_identifiers:
+                if target_container_enabled and target_item_name and target_container_name:
+                    removed_count = _remove_item_from_container(inventory, target_item_name, target_container_name, item_identifier, items_to_remove_per_item)
+                    if removed_count > 0:
+                        print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully removed {removed_count} of item '{item_identifier}' from container '{target_container_name}' in {target_type} '{target_name}'")
+                        total_removed += removed_count
+                    else:
+                        print(f"WARNING: No items '{item_identifier}' found in container '{target_container_name}' of item '{target_item_name}' in {target_type} '{target_name}'")
+                else:
+                    removed_count = 0
+                    items_to_remove = items_to_remove_per_item
+                    print(f"[DEBUG] Remove Item: Looking for item_identifier='{item_identifier}' in {target_type} '{target_name}'")
+                    print(f"[DEBUG] Remove Item: Inventory contains {len(inventory)} items")
+                    for i, item in enumerate(inventory):
+                        print(f"[DEBUG] Remove Item: Item {i}: name='{item.get('name', 'N/A')}', item_id='{item.get('item_id', 'N/A')}'")
+                    for i in range(len(inventory) - 1, -1, -1):
+                        item = inventory[i]
+                        print(f"[DEBUG] Remove Item: Checking item {i}: name='{item.get('name', 'N/A')}', item_id='{item.get('item_id', 'N/A')}'")
+                        print(f"[DEBUG] Remove Item: Comparing '{item_identifier}' with name='{item.get('name', 'N/A')}' and item_id='{item.get('item_id', 'N/A')}'")
+                        item_id_match = item_identifier.lower().startswith('item_') and item.get('item_id', '').lower() == item_identifier.lower()
+                        name_match = item.get('name') == item_identifier
+                        print(f"[DEBUG] Remove Item: item_id_match = {item_id_match} (comparing '{item.get('item_id', '')}'.lower() == '{item_identifier}'.lower())")
+                        print(f"[DEBUG] Remove Item: name_match = {name_match}")
+                        if item_id_match or name_match:
+                            current_quantity = item.get('quantity', 1)
+                            if current_quantity <= items_to_remove:
+                                removed_count += current_quantity
+                                inventory.pop(i)
+                                items_to_remove -= current_quantity
+                            else:
+                                item['quantity'] = current_quantity - items_to_remove
+                                removed_count += items_to_remove
+                                items_to_remove = 0
+                            if items_to_remove <= 0:
+                                break
+                    if removed_count > 0:
+                        print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully removed {removed_count} of item '{item_identifier}' from {target_type} '{target_name}'")
+                        total_removed += removed_count
+                    else:
+                        print(f"WARNING: No items '{item_identifier}' found in {target_type} '{target_name}'")
+            if total_removed > 0:
+                consume = obj.get('consume', False)
+                if consume:
+                    consume_scope = obj.get('consume_scope', 'Player')
+                    for item_identifier in item_identifiers:
+                        if _is_item_consumable(item_identifier, workflow_data_dir):
+                            _apply_item_consume_effects(item_identifier, consume_scope, workflow_data_dir, tab_data, character_name)
                         else:
-                            item['quantity'] = current_quantity - items_to_remove
-                            removed_count += items_to_remove
-                            items_to_remove = 0
-                        
-                        if items_to_remove <= 0:
-                            break
-                if removed_count == 0:
-                    print(f"WARNING: No items '{item_name}' found in {target_type} '{target_name}'")
-                    return
-                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully removed {removed_count} of item '{item_name}' from {target_type} '{target_name}'")
-            with open(target_file_path, 'w', encoding='utf-8') as f:
-                json.dump(target_data, f, indent=2, ensure_ascii=False)
+                            print(f"WARNING: Cannot consume item '{item_identifier}' - item is not marked as consumable in Inventory Reference")
+                with open(target_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(target_data, f, indent=2, ensure_ascii=False)
+            else:
+                print(f"WARNING: No items were removed from {target_type} '{target_name}'")
         except Exception as e:
-            print(f"ERROR: Failed to remove item '{item_name}' from {target_type} '{target_name}': {e}")
+            print(f"ERROR: Failed to remove items from {target_type} '{target_name}': {e}")
     
     elif obj_type == 'Move Item':
-        item_name = obj.get('item_name', '')
-        quantity = obj.get('quantity', 1)
+        item_name = _substitute_variables_in_string(obj.get('item_name', ''), tab_data, character_name)
+        quantity = _substitute_variables_in_string(obj.get('quantity', 1), tab_data, character_name)
         from_type = obj.get('from_type', '')
-        from_name = obj.get('from_name', '')
+        from_name = _substitute_variables_in_string(obj.get('from_name', ''), tab_data, character_name)
         to_type = obj.get('to_type', '')
-        to_name = obj.get('to_name', '')
+        to_name = _substitute_variables_in_string(obj.get('to_name', ''), tab_data, character_name)
         from_container_enabled = obj.get('from_container_enabled', False)
-        from_item_name = obj.get('from_item_name', '')
-        from_container_name = obj.get('from_container_name', '')
+        from_item_name = _substitute_variables_in_string(obj.get('from_item_name', ''), tab_data, character_name)
+        from_container_name = _substitute_variables_in_string(obj.get('from_container_name', ''), tab_data, character_name)
         to_container_enabled = obj.get('to_container_enabled', False)
-        to_item_name = obj.get('to_item_name', '')
-        to_container_name = obj.get('to_container_name', '')
+        to_item_name = _substitute_variables_in_string(obj.get('to_item_name', ''), tab_data, character_name)
+        to_container_name = _substitute_variables_in_string(obj.get('to_container_name', ''), tab_data, character_name)
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if not workflow_data_dir:
             print(f"ERROR: Cannot process Move Item - workflow_data_dir not found")
             return
         if not item_name:
             print(f"ERROR: Cannot move item - item_name is empty")
+            return
+        
+        item_identifiers = [identifier.strip() for identifier in item_name.split(',') if identifier.strip()]
+        if not item_identifiers:
+            print(f"ERROR: Cannot move item - no valid item identifiers found in '{item_name}'")
             return
         player_name = _get_player_character_name(workflow_data_dir)
         current_setting_name = _get_player_current_setting_name(workflow_data_dir)
@@ -1193,7 +1227,6 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
         try:
             with open(from_file_path, 'r', encoding='utf-8') as f:
                 from_data = json.load(f)
-            
             with open(to_file_path, 'r', encoding='utf-8') as f:
                 to_data = json.load(f)
             from_inventory = from_data.get('inventory', [])
@@ -1201,151 +1234,248 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
             if not from_inventory:
                 print(f"WARNING: No inventory found in source {from_type} '{from_name}'")
                 return
-            if 'inventory' not in to_data:
-                to_data['inventory'] = []
-            items_to_move = int(quantity) if isinstance(quantity, str) and quantity.isdigit() else int(quantity)
-            moved_count = 0
-            if from_container_enabled and to_container_enabled and from_item_name and to_item_name and from_container_name and to_container_name:
-                if from_file_path == to_file_path:
-                    moved_count = _move_item_between_containers(from_inventory, from_item_name, from_container_name, 
-                                                              to_item_name, to_container_name, item_name, items_to_move)
+            if not to_inventory:
+                to_inventory = []
+                to_data['inventory'] = to_inventory
+            
+            total_moved = 0
+            items_to_move_per_item = int(quantity) if str(quantity).isdigit() else int(quantity)
+            
+            for item_identifier in item_identifiers:
+                if from_container_enabled and from_item_name and from_container_name and to_container_enabled and to_item_name and to_container_name:
+                    if from_file_path == to_file_path:
+                        moved_count = _move_item_between_containers(from_inventory, from_item_name, from_container_name, 
+                                                                  to_item_name, to_container_name, item_identifier, items_to_move_per_item)
+                    else:
+                        removed_count = _remove_item_from_container(from_inventory, from_item_name, from_container_name, item_identifier, items_to_move_per_item)
+                        if removed_count == 0:
+                            print(f"WARNING: No items '{item_identifier}' found in container '{from_container_name}' of item '{from_item_name}' in source {from_type} '{from_name}'")
+                            continue
+                        new_item = {
+                            'item_id': f"item_{generate_item_id()}",
+                            'name': item_identifier,
+                            'quantity': removed_count,
+                            'owner': '',
+                            'description': '',
+                            'location': '',
+                            'containers': {}
+                        }
+                        success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
+                        if not success:
+                            _add_item_to_container(from_inventory, from_item_name, from_container_name, new_item)
+                            print(f"ERROR: Cannot add item '{item_identifier}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
+                            continue
+                        moved_count = removed_count
+                    if moved_count > 0:
+                        print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_identifier}' from container '{from_container_name}' to container '{to_container_name}'")
+                        total_moved += moved_count
+                elif from_container_enabled and from_item_name and from_container_name:
+                    removed_count = _remove_item_from_container(from_inventory, from_item_name, from_container_name, item_identifier, items_to_move_per_item)
+                    if removed_count > 0:
+                        new_item = {
+                            'item_id': f"item_{generate_item_id()}",
+                            'name': item_identifier,
+                            'quantity': removed_count,
+                            'owner': '',
+                            'description': '',
+                            'location': '',
+                            'containers': {}
+                        }
+                        to_inventory.append(new_item)
+                        print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {removed_count} of item '{item_identifier}' from container '{from_container_name}' to main inventory")
+                        total_moved += removed_count
+                    else:
+                        print(f"WARNING: No items '{item_identifier}' found in container '{from_container_name}' of item '{from_item_name}' in source {from_type} '{from_name}'")
+                elif to_container_enabled and to_item_name and to_container_name:
+                    moved_count = 0
+                    items_to_move = items_to_move_per_item
+                    for i in range(len(from_inventory) - 1, -1, -1):
+                        item = from_inventory[i]
+                        if (item_identifier.lower().startswith('item_') and item.get('item_id', '').lower() == item_identifier.lower()) or \
+                           item.get('name') == item_identifier:
+                            current_quantity = item.get('quantity', 1)
+                            if current_quantity <= items_to_move:
+                                moved_count += current_quantity
+                                from_inventory.pop(i)
+                                items_to_move -= current_quantity
+                                new_item = {
+                                    'item_id': f"item_{generate_item_id()}",
+                                    'name': item_identifier,
+                                    'quantity': current_quantity,
+                                    'owner': '',
+                                    'description': '',
+                                    'location': '',
+                                    'containers': {}
+                                }
+                                success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
+                                if not success:
+                                    from_inventory.append(new_item)
+                                    print(f"ERROR: Cannot add item '{item_identifier}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
+                                    continue
+                            else:
+                                item['quantity'] = current_quantity - items_to_move
+                                moved_count += items_to_move
+                                items_to_move = 0
+                                new_item = {
+                                    'item_id': f"item_{generate_item_id()}",
+                                    'name': item_identifier,
+                                    'quantity': items_to_move,
+                                    'owner': '',
+                                    'description': '',
+                                    'location': '',
+                                    'containers': {}
+                                }
+                                success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
+                                if not success:
+                                    item['quantity'] = current_quantity
+                                    print(f"ERROR: Cannot add item '{item_identifier}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
+                                    continue
+                            if items_to_move <= 0:
+                                break
+                    if moved_count > 0:
+                        print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_identifier}' from main inventory to container '{to_container_name}'")
+                        total_moved += moved_count
+                    else:
+                        print(f"WARNING: No items '{item_identifier}' found in source {from_type} '{from_name}'")
                 else:
-                    removed_count = _remove_item_from_container(from_inventory, from_item_name, from_container_name, item_name, items_to_move)
-                    if removed_count == 0:
-                        print(f"WARNING: No items '{item_name}' found in container '{from_container_name}' of item '{from_item_name}' in source {from_type} '{from_name}'")
-                        return
-                    new_item = {
-                        'item_id': f"item_{int(time.time() * 1000)}",
-                        'name': item_name,
-                        'quantity': removed_count,
-                        'owner': '',
-                        'description': '',
-                        'location': '',
-                        'containers': {}
-                    }
-                    success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
-                    if not success:
-                        _add_item_to_container(from_inventory, from_item_name, from_container_name, new_item)
-                        print(f"ERROR: Cannot add item '{item_name}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
-                        return
-                    moved_count = removed_count
-                if moved_count > 0:
-                    print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_name}' from container '{from_container_name}' to container '{to_container_name}'")
-            elif from_container_enabled and from_item_name and from_container_name:
-                removed_count = _remove_item_from_container(from_inventory, from_item_name, from_container_name, item_name, items_to_move)
-                if removed_count == 0:
-                    print(f"WARNING: No items '{item_name}' found in container '{from_container_name}' of item '{from_item_name}' in source {from_type} '{from_name}'")
-                    return
-                new_item = {
-                    'item_id': f"item_{int(time.time() * 1000)}",
-                    'name': item_name,
-                    'quantity': removed_count,
-                    'owner': '',
-                    'description': '',
-                    'location': '',
-                    'containers': {}
-                }
-                to_inventory.append(new_item)
-                moved_count = removed_count
-                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_name}' from container '{from_container_name}' to main inventory")
-            elif to_container_enabled and to_item_name and to_container_name:
-                for i in range(len(from_inventory) - 1, -1, -1):
-                    item = from_inventory[i]
-                    if item.get('name') == item_name:
-                        current_quantity = item.get('quantity', 1)
-                        if current_quantity <= items_to_move:
-                            moved_count += current_quantity
-                            from_inventory.pop(i)
-                            items_to_move -= current_quantity
-                            new_item = {
-                                'item_id': f"item_{int(time.time() * 1000)}",
-                                'name': item_name,
-                                'quantity': current_quantity,
-                                'owner': '',
-                                'description': '',
-                                'location': '',
-                                'containers': {}
-                            }
-                            success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
-                            if not success:
-                                from_inventory.append(new_item)
-                                print(f"ERROR: Cannot add item '{item_name}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
-                                return
-                        else:
-                            item['quantity'] = current_quantity - items_to_move
-                            moved_count += items_to_move
-                            items_to_move = 0
-                            new_item = {
-                                'item_id': f"item_{int(time.time() * 1000)}",
-                                'name': item_name,
-                                'quantity': items_to_move,
-                                'owner': '',
-                                'description': '',
-                                'location': '',
-                                'containers': {}
-                            }
-                            success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
-                            if not success:
-                                item['quantity'] = current_quantity
-                                print(f"ERROR: Cannot add item '{item_name}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
-                                return
-                        if items_to_move <= 0:
-                            break
-                if moved_count == 0:
-                    print(f"WARNING: No items '{item_name}' found in source {from_type} '{from_name}'")
-                    return
-                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_name}' from main inventory to container '{to_container_name}'")
+                    moved_count = 0
+                    items_to_move = items_to_move_per_item
+                    for i in range(len(from_inventory) - 1, -1, -1):
+                        item = from_inventory[i]
+                        if (item_identifier.lower().startswith('item_') and item.get('item_id', '').lower() == item_identifier.lower()) or \
+                           item.get('name') == item_identifier:
+                            current_quantity = item.get('quantity', 1)
+                            if current_quantity <= items_to_move:
+                                moved_count += current_quantity
+                                from_inventory.pop(i)
+                                items_to_move -= current_quantity
+                                new_item = {
+                                    'item_id': f"item_{generate_item_id()}",
+                                    'name': item_identifier,
+                                    'quantity': current_quantity,
+                                    'owner': '',
+                                    'description': '',
+                                    'location': '',
+                                    'containers': {}
+                                }
+                                to_inventory.append(new_item)
+                            else:
+                                item['quantity'] = current_quantity - items_to_move
+                                moved_count += items_to_move
+                                items_to_move = 0
+                                new_item = {
+                                    'item_id': f"item_{generate_item_id()}",
+                                    'name': item_identifier,
+                                    'quantity': items_to_move,
+                                    'owner': '',
+                                    'description': '',
+                                    'location': '',
+                                    'containers': {}
+                                }
+                                to_inventory.append(new_item)
+                            if items_to_move <= 0:
+                                break
+                    if moved_count > 0:
+                        print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_identifier}' from {from_type} '{from_name}' to {to_type} '{to_name}'")
+                        total_moved += moved_count
+                    else:
+                        print(f"WARNING: No items '{item_identifier}' found in source {from_type} '{from_name}'")
+            
+            if total_moved > 0:
+                from_data['inventory'] = from_inventory
+                to_data['inventory'] = to_inventory
+                with open(from_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(from_data, f, indent=2, ensure_ascii=False)
+                with open(to_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(to_data, f, indent=2, ensure_ascii=False)
             else:
-                for i in range(len(from_inventory) - 1, -1, -1):
-                    item = from_inventory[i]
-                    if item.get('name') == item_name:
-                        current_quantity = item.get('quantity', 1)
-                        if current_quantity <= items_to_move:
-                            moved_count += current_quantity
-                            from_inventory.pop(i)
-                            items_to_move -= current_quantity
-                            new_item = {
-                                'item_id': f"item_{int(time.time() * 1000)}",
-                                'name': item_name,
-                                'quantity': current_quantity,
-                                'owner': '',
-                                'description': '',
-                                'location': '',
-                                'containers': {}
-                            }
-                            to_inventory.append(new_item)
-                        else:
-                            item['quantity'] = current_quantity - items_to_move
-                            moved_count += items_to_move
-                            items_to_move = 0
-                            
-                            new_item = {
-                                'item_id': f"item_{int(time.time() * 1000)}",
-                                'name': item_name,
-                                'quantity': items_to_move,
-                                'owner': '',
-                                'description': '',
-                                'location': '',
-                                'containers': {}
-                            }
-                            to_inventory.append(new_item)
-                        if items_to_move <= 0:
-                            break
-                if moved_count == 0:
-                    print(f"WARNING: No items '{item_name}' found in source {from_type} '{from_name}'")
-                    return
-                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Successfully moved {moved_count} of item '{item_name}' from {from_type} '{from_name}' to {to_type} '{to_name}'")
-            from_data['inventory'] = from_inventory
-            to_data['inventory'] = to_inventory
-            with open(from_file_path, 'w', encoding='utf-8') as f:
-                json.dump(from_data, f, indent=2, ensure_ascii=False)
-            with open(to_file_path, 'w', encoding='utf-8') as f:
-                json.dump(to_data, f, indent=2, ensure_ascii=False)
+                print(f"WARNING: No items were moved from {from_type} '{from_name}' to {to_type} '{to_name}'")
         except Exception as e:
-            print(f"ERROR: Failed to move item '{item_name}' from {from_type} '{from_name}' to {to_type} '{to_name}': {e}")
+            print(f"ERROR: Failed to move items from {from_type} '{from_name}' to {to_type} '{to_name}': {e}")
+    
+    elif obj_type == 'Determine Items':
+        scope = obj.get('scope', 'Player')
+        return_type = obj.get('return_type', 'Return Single Item')
+        owner = _substitute_variables_in_string(obj.get('owner', ''), tab_data, character_name)
+        description = _substitute_variables_in_string(obj.get('description', ''), tab_data, character_name)
+        location = _substitute_variables_in_string(obj.get('location', ''), tab_data, character_name)
+        text = _substitute_variables_in_string(obj.get('text', ''), tab_data, character_name)
+        text_scope = obj.get('text_scope', 'Full Conversation')
+        if not text:
+            print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Determine Items - No search text provided, skipping")
+            return
+        workflow_data_dir = tab_data.get('workflow_data_dir')
+        if not workflow_data_dir:
+            print(f"ERROR: Cannot determine items - workflow_data_dir not found")
+            return
+        result = _determine_items_with_inference(
+            self, text, text_scope, scope, owner, description, location, 
+            return_type, workflow_data_dir, tab_data, character_name, 
+            current_user_msg, prev_assistant_msg
+        )
+        if result is not None:
+            var_name = 'items' if return_type in ['Return Multiple Items', 'Multiple Items'] else 'item'
+            item_details = {}
+            
+            if result != "NONE":
+                items_data = _load_items_data(workflow_data_dir, scope, character_name)
+                print(f"[DEBUG] Loaded {len(items_data)} items from inventory")
+                print(f"[DEBUG] Looking for item ID: {result}")
+                item_details = _extract_item_details_from_result(result, items_data)
+                print(f"[DEBUG] Extracted item details: {item_details}")
+                if return_type in ['Return Multiple Items', 'Multiple Items']:
+                    if 'names' in item_details:
+                        _save_global_variable(workflow_data_dir, 'itemnames', item_details.get('names', ''))
+                        _save_global_variable(workflow_data_dir, 'itemdescriptions', item_details.get('descriptions', ''))
+                        _save_global_variable(workflow_data_dir, 'itemlocations', item_details.get('locations', ''))
+                        _save_global_variable(workflow_data_dir, 'itemowners', item_details.get('owners', ''))
+                    elif 'name' in item_details:
+                        _save_global_variable(workflow_data_dir, 'itemnames', item_details.get('name', ''))
+                        _save_global_variable(workflow_data_dir, 'itemdescriptions', item_details.get('description', ''))
+                        _save_global_variable(workflow_data_dir, 'itemlocations', item_details.get('location', ''))
+                        _save_global_variable(workflow_data_dir, 'itemowners', item_details.get('owner', ''))
+                else:
+                    if 'name' in item_details:
+                        _save_global_variable(workflow_data_dir, 'itemname', item_details.get('name', ''))
+                        _save_global_variable(workflow_data_dir, 'itemdescription', item_details.get('description', ''))
+                        _save_global_variable(workflow_data_dir, 'itemlocation', item_details.get('location', ''))
+                        _save_global_variable(workflow_data_dir, 'itemowner', item_details.get('owner', ''))
+                    elif 'names' in item_details:
+                        _save_global_variable(workflow_data_dir, 'itemname', item_details.get('names', ''))
+                        _save_global_variable(workflow_data_dir, 'itemdescription', item_details.get('descriptions', ''))
+                        _save_global_variable(workflow_data_dir, 'itemlocation', item_details.get('locations', ''))
+                        _save_global_variable(workflow_data_dir, 'itemowner', item_details.get('owners', ''))
+            
+            _save_global_variable(workflow_data_dir, var_name, result)
+            print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Determine Items - Stored result '{result}' in global variable '{var_name}'")
+            
+            if result == "NONE":
+                _save_global_variable(workflow_data_dir, 'item', 'NONE')
+                _save_global_variable(workflow_data_dir, 'itemnames', 'NONE')
+                _save_global_variable(workflow_data_dir, 'itemdescriptions', 'NONE')
+                _save_global_variable(workflow_data_dir, 'itemlocations', 'NONE')
+                _save_global_variable(workflow_data_dir, 'itemowners', 'NONE')
+                _save_global_variable(workflow_data_dir, 'itemname', 'NONE')
+                _save_global_variable(workflow_data_dir, 'itemdescription', 'NONE')
+                _save_global_variable(workflow_data_dir, 'itemlocation', 'NONE')
+                _save_global_variable(workflow_data_dir, 'itemowner', 'NONE')
+                print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Determine Items - Cleared all item variables to NONE")
+            elif result != "NONE" and item_details:
+                if return_type in ['Return Multiple Items', 'Multiple Items']:
+                    if 'names' in item_details:
+                        print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Determine Items - Also stored: itemnames='{item_details.get('names', '')}', itemdescriptions='{item_details.get('descriptions', '')}', itemlocations='{item_details.get('locations', '')}', itemowners='{item_details.get('owners', '')}'")
+                    elif 'name' in item_details:
+                        print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Determine Items - Also stored: itemnames='{item_details.get('name', '')}', itemdescriptions='{item_details.get('description', '')}', itemlocations='{item_details.get('location', '')}', itemowners='{item_details.get('owner', '')}'")
+                else:
+                    if 'name' in item_details:
+                        print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Determine Items - Also stored: itemname='{item_details.get('name', '')}', itemdescription='{item_details.get('description', '')}', itemlocation='{item_details.get('location', '')}', itemowner='{item_details.get('owner', '')}'")
+                    elif 'names' in item_details:
+                        print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Determine Items - Also stored: itemname='{item_details.get('names', '')}', itemdescription='{item_details.get('descriptions', '')}', itemlocation='{item_details.get('locations', '')}', itemowner='{item_details.get('owners', '')}'")
+        else:
+            print(f"  >> Rule '{rule.get('id', 'Unknown')}' Action: Determine Items - No items found matching criteria")
     
     elif obj_type == 'Game Over':
-        game_over_message = obj.get('game_over_message', 'Game Over')
+        game_over_message = _substitute_variables_in_string(obj.get('game_over_message', 'Game Over'), tab_data, character_name)
         rule_id = rule.get('id', 'Unknown') if rule else 'Unknown'
         current_tab_index = self.tab_widget.currentIndex() if hasattr(self, 'tab_widget') else -1
         try:
@@ -1361,7 +1491,7 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
             traceback.print_exc()
 
     elif obj_type == 'Advance Time':
-        advance_amount = obj.get('advance_amount', '')
+        advance_amount = _substitute_variables_in_string(obj.get('advance_amount', ''), tab_data, character_name)
         if not advance_amount:
             print(f"ERROR: Cannot advance time - advance_amount is empty")
             return
@@ -1519,17 +1649,20 @@ def _substitute_variables_in_string(text_to_process, tab_data, actor_name_contex
     )
     result_text = text_to_process
     workflow_data_dir = tab_data.get('workflow_data_dir') if tab_data else None
-    if '(character)' in result_text and actor_name_context:
-        result_text = result_text.replace('(character)', actor_name_context)
-    if '(player)' in result_text and workflow_data_dir:
+    if '(character)' in result_text.lower() and actor_name_context:
+        result_text = re.sub(r'\(character\)', actor_name_context, result_text, flags=re.IGNORECASE)
+    if '(player)' in result_text.lower() and workflow_data_dir:
         player_name = _get_player_character_name(workflow_data_dir)
         if player_name:
-            result_text = result_text.replace('(player)', player_name)
-    if '(setting)' in result_text and workflow_data_dir:
+            result_text = re.sub(r'\(player\)', player_name, result_text, flags=re.IGNORECASE)
+    if '(setting)' in result_text.lower() and workflow_data_dir:
         setting_name = _get_player_current_setting_name(workflow_data_dir)
         if setting_name and setting_name != "Unknown Setting":
-            result_text = result_text.replace('(setting)', setting_name)
+            result_text = re.sub(r'\(setting\)', setting_name, result_text, flags=re.IGNORECASE)
     if workflow_data_dir:
+        class DummySelf:
+            pass
+        dummy_self = DummySelf()
         def get_var_value(scope, var_name):
             if scope == "global":
                 variables_file = os.path.join(workflow_data_dir, "game", "variables.json")
@@ -1544,24 +1677,25 @@ def _substitute_variables_in_string(text_to_process, tab_data, actor_name_contex
             elif scope == "player":
                 player_name = _get_player_character_name(workflow_data_dir)
                 if player_name:
-                    actor_data, _ = _get_or_create_actor_data(None, workflow_data_dir, player_name)
+                    actor_data, _ = _get_or_create_actor_data(dummy_self, workflow_data_dir, player_name)
                     return actor_data.get('variables', {}).get(var_name, "")
                 return ""
             elif scope == "actor" or scope == "character":
                 if actor_name_context:
-                    actor_data, _ = _get_or_create_actor_data(None, workflow_data_dir, actor_name_context)
+                    actor_data, _ = _get_or_create_actor_data(dummy_self, workflow_data_dir, actor_name_context)
                     return actor_data.get('variables', {}).get(var_name, "")
                 return ""
             elif scope == "setting":
                 current_setting_name = _get_player_current_setting_name(workflow_data_dir)
                 if current_setting_name and current_setting_name != "Unknown Setting":
-                    setting_file_path, _ = _find_setting_file_prioritizing_game_dir(None, workflow_data_dir, current_setting_name)
+                    setting_file_path, _ = _find_setting_file_prioritizing_game_dir(dummy_self, workflow_data_dir, current_setting_name)
                     if setting_file_path and os.path.exists(setting_file_path):
                         setting_data = _load_json_safely(setting_file_path)
                         if setting_data:
                             return setting_data.get('variables', {}).get(var_name, "")
                 return ""
             return ""
+        
         def replace_match(match):
             scope = match.group(1).lower()
             var_name = match.group(2).strip()
@@ -1570,3 +1704,464 @@ def _substitute_variables_in_string(text_to_process, tab_data, actor_name_contex
         pattern = r'\[(global|player|actor|character|setting),\s*([^,\]]+?)\s*\]'
         result_text = re.sub(pattern, replace_match, result_text)
     return result_text
+
+def _apply_item_consume_effects(item_name, consume_scope, workflow_data_dir, tab_data, character_name=None):
+    if not item_name or not workflow_data_dir:
+        return
+    if not _is_item_consumable(item_name, workflow_data_dir):
+        print(f"ERROR: Cannot apply consume effects to '{item_name}' - item is not marked as consumable")
+        return
+    items_dir = os.path.join(workflow_data_dir, "resources", "data files", "items")
+    if not os.path.exists(items_dir):
+        print(f"WARNING: Items directory not found: {items_dir}")
+        return
+    item_ref = None
+    for category in os.listdir(items_dir):
+        category_path = os.path.join(items_dir, category)
+        if os.path.isdir(category_path):
+            for filename in os.listdir(category_path):
+                if filename.endswith('.json'):
+                    file_path = os.path.join(category_path, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            item_data = json.load(f)
+                        if item_data.get('name') == item_name:
+                            item_ref = item_data
+                            break
+                    except Exception as e:
+                        print(f"ERROR: Failed to load item file {file_path}: {e}")
+                        continue
+        if item_ref:
+            break
+    if not item_ref:
+        print(f"WARNING: Item '{item_name}' not found in items directory")
+        return
+    variables_to_apply = item_ref.get('variable_actions', [])
+    if not variables_to_apply:
+        print(f"INFO: Item '{item_name}' has no variable effects to apply")
+        return
+    print(f"  >> Applying consume effects for '{item_name}' to scope '{consume_scope}'")
+    for var_effect in variables_to_apply:
+        if not isinstance(var_effect, dict):
+            continue
+        var_name = var_effect.get('variable_name', '')
+        operation = var_effect.get('operation', '')
+        value = var_effect.get('value', '')
+        if not var_name:
+            continue
+        if isinstance(value, str):
+            value = _substitute_variables_in_string(value, tab_data, character_name)
+        _apply_variable_effect(var_name, operation, value, consume_scope, workflow_data_dir, tab_data, character_name)
+
+def _apply_variable_effect(var_name, operation, value, scope, workflow_data_dir, tab_data, character_name=None):
+    try:
+        if scope == "Player":
+            player_name = _get_player_character_name(workflow_data_dir)
+            if player_name:
+                actor_data, actor_path = _get_or_create_actor_data(None, workflow_data_dir, player_name)
+                if actor_data:
+                    if 'variables' not in actor_data:
+                        actor_data['variables'] = {}
+                    _apply_operation_to_variable(actor_data['variables'], var_name, operation, value)
+                    with open(actor_path, 'w', encoding='utf-8') as f:
+                        json.dump(actor_data, f, indent=2, ensure_ascii=False)
+                    print(f"    Applied {operation} '{var_name}' = '{value}' to Player")
+        
+        elif scope == "Character":
+            if character_name:
+                actor_data, actor_path = _get_or_create_actor_data(None, workflow_data_dir, character_name)
+                if actor_data:
+                    if 'variables' not in actor_data:
+                        actor_data['variables'] = {}
+                    _apply_operation_to_variable(actor_data['variables'], var_name, operation, value)
+                    with open(actor_path, 'w', encoding='utf-8') as f:
+                        json.dump(actor_data, f, indent=2, ensure_ascii=False)
+                    print(f"    Applied {operation} '{var_name}' = '{value}' to Character '{character_name}'")
+        
+        elif scope == "Setting":
+            current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+            if current_setting_name and current_setting_name != "Unknown Setting":
+                setting_file_path, _ = _find_setting_file_prioritizing_game_dir(None, workflow_data_dir, current_setting_name)
+                if setting_file_path and os.path.exists(setting_file_path):
+                    with open(setting_file_path, 'r', encoding='utf-8') as f:
+                        setting_data = json.load(f)
+                    if 'variables' not in setting_data:
+                        setting_data['variables'] = {}
+                    _apply_operation_to_variable(setting_data['variables'], var_name, operation, value)
+                    with open(setting_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(setting_data, f, indent=2, ensure_ascii=False)
+                    print(f"    Applied {operation} '{var_name}' = '{value}' to Setting '{current_setting_name}'")
+        
+        elif scope == "Scene Characters":
+            current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+            if current_setting_name and current_setting_name != "Unknown Setting":
+                setting_file_path, _ = _find_setting_file_prioritizing_game_dir(None, workflow_data_dir, current_setting_name)
+                if setting_file_path and os.path.exists(setting_file_path):
+                    with open(setting_file_path, 'r', encoding='utf-8') as f:
+                        setting_data = json.load(f)
+                    player_name = _get_player_character_name(workflow_data_dir)
+                    if player_name:
+                        actor_data, actor_path = _get_or_create_actor_data(None, workflow_data_dir, player_name)
+                        if actor_data:
+                            if 'variables' not in actor_data:
+                                actor_data['variables'] = {}
+                            _apply_operation_to_variable(actor_data['variables'], var_name, operation, value)
+                            with open(actor_path, 'w', encoding='utf-8') as f:
+                                json.dump(actor_data, f, indent=2, ensure_ascii=False)
+                            print(f"    Applied {operation} '{var_name}' = '{value}' to Player")
+                    scene_characters = setting_data.get('characters', [])
+                    for char_name in scene_characters:
+                        if char_name != player_name:
+                            actor_data, actor_path = _get_or_create_actor_data(None, workflow_data_dir, char_name)
+                            if actor_data:
+                                if 'variables' not in actor_data:
+                                    actor_data['variables'] = {}
+                                _apply_operation_to_variable(actor_data['variables'], var_name, operation, value)
+                                with open(actor_path, 'w', encoding='utf-8') as f:
+                                    json.dump(actor_data, f, indent=2, ensure_ascii=False)
+                                print(f"    Applied {operation} '{var_name}' = '{value}' to Character '{char_name}'")
+    except Exception as e:
+        print(f"ERROR: Failed to apply variable effect '{var_name}' to scope '{scope}': {e}")
+
+def _apply_operation_to_variable(variables_dict, var_name, operation, value):
+    current_value = variables_dict.get(var_name, 0)
+    try:
+        if operation in ['increment', 'decrement', 'multiply', 'divide']:
+            try:
+                if isinstance(value, str):
+                    value = float(value) if '.' in value else int(value)
+                elif not isinstance(value, (int, float)):
+                    value = 0
+            except (ValueError, TypeError):
+                value = 0
+        if operation == 'set':
+            variables_dict[var_name] = value
+        elif operation == 'increment':
+            if isinstance(current_value, (int, float)) and isinstance(value, (int, float)):
+                variables_dict[var_name] = current_value + value
+            else:
+                variables_dict[var_name] = value
+        elif operation == 'decrement':
+            if isinstance(current_value, (int, float)) and isinstance(value, (int, float)):
+                variables_dict[var_name] = current_value - value
+            else:
+                variables_dict[var_name] = value
+        elif operation == 'multiply':
+            if isinstance(current_value, (int, float)) and isinstance(value, (int, float)):
+                variables_dict[var_name] = current_value * value
+            else:
+                variables_dict[var_name] = value
+        elif operation == 'divide':
+            if isinstance(current_value, (int, float)) and isinstance(value, (int, float)) and value != 0:
+                variables_dict[var_name] = current_value / value
+            else:
+                variables_dict[var_name] = value
+        else:
+            variables_dict[var_name] = value
+    except Exception as e:
+        print(f"ERROR: Failed to apply operation '{operation}' to variable '{var_name}': {e}")
+        variables_dict[var_name] = value
+
+def _is_item_consumable(item_name, workflow_data_dir):
+    if not item_name or not workflow_data_dir:
+        return False
+    items_dir = os.path.join(workflow_data_dir, "resources", "data files", "items")
+    if not os.path.exists(items_dir):
+        print(f"WARNING: Items directory not found: {items_dir}")
+        return False
+    for category in os.listdir(items_dir):
+        category_path = os.path.join(items_dir, category)
+        if os.path.isdir(category_path):
+            for filename in os.listdir(category_path):
+                if filename.endswith('.json'):
+                    file_path = os.path.join(category_path, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            item_data = json.load(f)
+                        if item_data.get('name') == item_name:
+                            properties = item_data.get('properties', '')
+                            return 'Consumable' in properties
+                    except Exception as e:
+                        print(f"ERROR: Failed to load item file {file_path}: {e}")
+                        continue
+    print(f"WARNING: Item '{item_name}' not found in items directory")
+    return False
+
+def _determine_items_with_inference(chatbot_instance, text, text_scope, scope, owner, description, location, return_type, workflow_data_dir, tab_data, character_name, current_user_msg, prev_assistant_msg):
+    try:
+        context_text = _get_context_for_text_scope(text_scope, tab_data, current_user_msg, prev_assistant_msg)
+        if not context_text:
+            print(f"WARNING: No context available for text scope '{text_scope}'")
+            return "NONE"
+        items_data = _get_items_from_scope(scope, workflow_data_dir, tab_data, character_name)
+        if not items_data:
+            print(f"WARNING: No items found in scope '{scope}'")
+            return "NONE"
+        if owner:
+            filtered_items = [item for item in items_data if item.get('owner', '').lower() == owner.lower()]
+            if not filtered_items:
+                print(f"WARNING: No items found with owner '{owner}' in scope '{scope}'")
+                return "NONE"
+            items_data = filtered_items
+        items_text = _format_items_for_llm(items_data)
+        if return_type == 'Return Multiple Items':
+            prompt = _create_determine_multiple_items_prompt(text, context_text, items_text)
+        else:
+            prompt = _create_determine_single_item_prompt(text, context_text, items_text)
+        model = chatbot_instance.get_current_model()
+        max_tokens = 50
+        temperature = 0.1
+        context = [
+            {"role": "user", "content": prompt}
+        ]
+        result = chatbot_instance.run_utility_inference_sync(context, model, max_tokens, temperature)
+        if not result:
+            print(f"ERROR: Inference call failed for Determine Items")
+            return "NONE"
+        parsed_result = _parse_determine_items_result(result, return_type)
+        print(f"[DETERMINE ITEMS] LLM Response: '{result}' -> Parsed: '{parsed_result}'")
+        return parsed_result
+    except Exception as e:
+        print(f"ERROR: Failed to determine items with inference: {e}")
+        import traceback
+        traceback.print_exc()
+        return "NONE"
+
+def _get_context_for_text_scope(text_scope, tab_data, current_user_msg, prev_assistant_msg):
+    if text_scope == 'Full Conversation':
+        return tab_data.get('context', [])
+    elif text_scope == 'User Message':
+        if current_user_msg:
+            return current_user_msg
+        context = tab_data.get('context', [])
+        for msg in reversed(context):
+            if msg.get('role') == 'user':
+                return msg.get('content', '')
+        return ""
+    elif text_scope == 'LLM Reply':
+        if prev_assistant_msg:
+            return prev_assistant_msg
+        context = tab_data.get('context', [])
+        for msg in reversed(context):
+            if msg.get('role') == 'assistant':
+                return msg.get('content', '')
+        return ""
+    elif text_scope == 'Conversation plus LLM Reply':
+        context = tab_data.get('context', [])
+        if prev_assistant_msg:
+            context.append({"role": "assistant", "content": prev_assistant_msg})
+        return context
+    else:
+        return ""
+
+def _get_items_from_scope(scope, workflow_data_dir, tab_data, character_name):
+    items = []
+    if scope == 'Player':
+        player_name = _get_player_character_name(workflow_data_dir)
+        if player_name:
+            actor_data, _ = _get_or_create_actor_data(None, workflow_data_dir, player_name)
+            if actor_data and 'inventory' in actor_data:
+                items.extend(actor_data['inventory'])
+    elif scope == 'Character':
+        if character_name:
+            actor_data, _ = _get_or_create_actor_data(None, workflow_data_dir, character_name)
+            if actor_data and 'inventory' in actor_data:
+                items.extend(actor_data['inventory'])
+    elif scope == 'Setting':
+        current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+        if current_setting_name:
+            setting_file_path, _ = _find_setting_file_prioritizing_game_dir(None, workflow_data_dir, current_setting_name)
+            if setting_file_path and os.path.exists(setting_file_path):
+                try:
+                    with open(setting_file_path, 'r', encoding='utf-8') as f:
+                        setting_data = json.load(f)
+                    if 'inventory' in setting_data:
+                        items.extend(setting_data['inventory'])
+                except Exception as e:
+                    print(f"ERROR: Failed to load setting inventory: {e}")
+    return items
+
+def _format_items_for_llm(items_data):
+    if not items_data:
+        return "No items available."
+    formatted_items = []
+    for item in items_data:
+        item_id = item.get('item_id', 'unknown')
+        name = item.get('name', 'unnamed')
+        owner = item.get('owner', 'unknown')
+        description = item.get('description', 'no description')
+        location = item.get('location', 'unknown location')
+        quantity = item.get('quantity', 1)
+        formatted_item = f"Item ID: {item_id}\nName: {name}\nOwner: {owner}\nDescription: {description}\nLocation: {location}\nQuantity: {quantity}"
+        formatted_items.append(formatted_item)
+    return "\n\n".join(formatted_items)
+
+def _create_determine_single_item_prompt(text, context_text, items_text):
+    context_str = ""
+    if isinstance(context_text, list):
+        context_lines = []
+        for msg in context_text:
+            role = msg.get('role', 'unknown').capitalize()
+            content = msg.get('content', '')
+            context_lines.append(f"{role}: {content}")
+        context_str = "\n".join(context_lines)
+    else:
+        context_str = str(context_text)
+    
+    prompt = f"""You are an AI assistant that analyzes text and item data to determine which SINGLE item best matches the given criteria. Return ONLY the Item ID of the best match, or NONE if no items feasibly match.
+
+CONTEXT:
+{context_str}
+
+AVAILABLE ITEMS:
+{items_text}
+
+QUESTION: {text}
+
+INSTRUCTIONS:
+- Return a SINGLE Item ID (the best match)
+- If no items match, return "NONE"
+- If no items are available, return "NONE"
+- Return ONLY the Item ID or "NONE" - no other text
+
+RESPONSE:"""
+    
+    return prompt
+
+def _create_determine_multiple_items_prompt(text, context_text, items_text):
+    context_str = ""
+    if isinstance(context_text, list):
+        context_lines = []
+        for msg in context_text:
+            role = msg.get('role', 'unknown').capitalize()
+            content = msg.get('content', '')
+            context_lines.append(f"{role}: {content}")
+        context_str = "\n".join(context_lines)
+    else:
+        context_str = str(context_text)
+    
+    prompt = f"""You are an AI assistant that analyzes text and item data to determine which MULTIPLE items match the given criteria. Return ONLY a comma-separated list of Item IDs, or NONE if no items feasibly match.
+
+CONTEXT:
+{context_str}
+
+AVAILABLE ITEMS:
+{items_text}
+
+QUESTION: {text}
+
+INSTRUCTIONS:
+- Return a comma-separated list of Item IDs (e.g., "item_123,item_456")
+- If no items match, return "NONE"
+- If no items are available, return "NONE"
+- Return ONLY the Item IDs or "NONE" - no other text
+
+RESPONSE:"""
+    
+    return prompt
+
+def _parse_determine_items_result(result, return_type):
+    if not result:
+        return "NONE"
+    result = result.strip().upper()
+    if result in ["NONE", "NO", "NONE.", "NO."]:
+        return "NONE"
+    if return_type == 'Return Multiple Items':
+        item_ids = [item_id.strip() for item_id in result.split(',') if item_id.strip()]
+        if not item_ids:
+            return "NONE"
+        return ",".join(item_ids)
+    else:
+        return result
+
+def _extract_item_details_from_result(result, items_data):
+    if not result or result == "NONE" or not items_data:
+        return {}
+    
+    if ',' in result:
+        item_ids = [item_id.strip().upper() for item_id in result.split(',')]
+        names = []
+        descriptions = []
+        locations = []
+        owners = []
+        
+        for item_id in item_ids:
+            item = _find_item_by_id(items_data, item_id)
+            if item:
+                names.append(item.get('name', ''))
+                descriptions.append(item.get('description', ''))
+                locations.append(item.get('location', ''))
+                owners.append(item.get('owner', ''))
+        
+        return {
+            'names': ', '.join(names),
+            'descriptions': ', '.join(descriptions),
+            'locations': ', '.join(locations),
+            'owners': ', '.join(owners)
+        }
+    else:
+        item_id = result.upper()
+        item = _find_item_by_id(items_data, item_id)
+        if item:
+            return {
+                'name': item.get('name', ''),
+                'description': item.get('description', ''),
+                'location': item.get('location', ''),
+                'owner': item.get('owner', '')
+            }
+        return {}
+
+def _find_item_by_id(items_data, item_id):
+    for item in items_data:
+        item_id_in_data = item.get('item_id', '')
+        if item_id_in_data.upper() == item_id.upper():
+            return item
+    return None
+
+def _save_global_variable(workflow_data_dir, var_name, var_value):
+    if not workflow_data_dir:
+        return
+    variables_file = os.path.join(workflow_data_dir, "game", "variables.json")
+    try:
+        variables = {}
+        if os.path.exists(variables_file):
+            with open(variables_file, 'r', encoding='utf-8') as f:
+                variables = json.load(f)
+        variables[var_name] = var_value
+        os.makedirs(os.path.dirname(variables_file), exist_ok=True)
+        with open(variables_file, 'w', encoding='utf-8') as f:
+            json.dump(variables, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"ERROR: Failed to save global variable '{var_name}': {e}")
+
+def _load_items_data(workflow_data_dir, scope='Setting', character_name=None):
+    if not workflow_data_dir:
+        return []
+    items = []
+    if scope == 'Player':
+        from core.utils import _get_player_character_name, _get_or_create_actor_data
+        player_name = _get_player_character_name(workflow_data_dir)
+        if player_name:
+            actor_data, _ = _get_or_create_actor_data(None, workflow_data_dir, player_name)
+            if actor_data and 'inventory' in actor_data:
+                items.extend(actor_data['inventory'])
+    elif scope == 'Character':
+        if character_name:
+            from core.utils import _get_or_create_actor_data
+            actor_data, _ = _get_or_create_actor_data(None, workflow_data_dir, character_name)
+            if actor_data and 'inventory' in actor_data:
+                items.extend(actor_data['inventory'])
+    elif scope == 'Setting':
+        from core.utils import _get_player_current_setting_name, _find_setting_file_prioritizing_game_dir
+        current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+        if current_setting_name:
+            setting_file_path, _ = _find_setting_file_prioritizing_game_dir(None, workflow_data_dir, current_setting_name)
+            if setting_file_path and os.path.exists(setting_file_path):
+                try:
+                    with open(setting_file_path, 'r', encoding='utf-8') as f:
+                        setting_data = json.load(f)
+                    if 'inventory' in setting_data:
+                        items.extend(setting_data['inventory'])
+                except Exception as e:
+                    print(f"ERROR: Failed to load setting inventory: {e}")
+    return items
