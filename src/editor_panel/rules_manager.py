@@ -858,6 +858,99 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                             action_obj["target_container_enabled"] = False
                                             action_obj["target_item_name"] = ""
                                             action_obj["target_container_name"] = ""
+                                        
+                                        remove_item_consume_checkbox = action_row_widget.findChild(QCheckBox, "RemoveItemConsumeCheckbox")
+                                        remove_item_consume_player_radio = action_row_widget.findChild(QRadioButton, "RemoveItemConsumePlayerRadio")
+                                        remove_item_consume_setting_radio = action_row_widget.findChild(QRadioButton, "RemoveItemConsumeSettingRadio")
+                                        remove_item_consume_character_radio = action_row_widget.findChild(QRadioButton, "RemoveItemConsumeCharacterRadio")
+                                        remove_item_consume_scene_chars_radio = action_row_widget.findChild(QRadioButton, "RemoveItemConsumeSceneCharsRadio")
+                                        
+                                        if remove_item_consume_checkbox:
+                                            try:
+                                                action_obj["consume"] = remove_item_consume_checkbox.isChecked()
+                                            except RuntimeError:
+                                                action_obj["consume"] = False
+                                        else:
+                                            action_obj["consume"] = False
+                                        
+                                        if action_obj.get("consume", False):
+                                            consume_scope = "Player"
+                                            if remove_item_consume_setting_radio and remove_item_consume_setting_radio.isChecked():
+                                                consume_scope = "Setting"
+                                            elif remove_item_consume_character_radio and remove_item_consume_character_radio.isChecked():
+                                                consume_scope = "Character"
+                                            elif remove_item_consume_scene_chars_radio and remove_item_consume_scene_chars_radio.isChecked():
+                                                consume_scope = "Scene Characters"
+                                            action_obj["consume_scope"] = consume_scope
+                                        else:
+                                            action_obj["consume_scope"] = "Player"
+                                    elif action_type == "Determine Items":
+                                        determine_items_player_radio = action_row_widget.findChild(QRadioButton, "DetermineItemPlayerRadio")
+                                        determine_items_character_radio = action_row_widget.findChild(QRadioButton, "DetermineItemCharacterRadio")
+                                        determine_items_setting_radio = action_row_widget.findChild(QRadioButton, "DetermineItemSettingRadio")
+                                        determine_items_single_item_radio = action_row_widget.findChild(QRadioButton, "DetermineItemsSingleItemRadio")
+                                        determine_items_multiple_items_radio = action_row_widget.findChild(QRadioButton, "DetermineItemsMultipleItemsRadio")
+                                        determine_items_owner_input = action_row_widget.findChild(QLineEdit, "DetermineItemOwnerInput")
+                                        determine_items_description_input = action_row_widget.findChild(QLineEdit, "DetermineItemsDescriptionInput")
+                                        determine_items_location_input = action_row_widget.findChild(QLineEdit, "DetermineItemsLocationInput")
+                                        determine_items_text_input = action_row_widget.findChild(QTextEdit, "DetermineItemsTextInput")
+                                        determine_items_full_convo_radio = action_row_widget.findChild(QRadioButton, "DetermineItemsFullConvoRadio")
+                                        determine_items_user_msg_radio = action_row_widget.findChild(QRadioButton, "DetermineItemsUserMsgRadio")
+                                        determine_items_llm_reply_radio = action_row_widget.findChild(QRadioButton, "DetermineItemsLlmReplyRadio")
+                                        determine_items_convo_llm_radio = action_row_widget.findChild(QRadioButton, "DetermineItemsConvoLlmRadio")
+                                        
+                                        scope = "Player"
+                                        if determine_items_character_radio and determine_items_character_radio.isChecked():
+                                            scope = "Character"
+                                        elif determine_items_setting_radio and determine_items_setting_radio.isChecked():
+                                            scope = "Setting"
+                                        action_obj["scope"] = scope
+                                        
+                                        return_type = "Single Item"
+                                        if determine_items_multiple_items_radio and determine_items_multiple_items_radio.isChecked():
+                                            return_type = "Multiple Items"
+                                        action_obj["return_type"] = return_type
+                                        
+                                        if determine_items_owner_input:
+                                            try:
+                                                action_obj["owner"] = determine_items_owner_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["owner"] = ""
+                                        else:
+                                            action_obj["owner"] = ""
+                                        
+                                        if determine_items_description_input:
+                                            try:
+                                                action_obj["description"] = determine_items_description_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["description"] = ""
+                                        else:
+                                            action_obj["description"] = ""
+                                        
+                                        if determine_items_location_input:
+                                            try:
+                                                action_obj["location"] = determine_items_location_input.text().strip()
+                                            except RuntimeError:
+                                                action_obj["location"] = ""
+                                        else:
+                                            action_obj["location"] = ""
+                                        
+                                        if determine_items_text_input:
+                                            try:
+                                                action_obj["text"] = determine_items_text_input.toPlainText().strip()
+                                            except RuntimeError:
+                                                action_obj["text"] = ""
+                                        else:
+                                            action_obj["text"] = ""
+                                        
+                                        text_scope = "Full Conversation"
+                                        if determine_items_user_msg_radio and determine_items_user_msg_radio.isChecked():
+                                            text_scope = "User Message"
+                                        elif determine_items_llm_reply_radio and determine_items_llm_reply_radio.isChecked():
+                                            text_scope = "LLM Reply"
+                                        elif determine_items_convo_llm_radio and determine_items_convo_llm_radio.isChecked():
+                                            text_scope = "Conversation plus LLM Reply"
+                                        action_obj["text_scope"] = text_scope
                                     elif action_type == "Post Visibility":
                                         current_post_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityCurrentPostRadio")
                                         player_post_radio = action_row_widget.findChild(QRadioButton, "PostVisibilityPlayerPostRadio")
