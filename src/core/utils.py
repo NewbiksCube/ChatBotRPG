@@ -31,7 +31,6 @@ def save_game_state(self):
     if not os.path.isdir(game_dir):
         QMessageBox.warning(self, "Nothing to Save", f"The 'game' directory for workflow '{tab_name}' does not exist.")
         return
-    
     dialog = QDialog(self)
     dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
     dialog.setWindowTitle("Save Game State")
@@ -151,7 +150,6 @@ def save_game_state(self):
                 self.medium_click_sound.play()
             except Exception as e:
                 print(f"Error playing medium_click_sound after save: {e}")
-        
     except OSError as e:
         QMessageBox.critical(self, "Save Error", f"Could not save game state.\nError: {e}")
     except Exception as e:
@@ -192,7 +190,6 @@ def load_game_state(self):
         base_color = theme_colors.get("base_color", "#00FF66")
         bg_color = theme_colors.get("bg_color", "#252525")
         darker_bg = theme_colors.get("darker_bg", "#1A1A1A")
-        
         dialog.setStyleSheet(f"""
             QDialog {{
                 background-color: {bg_color};
@@ -487,7 +484,6 @@ def load_game_state(self):
                 self.files_to_delete_on_exit = []
             self.files_to_delete_on_exit.extend(renamed_files)
             _cleanup_old_backup_files_in_directory(game_dir)
-        
         right_splitter = tab_data.get('right_splitter')
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if right_splitter and workflow_data_dir:
@@ -500,13 +496,11 @@ def load_game_state(self):
                 print(f"Load: Updated right splitter with setting: {current_setting_name}")
             except Exception as e:
                 print(f"Load: Error updating right splitter: {e}")
-        
         if hasattr(self, 'medium_click_sound') and self.medium_click_sound:
             try:
                 self.medium_click_sound.play()
             except Exception as e:
                 print(f"Error playing medium_click_sound after load: {e}")
-        
     except Exception as e:
         QMessageBox.critical(self, "Load Error", f"Could not complete load operation.\nError: {e}\n\nAttempting to restore clean state.")
         try:
