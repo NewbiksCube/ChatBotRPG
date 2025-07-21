@@ -910,6 +910,7 @@ class TimerRulesWidget(QWidget):
                     value_input = row_widget.findChild(QLineEdit, "ConditionValueInput")
                     scope_global_radio = row_widget.findChild(QRadioButton, "ConditionScopeGlobalRadio")
                     scope_character_radio = row_widget.findChild(QRadioButton, "ConditionScopeCharacterRadio")
+                    scope_player_radio = row_widget.findChild(QRadioButton, "ConditionScopePlayerRadio")
                     scope_setting_radio = row_widget.findChild(QRadioButton, "ConditionScopeSettingRadio")
                     name = name_input.text().strip() if name_input else ""
                     operator = operator_combo.currentText() if operator_combo else "=="
@@ -918,6 +919,8 @@ class TimerRulesWidget(QWidget):
                     scope = "Global"
                     if scope_character_radio and scope_character_radio.isChecked():
                         scope = "Character"
+                    elif scope_player_radio and scope_player_radio.isChecked():
+                        scope = "Player"
                     elif scope_setting_radio and scope_setting_radio.isChecked():
                         scope = "Setting"
                     if name: 
@@ -963,7 +966,7 @@ class TimerRulesWidget(QWidget):
         action_layout.setSpacing(5)
         type_combo = QComboBox()
         type_combo.setObjectName("TimerRuleActionTypeCombo")
-        type_combo.addItems(["Set Var", "System Message", "Narrator Post", "Actor Post", "New Scene", "Game Over"])
+        type_combo.addItems(["Set Var", "System Message", "Narrator Post", "Actor Post", "New Scene", "Game Over", "Set Screen Effect"])
         type_combo.setMinimumWidth(100)
         action_layout.addWidget(type_combo)
         value_input = QLineEdit()
@@ -1037,13 +1040,17 @@ class TimerRulesWidget(QWidget):
         scope_global_radio.setChecked(True)
         scope_character_radio = QRadioButton("Character")
         scope_character_radio.setObjectName("TimerRuleActionScopeCharacterRadio")
+        scope_player_radio = QRadioButton("Player")
+        scope_player_radio.setObjectName("TimerRuleActionScopePlayerRadio")
         scope_setting_radio = QRadioButton("Setting")
         scope_setting_radio.setObjectName("TimerRuleActionScopeSettingRadio")
         scope_group.addButton(scope_global_radio)
         scope_group.addButton(scope_character_radio)
+        scope_group.addButton(scope_player_radio)
         scope_group.addButton(scope_setting_radio)
         scope_layout.addWidget(scope_global_radio)
         scope_layout.addWidget(scope_character_radio)
+        scope_layout.addWidget(scope_player_radio)
         scope_layout.addWidget(scope_setting_radio)
         set_var_layout.addWidget(scope_widget)
         set_var_widget.setVisible(False)
@@ -1258,6 +1265,186 @@ class TimerRulesWidget(QWidget):
         game_over_layout.addWidget(game_over_message_input)
         game_over_widget.setVisible(False)
         action_layout.addWidget(game_over_widget, 2)
+        screen_effect_widget = QWidget()
+        screen_effect_widget.setObjectName("TimerRuleScreenEffectWidget")
+        screen_effect_layout = QVBoxLayout(screen_effect_widget)
+        screen_effect_layout.setContentsMargins(0, 0, 0, 0)
+        screen_effect_layout.setSpacing(5)
+        effect_type_layout = QHBoxLayout()
+        effect_type_label = QLabel("Effect Type:")
+        effect_type_label.setObjectName("TimerRuleScreenEffectTypeLabel")
+        effect_type_label.setFont(QFont('Consolas', 9))
+        effect_type_combo = QComboBox()
+        effect_type_combo.setObjectName("TimerRuleScreenEffectTypeCombo")
+        effect_type_combo.setFont(QFont('Consolas', 9))
+        effect_type_combo.addItems(["Blur", "Flicker", "Static", "Darken/Brighten"])
+        if self.theme_colors:
+            base_color = self.theme_colors.get("base_color", "#00FF66")
+            darker_bg = self.theme_colors.get("darker_bg", "#1A1A1A")
+            effect_type_combo.setStyleSheet(f"""
+                background-color: {darker_bg};
+                color: {base_color};
+                border: 1px solid {base_color};
+                selection-background-color: {base_color};
+                selection-color: {darker_bg};
+            """)
+            effect_type_label.setStyleSheet(f"""
+                background-color: transparent;
+                color: {base_color};
+            """)
+        effect_type_layout.addWidget(effect_type_label)
+        effect_type_layout.addWidget(effect_type_combo, 1)
+        screen_effect_layout.addLayout(effect_type_layout)
+        parameters_widget = QWidget()
+        parameters_layout = QVBoxLayout(parameters_widget)
+        parameters_layout.setContentsMargins(0, 0, 0, 0)
+        parameters_layout.setSpacing(3)
+        enable_layout = QHBoxLayout()
+        enable_label = QLabel("Enabled:")
+        enable_label.setFont(QFont('Consolas', 9))
+        enable_combo = QComboBox()
+        enable_combo.setObjectName("TimerRuleScreenEffectEnabledCombo")
+        enable_combo.setFont(QFont('Consolas', 9))
+        enable_combo.addItems(["True", "False"])
+        enable_layout.addWidget(enable_label)
+        enable_layout.addWidget(enable_combo)
+        enable_layout.addStretch()
+        parameters_layout.addLayout(enable_layout)
+        operation_layout = QHBoxLayout()
+        operation_label = QLabel("Operation:")
+        operation_label.setFont(QFont('Consolas', 9))
+        effect_operation_combo = QComboBox()
+        effect_operation_combo.setObjectName("TimerRuleScreenEffectOperationCombo")
+        effect_operation_combo.setFont(QFont('Consolas', 9))
+        effect_operation_combo.addItems(["Set", "Increment", "Decrement"])
+        operation_layout.addWidget(operation_label)
+        operation_layout.addWidget(effect_operation_combo)
+        operation_layout.addStretch()
+        parameters_layout.addLayout(operation_layout)
+        param_layout = QHBoxLayout()
+        param_name_label = QLabel("Parameter:")
+        param_name_label.setFont(QFont('Consolas', 9))
+        param_name_combo = QComboBox()
+        param_name_combo.setObjectName("TimerRuleScreenEffectParamNameCombo")
+        param_name_combo.setFont(QFont('Consolas', 9))
+        param_layout.addWidget(param_name_label)
+        param_layout.addWidget(param_name_combo, 1)
+        parameters_layout.addLayout(param_layout)
+        value_layout = QHBoxLayout()
+        param_value_label = QLabel("Value:")
+        param_value_label.setFont(QFont('Consolas', 9))
+        param_value_input = QLineEdit()
+        param_value_input.setObjectName("TimerRuleScreenEffectParamValueInput")
+        param_value_input.setFont(QFont('Consolas', 9))
+        param_value_input.setPlaceholderText("Parameter value")
+        value_layout.addWidget(param_value_label)
+        value_layout.addWidget(param_value_input, 1)
+        parameters_layout.addLayout(value_layout)
+        flicker_color_layout = QHBoxLayout()
+        flicker_color_label = QLabel("Color:")
+        flicker_color_label.setFont(QFont('Consolas', 9))
+        flicker_color_combo = QComboBox()
+        flicker_color_combo.setObjectName("TimerRuleScreenEffectFlickerColorCombo")
+        flicker_color_combo.setFont(QFont('Consolas', 9))
+        flicker_color_combo.addItems(["white", "black"])
+        flicker_color_layout.addWidget(flicker_color_label)
+        flicker_color_layout.addWidget(flicker_color_combo, 1)
+        parameters_layout.addLayout(flicker_color_layout)
+        flicker_color_label.setVisible(False)
+        flicker_color_combo.setVisible(False)
+        param_description = QLabel("Parameter description will appear here")
+        param_description.setObjectName("TimerRuleScreenEffectParamDescription")
+        param_description.setFont(QFont('Consolas', 8))
+        param_description.setWordWrap(True)
+        parameters_layout.addWidget(param_description)
+        screen_effect_layout.addWidget(parameters_widget)
+        screen_effect_widget.setVisible(False)
+        action_layout.addWidget(screen_effect_widget, 2)
+        
+        def update_screen_effect_param_combo():
+            effect_type = effect_type_combo.currentText()
+            param_name_combo.clear()
+            if effect_type == "Blur":
+                param_name_combo.addItems(["radius", "animation_speed", "animate"])
+            elif effect_type == "Flicker":
+                param_name_combo.addItems(["intensity", "frequency", "color"])
+            elif effect_type == "Static":
+                param_name_combo.addItems(["intensity", "frequency", "dot_size"])
+            elif effect_type == "Darken/Brighten":
+                param_name_combo.addItems(["factor", "animation_speed", "animate"])
+            update_screen_effect_flicker_color_visibility()
+            update_screen_effect_param_description()
+        
+        def update_screen_effect_flicker_color_visibility():
+            effect_type = effect_type_combo.currentText()
+            param_name = param_name_combo.currentText()
+            is_flicker_color = (effect_type == "Flicker" and param_name == "color")
+            flicker_color_label.setVisible(is_flicker_color)
+            flicker_color_combo.setVisible(is_flicker_color)
+            param_value_input.setVisible(not is_flicker_color)
+        
+        def update_screen_effect_param_description():
+            effect_type = effect_type_combo.currentText()
+            param_name = param_name_combo.currentText()
+            description = ""
+            if effect_type == "Blur":
+                if param_name == "radius":
+                    description = "Blur radius (1-20, default: 5)"
+                elif param_name == "animation_speed":
+                    description = "Animation speed in milliseconds (default: 2000)"
+                elif param_name == "animate":
+                    description = "Whether to animate the blur (true/false, default: true)"
+            elif effect_type == "Flicker":
+                if param_name == "intensity":
+                    description = "Flicker intensity (0.0-1.0, default: 0.3)"
+                elif param_name == "frequency":
+                    description = "Flicker frequency in milliseconds (default: 500)"
+                elif param_name == "color":
+                    description = "Flicker color (white/black, default: white)"
+            elif effect_type == "Static":
+                if param_name == "intensity":
+                    description = "Static intensity (0.0-1.0, default: 0.2)"
+                elif param_name == "frequency":
+                    description = "Static frequency in milliseconds (default: 100)"
+                elif param_name == "dot_size":
+                    description = "Static dot size (1-10, default: 3)"
+            elif effect_type == "Darken/Brighten":
+                if param_name == "factor":
+                    description = "Darken/brighten factor (-1.0 to 1.0, negative=darken, positive=brighten)"
+                elif param_name == "animation_speed":
+                    description = "Animation speed in milliseconds (default: 2000)"
+                elif param_name == "animate":
+                    description = "Whether to animate the effect (true/false, default: true)"
+            param_description.setText(description)
+        
+        effect_type_combo.currentIndexChanged.connect(update_screen_effect_param_combo)
+        param_name_combo.currentIndexChanged.connect(update_screen_effect_flicker_color_visibility)
+        param_name_combo.currentIndexChanged.connect(update_screen_effect_param_description)
+        update_screen_effect_param_combo()
+        
+        if self.theme_colors:
+            base_color = self.theme_colors.get("base_color", "#00FF66")
+            darker_bg = self.theme_colors.get("darker_bg", "#1A1A1A")
+            for widget in [effect_operation_combo, param_name_combo, param_value_input, enable_combo, flicker_color_combo]:
+                if widget:
+                    widget.setStyleSheet(f"""
+                        background-color: {darker_bg};
+                        color: {base_color};
+                        border: 1px solid {base_color};
+                        selection-background-color: {base_color};
+                        selection-color: {darker_bg};
+                    """)
+            for label in [operation_label, param_name_label, param_value_label, flicker_color_label, enable_label]:
+                if label:
+                    label.setStyleSheet(f"""
+                        background-color: transparent;
+                        color: {base_color};
+                    """)
+            param_description.setStyleSheet(f"""
+                background-color: transparent;
+                color: {base_color};
+            """)
+        
         remove_button = QPushButton("-")
         remove_button.setObjectName("TimerRuleActionRemoveButton")
         remove_button.setFixedWidth(30)
@@ -1269,6 +1456,7 @@ class TimerRulesWidget(QWidget):
         action_widget.setProperty("var_value_input", var_value_input)
         action_widget.setProperty("scope_global_radio", scope_global_radio)
         action_widget.setProperty("scope_character_radio", scope_character_radio)
+        action_widget.setProperty("scope_player_radio", scope_player_radio)
         action_widget.setProperty("scope_setting_radio", scope_setting_radio)
         action_widget.setProperty("actor_post_widget", actor_post_widget)
         action_widget.setProperty("actor_name_input", actor_name_input)
@@ -1285,6 +1473,13 @@ class TimerRulesWidget(QWidget):
         action_widget.setProperty("system_msg_sysmsg_position_combo", sysmsg_position_combo)
         action_widget.setProperty("game_over_widget", game_over_widget)
         action_widget.setProperty("game_over_message_input", game_over_message_input)
+        action_widget.setProperty("screen_effect_widget", screen_effect_widget)
+        action_widget.setProperty("screen_effect_type_combo", effect_type_combo)
+        action_widget.setProperty("screen_effect_operation_combo", effect_operation_combo)
+        action_widget.setProperty("screen_effect_param_name_combo", param_name_combo)
+        action_widget.setProperty("screen_effect_param_value_input", param_value_input)
+        action_widget.setProperty("screen_effect_enabled_combo", enable_combo)
+        action_widget.setProperty("screen_effect_flicker_color_combo", flicker_color_combo)
         def _update_action_row_inputs():
             selected_type = type_combo.currentText()
             is_set_var = (selected_type == "Set Var")
@@ -1292,6 +1487,7 @@ class TimerRulesWidget(QWidget):
             is_actor_post = (selected_type == "Actor Post")
             is_narrator_post = (selected_type == "Narrator Post")
             is_game_over = (selected_type == "Game Over")
+            is_screen_effect = (selected_type == "Set Screen Effect")
             widget = type_combo.parentWidget()
             val_input = widget.property("value_input")
             set_var_cont = widget.property("set_var_widget")
@@ -1299,6 +1495,7 @@ class TimerRulesWidget(QWidget):
             actor_post_cont = widget.property("actor_post_widget")
             narrator_post_cont = widget.property("narrator_post_widget")
             game_over_cont = widget.property("game_over_widget")
+            screen_effect_cont = widget.property("screen_effect_widget")
             if is_set_var:
                 op_selector = widget.property("operation_selector")
                 var_val_input = widget.property("var_value_input")
@@ -1311,7 +1508,13 @@ class TimerRulesWidget(QWidget):
                 if gen_context_widget:
                     gen_context_widget.setVisible(is_generate_op)
             if val_input:
-                val_input.setVisible(not (is_set_var or is_system_message or is_actor_post or is_narrator_post or is_game_over))
+                val_input.setVisible(not (is_set_var or is_system_message or is_actor_post or is_narrator_post or is_game_over or is_screen_effect))
+                if selected_type == "New Scene":
+                    val_input.setPlaceholderText("(No value needed)") 
+                    val_input.setEnabled(False)
+                else:
+                    val_input.setPlaceholderText("Action value")
+                    val_input.setEnabled(True)
             if set_var_cont:
                 set_var_cont.setVisible(is_set_var)
             if system_message_cont:
@@ -1322,13 +1525,8 @@ class TimerRulesWidget(QWidget):
                 narrator_post_cont.setVisible(is_narrator_post)
             if game_over_cont:
                 game_over_cont.setVisible(is_game_over)
-            if val_input:
-                if selected_type == "New Scene":
-                    val_input.setPlaceholderText("(No value needed)") 
-                    val_input.setEnabled(False)
-                else:
-                    val_input.setPlaceholderText("Action value")
-                    val_input.setEnabled(True)
+            if screen_effect_cont:
+                screen_effect_cont.setVisible(is_screen_effect)
         _update_action_row_inputs()
         type_combo.currentIndexChanged.connect(_update_action_row_inputs)
         operation_selector.currentIndexChanged.connect(_update_action_row_inputs)
@@ -1343,6 +1541,7 @@ class TimerRulesWidget(QWidget):
                 scope = action.get("scope", "Global")
                 scope_global_radio.setChecked(scope == "Global")
                 scope_character_radio.setChecked(scope == "Character")
+                scope_player_radio.setChecked(scope == "Player")
                 scope_setting_radio.setChecked(scope == "Setting")
                 op_idx = operation_selector.findText(action.get("operation", "Set"), Qt.MatchFixedString | Qt.MatchCaseSensitive)
                 operation_selector.setCurrentIndex(op_idx if op_idx >= 0 else 0)
@@ -1384,6 +1583,43 @@ class TimerRulesWidget(QWidget):
                 sysmsg_position_combo.setCurrentIndex(sysmsg_pos_idx if sysmsg_pos_idx >= 0 else 0)
             elif action_type == "Game Over":
                 game_over_message_input.setPlainText(action.get("message", ""))
+            elif action_type == "Set Screen Effect":
+                effect_type_combo = action_widget.property("screen_effect_type_combo")
+                effect_operation_combo = action_widget.property("screen_effect_operation_combo")
+                param_name_combo = action_widget.property("screen_effect_param_name_combo")
+                param_value_input = action_widget.property("screen_effect_param_value_input")
+                enable_combo = action_widget.property("screen_effect_enabled_combo")
+                flicker_color_combo = action_widget.property("screen_effect_flicker_color_combo")
+                
+                if effect_type_combo:
+                    effect_type = action.get("effect_type", "Blur")
+                    idx = effect_type_combo.findText(effect_type)
+                    if idx >= 0:
+                        effect_type_combo.setCurrentIndex(idx)
+                
+                if effect_operation_combo:
+                    operation = action.get("operation", "set").capitalize()
+                    idx = effect_operation_combo.findText(operation)
+                    if idx >= 0:
+                        effect_operation_combo.setCurrentIndex(idx)
+                
+                if param_name_combo:
+                    param_name = action.get("param_name", "")
+                    param_name_combo.setCurrentText(param_name)
+                
+                if param_value_input:
+                    param_value = action.get("param_value", "")
+                    param_value_input.setText(param_value)
+                
+                if enable_combo:
+                    enabled = action.get("enabled", True)
+                    enable_combo.setCurrentText("True" if enabled else "False")
+                
+                if flicker_color_combo:
+                    flicker_color = action.get("param_value", "white")
+                    idx = flicker_color_combo.findText(flicker_color)
+                    if idx >= 0:
+                        flicker_color_combo.setCurrentIndex(idx)
             else:
                 value_input.setText(action.get("value", ""))
             _update_action_row_inputs()
@@ -1417,11 +1653,13 @@ class TimerRulesWidget(QWidget):
                 val_input = widget.property("var_value_input")
                 g_radio = widget.property("scope_global_radio")
                 c_radio = widget.property("scope_character_radio")
+                p_radio = widget.property("scope_player_radio")
                 s_radio = widget.property("scope_setting_radio")
                 if name_input: var_name = name_input.text().strip()
                 if op_selector: operation = op_selector.currentText()
                 if val_input: var_value = val_input.text().strip()
                 if c_radio and c_radio.isChecked(): action_scope = "Character"
+                elif p_radio and p_radio.isChecked(): action_scope = "Player"
                 elif s_radio and s_radio.isChecked(): action_scope = "Setting"
                 else: action_scope = "Global"
                 if var_name:
@@ -1501,6 +1739,34 @@ class TimerRulesWidget(QWidget):
                         "message": message
                     }
                     actions.append(action_data)
+                elif action_type == "Set Screen Effect":
+                    effect_type_combo = widget.property("screen_effect_type_combo")
+                    effect_operation_combo = widget.property("screen_effect_operation_combo")
+                    param_name_combo = widget.property("screen_effect_param_name_combo")
+                    param_value_input = widget.property("screen_effect_param_value_input")
+                    enable_combo = widget.property("screen_effect_enabled_combo")
+                    flicker_color_combo = widget.property("screen_effect_flicker_color_combo")
+                    
+                    if effect_type_combo and param_name_combo:
+                        effect_type = effect_type_combo.currentText()
+                        operation = effect_operation_combo.currentText().lower() if effect_operation_combo else "set"
+                        param_name = param_name_combo.currentText()
+                        enabled = enable_combo.currentText() == "True" if enable_combo else True
+                        
+                        if effect_type == "Flicker" and param_name == "color":
+                            param_value = flicker_color_combo.currentText() if flicker_color_combo else "white"
+                        else:
+                            param_value = param_value_input.text().strip() if param_value_input else ""
+                        
+                        action_data = {
+                            "type": action_type,
+                            "effect_type": effect_type,
+                            "operation": operation,
+                            "param_name": param_name,
+                            "param_value": param_value,
+                            "enabled": enabled
+                        }
+                        actions.append(action_data)
                 else:
                     value_input = widget.property("value_input")
                     action_value = value_input.text() if value_input else ""
@@ -1704,14 +1970,19 @@ class TimerRulesWidget(QWidget):
         scope_character_radio = QRadioButton("Character")
         scope_character_radio.setObjectName("ConditionScopeCharacterRadio") 
         scope_character_radio.setToolTip("Character variable (requires rule applies to Character)")
+        scope_player_radio = QRadioButton("Player")
+        scope_player_radio.setObjectName("ConditionScopePlayerRadio")
+        scope_player_radio.setToolTip("Player character variable")
         scope_setting_radio = QRadioButton("Setting")
         scope_setting_radio.setObjectName("ConditionScopeSettingRadio")
         scope_setting_radio.setToolTip("Setting variable")
         scope_group.addButton(scope_global_radio)
         scope_group.addButton(scope_character_radio)
+        scope_group.addButton(scope_player_radio)
         scope_group.addButton(scope_setting_radio)
         row_layout.addWidget(scope_global_radio)
         row_layout.addWidget(scope_character_radio)
+        row_layout.addWidget(scope_player_radio)
         row_layout.addWidget(scope_setting_radio)
         remove_button = QPushButton("-")
         remove_button.setObjectName("RemoveVariableConditionButton")
@@ -1725,6 +1996,7 @@ class TimerRulesWidget(QWidget):
             "value": value_input,
             "scope_global": scope_global_radio,
             "scope_character": scope_character_radio,
+            "scope_player": scope_player_radio,
             "scope_setting": scope_setting_radio,
             "remove_button": remove_button,
             "inter_row_operator": inter_row_op_combo
@@ -1738,7 +2010,11 @@ class TimerRulesWidget(QWidget):
             scope = condition_data.get("scope", "Global")
             scope_global_radio.setChecked(scope == "Global")
             scope_character_radio.setChecked(scope == "Character")
+            scope_player_radio.setChecked(scope == "Player")
             scope_setting_radio.setChecked(scope == "Setting")
+            logic_op = condition_data.get("logic_to_previous", "AND")
+            logic_idx = inter_row_op_combo.findText(logic_op)
+            inter_row_op_combo.setCurrentIndex(logic_idx if logic_idx >= 0 else 0)
         def update_value_visibility():
             op = operator_combo.currentText()
             value_input.setVisible(op not in ["exists", "not exists"])
