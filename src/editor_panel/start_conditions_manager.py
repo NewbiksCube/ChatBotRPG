@@ -21,6 +21,7 @@ class StartConditionsManagerWidget(QWidget):
         self._load_character_system_prompt()
         self._load_origin()
         self._load_starting_datetime()
+        self._load_global_vars()
         self.datetime_edit.dateTimeChanged.connect(self._save_starting_datetime)
         self.advancement_group.buttonClicked.connect(self._save_advancement_mode)
         self.time_multiplier_spin.valueChanged.connect(self._save_time_multiplier)
@@ -164,6 +165,43 @@ class StartConditionsManagerWidget(QWidget):
         self.character_system_prompt_editor.setPlaceholderText("Enter system instructions for character AI here.\nThis message will be sent as a system prompt for character interactions.")
         layout.addWidget(self.character_system_prompt_editor)
         self.character_system_prompt_editor.textChanged.connect(self._save_character_system_prompt)
+        
+        self.global_vars_label = QLabel("Global Variables:")
+        self.global_vars_label.setFont(QFont('Consolas', 12, QFont.Bold))
+        layout.addWidget(self.global_vars_label)
+        
+        self.global_vars_description = QLabel("Define variables that will be initialized once when starting a new game:")
+        self.global_vars_description.setFont(QFont('Consolas', 10))
+        self.global_vars_description.setStyleSheet(f"color: {self.theme_colors['base_color']}; margin-bottom: 8px;")
+        layout.addWidget(self.global_vars_description)
+        
+        self.global_vars_container = QWidget()
+        self.global_vars_layout = QVBoxLayout(self.global_vars_container)
+        self.global_vars_layout.setContentsMargins(0, 0, 0, 0)
+        self.global_vars_layout.setSpacing(8)
+        
+        self.global_vars_items = []
+        self._add_global_var_item()
+        
+        add_var_btn = QPushButton("+ Add Variable")
+        add_var_btn.setFont(QFont('Consolas', 10))
+        add_var_btn.clicked.connect(self._add_global_var_item)
+        add_var_btn.setStyleSheet(f"""
+            QPushButton {{
+                color: {self.theme_colors['base_color']};
+                background-color: {self.theme_colors['bg_color']};
+                border: 1px solid {self.theme_colors['base_color']};
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {QColor(self.theme_colors['base_color']).darker(300).name()};
+            }}
+        """)
+        layout.addWidget(add_var_btn)
+        layout.addWidget(self.global_vars_container)
+        
         layout.addStretch(1)
         self.intro_checkbox.stateChanged.connect(self._on_intro_changed)
         self.scroll_area.setWidget(self.scroll_content)
@@ -462,6 +500,147 @@ class StartConditionsManagerWidget(QWidget):
                 for checkbox in checkboxes.values():
                     checkbox.setStyleSheet(checkbox_style)
         self.format_hint.setStyleSheet(f"color: {self.theme_colors['base_color']}; margin-left: 8px;")
+        
+        self.global_vars_label.setStyleSheet(f"color: {self.theme_colors['base_color']};")
+        self.global_vars_description.setStyleSheet(f"color: {self.theme_colors['base_color']}; margin-bottom: 8px;")
+        
+        for item in self.global_vars_items:
+            name_input = item.get('name_input')
+            value_input = item.get('value_input')
+            if name_input:
+                name_input.setStyleSheet(f"""
+                    QLineEdit#GlobalVarNameInput {{
+                        color: {self.theme_colors['base_color']};
+                        background-color: {self.theme_colors['bg_color']};
+                        border: 1px solid {self.theme_colors['base_color']};
+                        border-radius: 4px;
+                        padding: 4px;
+                        selection-background-color: {QColor(self.theme_colors['base_color']).darker(300).name()};
+                        selection-color: white;
+                    }}
+                """)
+            if value_input:
+                value_input.setStyleSheet(f"""
+                    QLineEdit#GlobalVarValueInput {{
+                        color: {self.theme_colors['base_color']};
+                        background-color: {self.theme_colors['bg_color']};
+                        border: 1px solid {self.theme_colors['base_color']};
+                        border-radius: 4px;
+                        padding: 4px;
+                        selection-background-color: {QColor(self.theme_colors['base_color']).darker(300).name()};
+                        selection-color: white;
+                    }}
+                """)
+
+    def _add_global_var_item(self, var_name="", var_value=""):
+        container_widget = QWidget()
+        container_widget.setObjectName("GlobalVarItem")
+        row = QHBoxLayout(container_widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        
+        name_label = QLabel("Name:")
+        name_label.setFont(QFont('Consolas', 10))
+        name_label.setStyleSheet(f"color: {self.theme_colors['base_color']};")
+        name_label.setFixedWidth(60)
+        row.addWidget(name_label)
+        
+        name_input = QLineEdit()
+        name_input.setObjectName("GlobalVarNameInput")
+        name_input.setFont(QFont('Consolas', 10))
+        name_input.setPlaceholderText("variable_name")
+        name_input.setText(var_name)
+        name_input.setStyleSheet(f"""
+            QLineEdit#GlobalVarNameInput {{
+                color: {self.theme_colors['base_color']};
+                background-color: {self.theme_colors['bg_color']};
+                border: 1px solid {self.theme_colors['base_color']};
+                border-radius: 4px;
+                padding: 4px;
+                selection-background-color: {QColor(self.theme_colors['base_color']).darker(300).name()};
+                selection-color: white;
+            }}
+        """)
+        name_input.textChanged.connect(self._save_global_vars)
+        row.addWidget(name_input)
+        
+        value_label = QLabel("Value:")
+        value_label.setFont(QFont('Consolas', 10))
+        value_label.setStyleSheet(f"color: {self.theme_colors['base_color']};")
+        value_label.setFixedWidth(50)
+        row.addWidget(value_label)
+        
+        value_input = QLineEdit()
+        value_input.setObjectName("GlobalVarValueInput")
+        value_input.setFont(QFont('Consolas', 10))
+        value_input.setPlaceholderText("initial_value")
+        value_input.setText(var_value)
+        value_input.setStyleSheet(f"""
+            QLineEdit#GlobalVarValueInput {{
+                color: {self.theme_colors['base_color']};
+                background-color: {self.theme_colors['bg_color']};
+                border: 1px solid {self.theme_colors['base_color']};
+                border-radius: 4px;
+                padding: 4px;
+                selection-background-color: {QColor(self.theme_colors['base_color']).darker(300).name()};
+                selection-color: white;
+            }}
+        """)
+        value_input.textChanged.connect(self._save_global_vars)
+        row.addWidget(value_input)
+        
+        remove_btn = QPushButton("×")
+        remove_btn.setFixedWidth(30)
+        remove_btn.setFont(QFont('Consolas', 12, QFont.Bold))
+        remove_btn.clicked.connect(lambda: self._remove_global_var_item(container_widget))
+        remove_btn.setStyleSheet(f"""
+            QPushButton {{
+                color: {self.theme_colors['base_color']};
+                background-color: {self.theme_colors['bg_color']};
+                border: 1px solid {self.theme_colors['base_color']};
+                border-radius: 4px;
+                padding: 2px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {QColor(self.theme_colors['base_color']).darker(300).name()};
+            }}
+        """)
+        row.addWidget(remove_btn)
+        
+        self.global_vars_layout.addWidget(container_widget)
+        
+        item = {
+            'widget': container_widget,
+            'name_input': name_input,
+            'value_input': value_input
+        }
+        self.global_vars_items.append(item)
+        
+        main_ui = self._get_main_ui()
+        if main_ui and hasattr(main_ui, 'add_rule_sound') and main_ui.add_rule_sound:
+            try:
+                main_ui.add_rule_sound.play()
+            except Exception:
+                main_ui.add_rule_sound = None
+
+    def _remove_global_var_item(self, widget):
+        item_to_remove = None
+        for item in self.global_vars_items:
+            if item['widget'] == widget:
+                item_to_remove = item
+                break
+        if item_to_remove:
+            self.global_vars_layout.removeWidget(widget)
+            widget.setParent(None)
+            self.global_vars_items.remove(item_to_remove)
+            main_ui = self._get_main_ui()
+            if main_ui and hasattr(main_ui, 'delete_rule_sound') and main_ui.delete_rule_sound:
+                try:
+                    main_ui.delete_rule_sound.play()
+                except Exception:
+                    main_ui.delete_rule_sound = None
+            self._save_global_vars()
 
     def _toggle_intro_text(self, checked):
         self.intro_title_label.setVisible(checked)
@@ -1032,4 +1211,55 @@ class StartConditionsManagerWidget(QWidget):
             with open(self.variables_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"[StartConditionsManager] Error saving time multiplier: {e}") 
+            print(f"[StartConditionsManager] Error saving time multiplier: {e}")
+
+    def _load_global_vars(self):
+        if not self.variables_file or not os.path.exists(self.variables_file):
+            return
+        try:
+            with open(self.variables_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            global_vars = data.get('global_variables', {})
+            
+            while self.global_vars_items:
+                item = self.global_vars_items[0]
+                widget = item['widget']
+                self.global_vars_layout.removeWidget(widget)
+                widget.setParent(None)
+                self.global_vars_items.remove(item)
+            
+            if global_vars:
+                for var_name, var_value in global_vars.items():
+                    self._add_global_var_item(var_name, str(var_value))
+            else:
+                self._add_global_var_item()
+        except Exception as e:
+            print(f"[StartConditionsManager] Error loading global variables: {e}")
+            self._add_global_var_item()
+
+    def _save_global_vars(self):
+        if not self.variables_file:
+            return
+        try:
+            if os.path.exists(self.variables_file):
+                with open(self.variables_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            else:
+                data = {}
+            
+            global_vars = {}
+            for item in self.global_vars_items:
+                name_input = item.get('name_input')
+                value_input = item.get('value_input')
+                if name_input and value_input:
+                    var_name = name_input.text().strip()
+                    var_value = value_input.text().strip()
+                    if var_name:
+                        global_vars[var_name] = var_value
+            
+            data['global_variables'] = global_vars
+            
+            with open(self.variables_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"[StartConditionsManager] Error saving global variables: {e}")
