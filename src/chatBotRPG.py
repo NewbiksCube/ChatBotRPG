@@ -1189,6 +1189,11 @@ class ChatbotUI(QWidget):
             current_context.append(user_msg_obj)
             self._save_context_for_tab(self.current_tab_index)
             self._last_user_msg_for_post_rules = user_message
+            
+            right_splitter = tab_data.get('right_splitter') if tab_data else None
+            if right_splitter and hasattr(right_splitter, 'update_game_time'):
+                right_splitter.update_game_time()
+            
             if tab_data and 'thought_rules' in tab_data and tab_data['thought_rules']:
                 self._cot_next_step = lambda: self._complete_message_processing(user_message)
                 QTimer.singleShot(0, lambda: self._apply_chain_of_thought_rules_pre(user_message, prev_assistant_msg))
@@ -1791,6 +1796,11 @@ class ChatbotUI(QWidget):
         if hasattr(self, '_pending_update_top_splitter') and self._pending_update_top_splitter:
             update_top_splitter_location_text(self._pending_update_top_splitter)
             self._pending_update_top_splitter = None
+        
+        right_splitter = tab_data.get('right_splitter') if tab_data else None
+        if right_splitter and hasattr(right_splitter, 'update_game_time'):
+            right_splitter.update_game_time()
+        
         self._assistant_message_buffer = None
         self._last_user_msg_for_post_rules = None
         self._cot_text_tag = None
@@ -2605,9 +2615,9 @@ class ChatbotUI(QWidget):
                 except Exception as e:
                     print(f"  Error reading gamestate.json for effects init: {e}")
             gamestate['effects'] = {
-                "blur": {"enabled": False, "radius": 5, "animation_speed": 2000, "animate": False},
-                "flicker": {"enabled": False, "intensity": 0.1, "frequency": 1000, "color": "white"},
-                "static": {"enabled": False, "intensity": 0.05, "frequency": 200, "dot_size": 1},
+                "blur": {"enabled": False, "radius": 0, "animation_speed": 2000, "animate": False},
+                "flicker": {"enabled": False, "intensity": 0, "frequency": 1000, "color": "white"},
+                "static": {"enabled": False, "intensity": 0, "frequency": 200, "dot_size": 1},
                 "darken_brighten": {"enabled": False, "factor": 1.0, "animation_speed": 2000, "animate": False}
             }
             try:
@@ -3475,7 +3485,7 @@ p, li { white-space: pre-wrap; }
         if 'blur' in self._screen_effects[tab_index]:
             self._screen_effects[tab_index]['blur'].set_config(
                 enabled=blur_config.get('enabled', False),
-                radius=blur_config.get('radius', 5),
+                radius=blur_config.get('radius', 0),
                 animation_speed=blur_config.get('animation_speed', 2000),
                 animate=blur_config.get('animate', True)
             )
@@ -3495,7 +3505,7 @@ p, li { white-space: pre-wrap; }
         if 'static' in self._screen_effects[tab_index]:
             self._screen_effects[tab_index]['static'].set_config(
                 enabled=static_config.get('enabled', False),
-                intensity=static_config.get('intensity', 0.2),
+                intensity=static_config.get('intensity', 0),
                 frequency=static_config.get('frequency', 100),
                 dot_size=static_config.get('dot_size', 3)
             )
@@ -3521,22 +3531,22 @@ p, li { white-space: pre-wrap; }
             _load_json_safely
         )
         result_text = text_to_process
-        if '(character)' in result_text and actor_name_context:
-            result_text = result_text.replace('(character)', actor_name_context)
-        if '(player)' in result_text:
+        if '(character)' in result_text.lower() and actor_name_context:
+            result_text = re.sub(r'\(character\)', actor_name_context, result_text, flags=re.IGNORECASE)
+        if '(player)' in result_text.lower():
             workflow_data_dir = tab_data.get('workflow_data_dir') if tab_data else None
             if workflow_data_dir:
                 from core.utils import _get_player_character_name
                 player_name = _get_player_character_name(workflow_data_dir)
                 if player_name:
-                    result_text = result_text.replace('(player)', player_name)
-        if '(setting)' in result_text:
+                    result_text = re.sub(r'\(player\)', player_name, result_text, flags=re.IGNORECASE)
+        if '(setting)' in result_text.lower():
             workflow_data_dir = tab_data.get('workflow_data_dir') if tab_data else None
             if workflow_data_dir:
                 from core.utils import _get_player_current_setting_name
                 setting_name = _get_player_current_setting_name(workflow_data_dir)
                 if setting_name and setting_name != "Unknown Setting":
-                    result_text = result_text.replace('(setting)', setting_name)
+                    result_text = re.sub(r'\(setting\)', setting_name, result_text, flags=re.IGNORECASE)
         def get_var_value(scope, var_name):
             workflow_data_dir = tab_data.get('workflow_data_dir')
             if not var_name: return ""
@@ -3743,6 +3753,8 @@ Brief note from {character_name}'s perspective:"""
         except Exception as e:
             import traceback
             traceback.print_exc()
+
+
 
     def _cleanup_old_backup_files(self):
         try:
