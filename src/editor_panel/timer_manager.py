@@ -21,21 +21,14 @@ class TimerInstance:
 
     def _calculate_interval_ms(self):
         interval_ms = 60000
-        
-        # Check if this timer uses game time instead of real time
         use_game_time = self._should_use_game_time()
-        
         if use_game_time:
-            # Calculate game time interval
             game_seconds = self._calculate_game_time_interval()
             if game_seconds > 0:
-                # Convert game time to real time based on time multiplier
                 time_multiplier = self._get_time_multiplier()
                 real_seconds = game_seconds / time_multiplier if time_multiplier > 0 else game_seconds
                 interval_ms = int(real_seconds * 1000)
-                print(f"[TIMER] Game time interval: {game_seconds}s game time = {real_seconds}s real time (multiplier: {time_multiplier})")
         else:
-            # Use real time interval (original logic)
             if self.rule_data.get('interval_is_random', False):
                 min_interval = self.rule_data.get('interval_min', 5)
                 max_interval = self.rule_data.get('interval_max', 60)
@@ -44,79 +37,56 @@ class TimerInstance:
             else:
                 interval_seconds = self.rule_data.get('interval', 60)
                 interval_ms = interval_seconds * 1000
-        
         return interval_ms
     
     def _should_use_game_time(self):
-        """Check if this timer should use game time instead of real time"""
-        # Check the time_mode field first
         time_mode = self.rule_data.get('time_mode', 'real_time')
         if time_mode == 'game_time':
             return True
-        
-        # Fallback: Check if any game time fields are set (for backward compatibility)
         game_seconds = self.rule_data.get('game_seconds', 0)
         game_minutes = self.rule_data.get('game_minutes', 0)
         game_hours = self.rule_data.get('game_hours', 0)
         game_days = self.rule_data.get('game_days', 0)
-        
-        # If any game time field is non-zero, use game time
         return game_seconds > 0 or game_minutes > 0 or game_hours > 0 or game_days > 0
     
     def _calculate_game_time_interval(self):
-        """Calculate the total game time interval in seconds"""
         total_seconds = 0
-        
-        # Add game seconds
         if self.rule_data.get('game_seconds_is_random', False):
             min_seconds = self.rule_data.get('game_seconds_min', 0)
             max_seconds = self.rule_data.get('game_seconds_max', 59)
             total_seconds += random.randint(min_seconds, max_seconds)
         else:
             total_seconds += self.rule_data.get('game_seconds', 0)
-        
-        # Add game minutes
         if self.rule_data.get('game_minutes_is_random', False):
             min_minutes = self.rule_data.get('game_minutes_min', 0)
             max_minutes = self.rule_data.get('game_minutes_max', 59)
             total_seconds += random.randint(min_minutes, max_minutes) * 60
         else:
             total_seconds += self.rule_data.get('game_minutes', 0) * 60
-        
-        # Add game hours
         if self.rule_data.get('game_hours_is_random', False):
             min_hours = self.rule_data.get('game_hours_min', 0)
             max_hours = self.rule_data.get('game_hours_max', 23)
             total_seconds += random.randint(min_hours, max_hours) * 3600
         else:
             total_seconds += self.rule_data.get('game_hours', 0) * 3600
-        
-        # Add game days
         if self.rule_data.get('game_days_is_random', False):
             min_days = self.rule_data.get('game_days_min', 0)
             max_days = self.rule_data.get('game_days_max', 365)
             total_seconds += random.randint(min_days, max_days) * 86400
         else:
             total_seconds += self.rule_data.get('game_days', 0) * 86400
-        
         return total_seconds
     
     def _get_time_multiplier(self):
-        """Get the current time multiplier from the time manager"""
         if not self.tab_data:
             return 1.0
-        
         time_manager_widget = self.tab_data.get('time_manager_widget')
         if not time_manager_widget:
             return 1.0
-        
-        # Try to get the time multiplier from the time manager
         try:
-            # Load the time passage configuration
             workflow_data_dir = self.tab_data.get('workflow_data_dir')
             if not workflow_data_dir:
                 return 1.0
-            
             time_passage_file = os.path.join(workflow_data_dir, 'resources', 'data files', 'settings', 'time_passage.json')
             if os.path.exists(time_passage_file):
                 with open(time_passage_file, 'r', encoding='utf-8') as f:
@@ -167,18 +137,16 @@ class TimerManager(QObject):
         self.lock = threading.RLock()
         self.main_timer = QTimer(self)
         self.main_timer.timeout.connect(self._check_timers)
-        self.main_timer.start(1000)  # Check every second
-        self._creating_timers = set()  # Track timers currently being created to prevent duplicates
-        self._timers_paused = False  # Track if timers are paused during NPC processing
+        self.main_timer.start(1000)
+        self._creating_timers = set()
+        self._timers_paused = False
 
     def pause_timers(self):
-        """Pause all timer firing during NPC processing"""
         with self.lock:
             self._timers_paused = True
             print("[TIMER PAUSE] Timers paused during NPC processing")
 
     def resume_timers(self):
-        """Resume timer firing after NPC processing completes"""
         with self.lock:
             self._timers_paused = False
             print("[TIMER RESUME] Timers resumed after NPC processing")
@@ -192,11 +160,8 @@ class TimerManager(QObject):
         operator = condition.get('operator', '==')
         value = condition.get('value', '')
         scope = condition.get('scope', 'Global')
-        
-        # Apply variable substitution to the condition value if it's a string
         if isinstance(value, str) and hasattr(self.parent(), '_substitute_variables_in_string'):
             value = self.parent()._substitute_variables_in_string(value, tab_data, character_name)
-        
         print(f"[TIMER DEBUG] Evaluating condition: {var_name} {operator} {value} (scope: {scope}, character: {character_name})")
         
         var_value = None
@@ -211,9 +176,23 @@ class TimerManager(QObject):
                 actor_data, _ = _get_or_create_actor_data(self.parent(), workflow_dir, character_name)
                 if actor_data and 'variables' in actor_data:
                     var_value = actor_data['variables'].get(var_name)
-                    print(f"[TIMER DEBUG] Character variable '{var_name}' = {var_value} for {character_name}")
                 else:
-                    print(f"[TIMER DEBUG] No character variables found for {character_name}")
+                    return False
+            except Exception:
+                return False
+        elif scope == 'Player':
+            workflow_dir = tab_data.get('workflow_data_dir')
+            if not workflow_dir:
+                return False
+            try:
+                from core.utils import _get_player_character_name, _get_or_create_actor_data
+                player_name = _get_player_character_name(workflow_dir)
+                if not player_name:
+                    return False
+                actor_data, _ = _get_or_create_actor_data(self.parent(), workflow_dir, player_name)
+                if actor_data and 'variables' in actor_data:
+                    var_value = actor_data['variables'].get(var_name)
+                else:
                     return False
             except Exception:
                 return False
@@ -258,17 +237,21 @@ class TimerManager(QObject):
         elif var_value is None:
             if operator == "!=":
                 result = True
+            elif operator in [">", "<", ">=", "<="]:
+                try:
+                    val_num = float(value) if value is not None else 0
+                    result = self._compare_numeric(0, val_num, operator)
+                except (ValueError, TypeError):
+                    result = False
             else:
                 result = False
         else:
             try:
-                # First try to handle as numeric comparison if both values can be converted to numbers
                 try:
                     var_num = float(var_value) if var_value is not None else 0
                     val_num = float(value) if value is not None else 0
                     result = self._compare_numeric(var_num, val_num, operator)
                 except (ValueError, TypeError):
-                    # If numeric conversion fails, fall back to string comparison
                     var_str = str(var_value).lower() if var_value is not None else ""
                     val_str = str(value).lower() if value is not None else ""
                     if operator == "==":
@@ -280,7 +263,6 @@ class TimerManager(QObject):
                     elif operator == "not contains":
                         result = val_str not in var_str
                     elif operator in [">", "<", ">=", "<="]:
-                        # For comparison operators, try to convert to numbers again
                         try:
                             var_num = float(var_value) if var_value is not None else 0
                             val_num = float(value) if value is not None else 0
@@ -320,32 +302,21 @@ class TimerManager(QObject):
         return False
     
     def _evaluate_game_time_condition(self, condition, tab_data):
-        """Evaluate Game Time conditions for timer rules using cyclical time"""
         if not condition or condition.get('type') != 'Game Time':
             return False
-        
         operator = condition.get('operator', 'Before')
         time_type = condition.get('time_type', 'Minute')
         target_value = condition.get('value', 0)
-        
-        # Get current game datetime from variables
         try:
             main_ui = self.parent()
             tab_index = main_ui.tabs_data.index(tab_data) if tab_data in main_ui.tabs_data else -1
             if tab_index < 0:
-                print(f"[TIMER DEBUG] Could not find tab index for Game Time condition")
                 return False
-            
             variables = main_ui._load_variables(tab_index)
             current_datetime_str = variables.get('datetime')
-            
             if not current_datetime_str:
-                print(f"[TIMER DEBUG] No game datetime found in variables")
                 return False
-                
             current_datetime = datetime.fromisoformat(current_datetime_str)
-            
-            # Extract cyclical time component based on time_type
             if time_type == 'Second':
                 current_value = current_datetime.second
             elif time_type == 'Minute':
@@ -359,12 +330,7 @@ class TimerManager(QObject):
             elif time_type == 'Year':
                 current_value = current_datetime.year
             else:
-                print(f"[TIMER DEBUG] Unknown time type '{time_type}' for Game Time condition")
                 return False
-            
-            print(f"[TIMER DEBUG] Game Time condition: {operator} {target_value} {time_type} (current: {current_value}, target: {target_value})")
-            
-            # Evaluate the condition using cyclical time
             if operator == 'Before':
                 result = current_value < target_value
             elif operator == 'After':
@@ -372,21 +338,14 @@ class TimerManager(QObject):
             elif operator == 'At':
                 result = current_value == target_value
             else:
-                print(f"[TIMER DEBUG] Unknown Game Time operator: {operator}")
                 return False
-                
-            print(f"[TIMER DEBUG] Game Time condition result: {result}")
             return result
-                
         except (ValueError, TypeError) as e:
-            print(f"[TIMER DEBUG] Error parsing game datetime '{current_datetime_str}': {e}")
             return False
         except Exception as e:
-            print(f"[TIMER DEBUG] Error evaluating Game Time condition: {e}")
             return False
     
 
-        
     def _evaluate_rule_conditions(self, rule, tab_data, character_name=None):
         condition_type = rule.get('condition_type', 'Always')
         if condition_type == 'Always':
@@ -397,26 +356,31 @@ class TimerManager(QObject):
                 return False
             final_result_log = None
             condition_operator_log = rule.get('condition_operator', 'AND')
+            print(f"[TIMER DEBUG] Evaluating {len(condition_details)} conditions with operator: {condition_operator_log}")
             for i, condition in enumerate(condition_details):
                 logic_op_to_previous_log = condition.get('logic_to_previous', 'AND')
-                
-                # Check if this is a Game Time condition
                 if condition.get('type') == 'Game Time':
                     cond_result_log = self._evaluate_game_time_condition(condition, tab_data)
                 else:
                     cond_result_log = self._evaluate_variable_condition(condition, tab_data, character_name)
+                print(f"[TIMER DEBUG] Condition {i+1}: {condition.get('name', 'Unknown')} {condition.get('operator', '==')} {condition.get('value', 'Unknown')} (scope: {condition.get('scope', 'Global')}) = {cond_result_log}")
+                if i > 0:
+                    print(f"[TIMER DEBUG] Logic to previous: {logic_op_to_previous_log}")
                 
                 if final_result_log is None:
                     final_result_log = cond_result_log
                 elif logic_op_to_previous_log == 'AND':
                     final_result_log = final_result_log and cond_result_log
+                    print(f"[TIMER DEBUG] AND operation: {final_result_log}")
                 elif logic_op_to_previous_log == 'OR':
                     final_result_log = final_result_log or cond_result_log
+                    print(f"[TIMER DEBUG] OR operation: {final_result_log}")
                 else:
                     final_result_log = final_result_log and cond_result_log
                 if condition_operator_log == 'AND' and final_result_log is False:
                     return False
             final_eval_outcome = final_result_log if final_result_log is not None else False
+            print(f"[TIMER DEBUG] Final condition result: {final_eval_outcome}")
             return final_eval_outcome
         return False
 
@@ -507,11 +471,9 @@ class TimerManager(QObject):
                     continue
                 passed_condition_targets = []
                 if final_rule_scope == 'Global':
-                    # Check if this global timer has character-scoped conditions
                     condition_details = rule.get('condition_details', [])
                     has_character_conditions = any(cond.get('scope') == 'Character' for cond in condition_details)
                     is_recurring = rule.get('recurring', False)
-                    
                     if has_character_conditions:
                         if hasattr(self.parent(), 'get_character_names_in_scene_for_timers'):
                             characters_in_scene = self.parent().get_character_names_in_scene_for_timers(tab_data)
@@ -550,24 +512,14 @@ class TimerManager(QObject):
                 for target in passed_condition_targets:
                     timer_instance_character_binding = None if target == 'global' else target
                     actual_timer_key_for_dict = target
-                    
-                    # For character-specific timers created from global rules, use character name as key
                     if target != 'global' and final_rule_scope == 'Global':
                         actual_timer_key_for_dict = f"global_{target}"
-                    
-                    # Create a unique identifier for this timer to prevent duplicates
                     timer_creation_id = f"{tab_id}:{rule_id}:{actual_timer_key_for_dict}"
-                    
-                    # Check if we're already creating this timer
                     if timer_creation_id in self._creating_timers:
                         continue
-                    
                     existing_timer = self.active_timers[tab_id][rule_id].get(actual_timer_key_for_dict)
                     if not existing_timer:
-                        # Double-check that we don't already have a timer for this exact combination
-                        # This prevents race conditions where multiple timers could be created
                         if actual_timer_key_for_dict not in self.active_timers[tab_id][rule_id]:
-                            # Mark this timer as being created
                             self._creating_timers.add(timer_creation_id)
                             try:
                                 new_timer = TimerInstance(rule, timer_instance_character_binding, tab_data)
@@ -575,7 +527,6 @@ class TimerManager(QObject):
                                 new_timer.start()
                                 self.save_timer_state(tab_data)
                             finally:
-                                # Always remove from creating set
                                 self._creating_timers.discard(timer_creation_id)
                         else:
                             pass
@@ -607,9 +558,6 @@ class TimerManager(QObject):
             except Exception:
                 tab_id = "unknown_tab"
             tab_data['id'] = tab_id
-        
-        # Terminate character-specific timers when scene changes
-        # since those characters are no longer in the scene
         tab_id_str = str(tab_id)
         terminated_count = 0
         with self.lock:
@@ -618,42 +566,29 @@ class TimerManager(QObject):
                 for rule_id, timers_dict in self.active_timers[tab_id_str].items():
                     timers_to_remove = []
                     for timer_key, timer_instance in timers_dict.items():
-                        # Check if this is a character-specific timer or a recurring timer
                         rule_data = timer_instance.rule_data
                         rule_scope = rule_data.get('rule_scope') or rule_data.get('scope', 'Global')
                         has_character_binding = timer_instance.character is not None
                         is_character_timer = rule_scope == 'Character' or has_character_binding
                         is_recurring_timer = rule_data.get('recurring', False)
                         is_global_timer = rule_data.get('global', False)
-                        
-                        # Don't terminate global timers on scene change
                         if is_global_timer:
                             print(f"[SCENE CHANGE] Keeping global timer for rule '{rule_id}', character: '{timer_instance.character}'")
                             continue
-                        
                         if is_character_timer or is_recurring_timer:
                             timer_type = "character" if is_character_timer else "recurring"
                             print(f"[SCENE CHANGE] Terminating {timer_type} timer for rule '{rule_id}', character: '{timer_instance.character}'")
                             timer_instance.stop()
                             timers_to_remove.append(timer_key)
                             terminated_count += 1
-                    
-                    # Remove terminated character timers
                     for timer_key in timers_to_remove:
                         del timers_dict[timer_key]
-                    
-                    # If no timers left for this rule, mark rule for removal
                     if not timers_dict:
                         rules_to_remove.append(rule_id)
-                
-                # Remove empty rule entries
                 for rule_id in rules_to_remove:
                     del self.active_timers[tab_id_str][rule_id]
-                
-                # If no rules left for this tab, remove tab entry
                 if not self.active_timers[tab_id_str]:
                     del self.active_timers[tab_id_str]
-        
         if terminated_count > 0:
             print(f"[SCENE CHANGE] Terminated {terminated_count} character-specific timers")
             self.save_timer_state(tab_data)
@@ -731,8 +666,7 @@ class TimerManager(QObject):
 
     def _check_timers(self):
         if self._timers_paused:
-            return  # Skip timer checks when paused
-        
+            return
         expired_timers = []
         timers_to_stop = []
         current_time_for_check = datetime.now()
@@ -741,9 +675,7 @@ class TimerManager(QObject):
                 for rule_id, timers_dict in rules_dict.items():
                     for timer_key, timer in timers_dict.items():
                         if timer.is_running:
-                            # Check if timer is already firing to prevent duplicates
                             if hasattr(timer, '_is_firing') and timer._is_firing:
-                                print(f"[TIMER LOOP] Timer {rule_id} for {timer.character} is already firing, skipping")
                                 continue
                             if timer.is_expired():
                                 rule_data = timer.rule_data
@@ -1047,8 +979,6 @@ class TimerManager(QObject):
                 if not rule_data.get('enabled', True):
                     continue
                 character_binding = timer_data.get('character') if is_character else None
-                
-                # For character timers, validate that the character is present in the current scene
                 if is_character and character_binding:
                     main_ui = self.parent()
                     if main_ui and hasattr(main_ui, 'get_character_names_in_scene_for_timers'):
@@ -1061,7 +991,6 @@ class TimerManager(QObject):
                     else:
                         print(f"[TIMER LOAD] Warning: Cannot validate scene presence for character timer '{character_binding}', skipping restoration to be safe")
                         continue
-                
                 if tab_id not in self.active_timers:
                     self.active_timers[tab_id] = {}
                 if rule_id not in self.active_timers[tab_id]:
@@ -1281,7 +1210,12 @@ def execute_timer_action(main_ui, rule_data, action, character_name=None, tab_da
             success = trigger_game_over(main_ui, current_tab_index, game_over_message)
         except Exception as e:
             print(f"[TIMER ACTION] Error triggering Game Over from timer rule: {e}")
-        return
+    elif action_type == "Set Screen Effect":
+        try:
+            from rules.apply_rules import _apply_rule_side_effects
+            _apply_rule_side_effects(main_ui, action, None, None, None)
+        except Exception as e:
+            print(f"[TIMER ACTION] Error setting screen effect from timer rule: {e}")
 
 def _execute_set_var_action(main_ui, action, character_name, tab_data):
     var_name = action.get('var_name', '')
@@ -1291,9 +1225,7 @@ def _execute_set_var_action(main_ui, action, character_name, tab_data):
     if not var_name:
         return
     if isinstance(var_value, str) and hasattr(main_ui, '_substitute_variables_in_string'):
-        print(f"[TIMER SET VAR DEBUG] Before substitution: var_value='{var_value}', character_name='{character_name}'")
         var_value = main_ui._substitute_variables_in_string(var_value, tab_data, character_name)
-        print(f"[TIMER SET VAR DEBUG] After substitution: var_value='{var_value}'")
     
     if operation == 'Generate':
         gen_instructions = action.get('generate_instructions', '')
@@ -1340,7 +1272,7 @@ def _execute_set_var_action(main_ui, action, character_name, tab_data):
                 return
             if 'variables' not in actor_data or not isinstance(actor_data['variables'], dict):
                 actor_data['variables'] = {}
-            _apply_variable_operation(actor_data['variables'], var_name, var_value, 'Set')
+            _apply_variable_operation(actor_data['variables'], var_name, var_value, operation)
             with open(actor_file, 'w', encoding='utf-8') as f:
                 json.dump(actor_data, f, indent=2, ensure_ascii=False)
                 f.flush()
@@ -1348,6 +1280,36 @@ def _execute_set_var_action(main_ui, action, character_name, tab_data):
         except ImportError:
             pass
         except Exception as e:
+            pass
+    elif scope == 'Player':
+        workflow_dir = tab_data.get('workflow_data_dir')
+        if not workflow_dir:
+            return
+        try:
+            from core.utils import _get_player_character_name, _get_or_create_actor_data
+            player_name = _get_player_character_name(workflow_dir)
+            print(f"[TIMER SET VAR DEBUG] Player scope: player_name='{player_name}'")
+            if not player_name:
+                return
+            actor_data, actor_file = _get_or_create_actor_data(main_ui, workflow_dir, player_name)
+            print(f"[TIMER SET VAR DEBUG] Actor file: {actor_file}")
+            if not actor_data or not actor_file:
+                return
+            if 'variables' not in actor_data or not isinstance(actor_data['variables'], dict):
+                actor_data['variables'] = {}
+            print(f"[TIMER SET VAR DEBUG] Before operation: {var_name} = {actor_data['variables'].get(var_name, 'NOT_FOUND')}")
+            _apply_variable_operation(actor_data['variables'], var_name, var_value, operation)
+            print(f"[TIMER SET VAR DEBUG] After operation: {var_name} = {actor_data['variables'].get(var_name, 'NOT_FOUND')}")
+            with open(actor_file, 'w', encoding='utf-8') as f:
+                json.dump(actor_data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            print(f"[TIMER SET VAR DEBUG] Successfully saved to {actor_file}")
+        except ImportError:
+            print(f"[TIMER SET VAR DEBUG] ImportError in Player scope")
+            pass
+        except Exception as e:
+            print(f"[TIMER SET VAR DEBUG] Exception in Player scope: {e}")
             pass
     elif scope == 'Setting':
         workflow_dir = tab_data.get('workflow_data_dir')
@@ -1366,7 +1328,7 @@ def _execute_set_var_action(main_ui, action, character_name, tab_data):
                 setting_data = json.load(f)
             if 'variables' not in setting_data or not isinstance(setting_data['variables'], dict):
                 setting_data['variables'] = {}
-            _apply_variable_operation(setting_data['variables'], var_name, var_value, 'Set')
+            _apply_variable_operation(setting_data['variables'], var_name, var_value, operation)
             with open(setting_file, 'w', encoding='utf-8') as f:
                 json.dump(setting_data, f, indent=2, ensure_ascii=False)
                 f.flush()
@@ -1380,14 +1342,17 @@ def _execute_set_var_action(main_ui, action, character_name, tab_data):
         if tab_index < 0:
             return
         variables = main_ui._load_variables(tab_index)
-        _apply_variable_operation(variables, var_name, var_value, 'Set')
+        _apply_variable_operation(variables, var_name, var_value, operation)
         main_ui._save_variables(tab_index, variables)
 
 def _apply_variable_operation(variables_dict, var_name, var_value, operation):
     if operation == "Set":
         variables_dict[var_name] = var_value
     else:
-        current_value = variables_dict.get(var_name, 0)
+        if operation in ["Increment", "Decrement", "Multiply", "Divide"]:
+            current_value = variables_dict.get(var_name, 0.0)
+        else:
+            current_value = variables_dict.get(var_name, 0)
         try:
             if isinstance(current_value, str):
                 if '.' in current_value:
