@@ -69,7 +69,6 @@ def _process_specific_rule(self, rule, current_user_msg, prev_assistant_msg, rul
                  QTimer.singleShot(0, self._cot_next_step)
                  self._cot_next_step = None
             return
-
         if not applies_to_char and tab_data.get('_narrator_to_exit_rules', False):
              print(f"Skipping narrator rule '{rule.get('id')}' due to prior Exit Rule Processing action.")
              if not triggered_directly and rule_index is not None:
@@ -81,7 +80,6 @@ def _process_specific_rule(self, rule, current_user_msg, prev_assistant_msg, rul
                 QTimer.singleShot(0, self._cot_next_step)
                 self._cot_next_step = None
              return
-             
     if original_sequential_context:
         self._original_sequential_context = original_sequential_context
     if self.utility_inference_thread and self.utility_inference_thread.isRunning():
@@ -358,7 +356,6 @@ def _process_next_sequential_rule_post(self, current_user_msg, assistant_msg, ru
             QTimer.singleShot(0, self._cot_next_step)
             self._cot_next_step = None
         return
-    
     if not hasattr(self, '_cot_sequential_index'):
         self._cot_sequential_index = 0
     if not rules or self._cot_sequential_index >= len(rules):
@@ -377,7 +374,6 @@ def _process_next_sequential_rule_post(self, current_user_msg, assistant_msg, ru
         self._cot_sequential_index += 1
         QTimer.singleShot(0, lambda: _process_next_sequential_rule_post(self, current_user_msg, assistant_msg, rules))
         return
-    
     if applies_to == 'Character':
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if workflow_data_dir and hasattr(self, 'get_character_names_in_scene_for_timers'):
@@ -669,7 +665,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
             tag_text = action_obj.get('value', '').strip()
             if tag_text:
                 character_context = character_name_override if character_name_override else actor_for_substitution
-                tag_text = self._substitute_placeholders_in_condition_value(tag_text, tab_data, character_context)
+                tag_text = self._substitute_variables_in_string(tag_text, tab_data, character_context)
             tag_mode = action_obj.get('tag_mode', 'overwrite').lower()
             if tag_text:
                 applies_to_rule = rule.get('applies_to', 'Narrator')
@@ -735,16 +731,12 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                 print(f"  >> Rule '{rule_id}' Action: Invalid brightness value '{brightness_value}', skipping")
         
         elif action_type == 'Post Visibility':
-            # Store Post Visibility data for metadata attachment when the post is saved
             applies_to = action_obj.get('applies_to', 'Current Post')
             mode = action_obj.get('visibility_mode', 'Visible Only To')
             condition_type = action_obj.get('condition_type', 'Name Match')
             conditions = action_obj.get('conditions', [])
-            
-            # Convert our UI conditions format to the backend format
             actor_names = []
             variable_conditions = []
-            
             for condition in conditions:
                 if condition.get('type') == 'Name Match':
                     actor_names.append(condition.get('name', ''))
@@ -754,7 +746,6 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                     value = condition.get('value', '')
                     var_scope = condition.get('variable_scope', 'Global')
                     if var_name:
-                        # Convert UI operators to backend operators
                         operator_mapping = {
                             'equals': '==',
                             'not equals': '!=',
@@ -771,7 +762,6 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                             'value': value,
                             'variable_scope': var_scope
                         })
-            
             post_visibility_data = {
                 'applies_to': applies_to,
                 'mode': mode,
@@ -779,14 +769,11 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                 'actor_names': actor_names,
                 'variable_conditions': variable_conditions
             }
-            
             applies_to_rule = rule.get('applies_to', 'Narrator')
             
             if applies_to == 'Player Post':
-                # For Player Post visibility, store it separately to be applied to the last user message
                 if not hasattr(self, '_player_post_visibility_queue'):
                     self._player_post_visibility_queue = []
-                
                 if applies_to_rule == 'Character':
                     character_name_for_visibility = character_name_for_rule_context or character_name_override
                     if character_name_for_visibility:
@@ -799,10 +786,8 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                         'character': 'Narrator',
                         'data': post_visibility_data
                     })
-                
                 print(f"  >> Rule '{rule_id}' Action: Player Post Visibility queued ({mode}, {condition_type})")
             else:
-                # For Current Post visibility, store in post effects as before
                 if applies_to_rule == 'Character':
                     character_name_for_visibility = character_name_for_rule_context or character_name_override
                     if character_name_for_visibility:
@@ -815,7 +800,6 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                     if not hasattr(self, '_narrator_post_effects'):
                         self._narrator_post_effects = {}
                     self._narrator_post_effects['post_visibility'] = post_visibility_data
-                
                 print(f"  >> Rule '{rule_id}' Action: Current Post Visibility set ({mode}, {condition_type})")
         elif action_type == 'New Scene':
             if tab_data:
@@ -973,6 +957,8 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
         elif action_type == 'Advance Time':
             _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
         elif action_type == 'Change Time Passage':
+            _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
+        elif action_type == 'Determine Items':
             _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
     try:
         if force_narrator_action_obj:
