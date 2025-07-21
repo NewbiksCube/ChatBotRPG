@@ -445,7 +445,13 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                         new_value = param_value
                 else:
                     try:
-                        new_value = float(param_value)
+                        param_num = float(param_value)
+                        if operation == "increment":
+                            new_value = param_num
+                        elif operation == "decrement":
+                            new_value = -param_num
+                        elif operation == "set":
+                            new_value = param_num
                         if new_value.is_integer():
                             new_value = int(new_value)
                     except ValueError:
@@ -1149,13 +1155,19 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                         print(f"WARNING: No items '{item_identifier}' found in {target_type} '{target_name}'")
             if total_removed > 0:
                 consume = obj.get('consume', False)
+                print(f"[DEBUG] Remove Item: consume={consume}")
                 if consume:
                     consume_scope = obj.get('consume_scope', 'Player')
+                    print(f"[DEBUG] Remove Item: consume_scope={consume_scope}")
                     for item_identifier in item_identifiers:
+                        print(f"[DEBUG] Remove Item: Checking if '{item_identifier}' is consumable")
                         if _is_item_consumable(item_identifier, workflow_data_dir):
+                            print(f"[DEBUG] Remove Item: '{item_identifier}' is consumable, applying effects")
                             _apply_item_consume_effects(item_identifier, consume_scope, workflow_data_dir, tab_data, character_name)
                         else:
                             print(f"WARNING: Cannot consume item '{item_identifier}' - item is not marked as consumable in Inventory Reference")
+                else:
+                    print(f"[DEBUG] Remove Item: consume=False, skipping variable effects")
                 with open(target_file_path, 'w', encoding='utf-8') as f:
                     json.dump(target_data, f, indent=2, ensure_ascii=False)
             else:
@@ -1358,7 +1370,11 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                                     'location': '',
                                     'containers': {}
                                 }
-                                to_inventory.append(new_item)
+                                success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
+                                if not success:
+                                    from_inventory.append(new_item)
+                                    print(f"ERROR: Cannot add item '{item_identifier}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
+                                    continue
                             else:
                                 item['quantity'] = current_quantity - items_to_move
                                 moved_count += items_to_move
@@ -1372,7 +1388,11 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                                     'location': '',
                                     'containers': {}
                                 }
-                                to_inventory.append(new_item)
+                                success = _add_item_to_container(to_inventory, to_item_name, to_container_name, new_item)
+                                if not success:
+                                    item['quantity'] = current_quantity
+                                    print(f"ERROR: Cannot add item '{item_identifier}' to container '{to_container_name}' in item '{to_item_name}' in destination {to_type} '{to_name}' - target item or container not found")
+                                    continue
                             if items_to_move <= 0:
                                 break
                     if moved_count > 0:
@@ -1705,16 +1725,56 @@ def _substitute_variables_in_string(text_to_process, tab_data, actor_name_contex
         result_text = re.sub(pattern, replace_match, result_text)
     return result_text
 
-def _apply_item_consume_effects(item_name, consume_scope, workflow_data_dir, tab_data, character_name=None):
-    if not item_name or not workflow_data_dir:
+def _apply_item_consume_effects(item_identifier, consume_scope, workflow_data_dir, tab_data, character_name=None):
+    if not item_identifier or not workflow_data_dir:
         return
-    if not _is_item_consumable(item_name, workflow_data_dir):
-        print(f"ERROR: Cannot apply consume effects to '{item_name}' - item is not marked as consumable")
+    
+    item_name = item_identifier
+    
+    if item_identifier.lower().startswith('item_'):
+        try:
+            from core.utils import _get_player_character_name, _get_player_current_setting_name
+            player_name = _get_player_character_name(workflow_data_dir)
+            current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+            
+            found_item_name = None
+            
+            if player_name:
+                actor_data, _ = _get_or_create_actor_data(None, workflow_data_dir, player_name)
+                if actor_data and 'inventory' in actor_data:
+                    for item in actor_data['inventory']:
+                        if item.get('item_id', '').lower() == item_identifier.lower():
+                            found_item_name = item.get('name')
+                            break
+            
+            if not found_item_name and current_setting_name:
+                setting_file_path, _ = _find_setting_file_prioritizing_game_dir(None, workflow_data_dir, current_setting_name)
+                if setting_file_path and os.path.exists(setting_file_path):
+                    with open(setting_file_path, 'r', encoding='utf-8') as f:
+                        setting_data = json.load(f)
+                    inventory = setting_data.get('inventory', [])
+                    for item in inventory:
+                        if item.get('item_id', '').lower() == item_identifier.lower():
+                            found_item_name = item.get('name')
+                            break
+            
+            if found_item_name:
+                item_name = found_item_name
+                print(f"[DEBUG] Found item name '{found_item_name}' for item ID '{item_identifier}' in consume effects")
+            else:
+                print(f"[DEBUG] Could not find item name for item ID '{item_identifier}' in consume effects")
+        except Exception as e:
+            print(f"[DEBUG] Error looking up item name for ID '{item_identifier}' in consume effects: {e}")
+    
+    if not _is_item_consumable(item_identifier, workflow_data_dir):
+        print(f"ERROR: Cannot apply consume effects to '{item_identifier}' - item is not marked as consumable")
         return
+    
     items_dir = os.path.join(workflow_data_dir, "resources", "data files", "items")
     if not os.path.exists(items_dir):
         print(f"WARNING: Items directory not found: {items_dir}")
         return
+    
     item_ref = None
     for category in os.listdir(items_dir):
         category_path = os.path.join(items_dir, category)
@@ -1733,13 +1793,16 @@ def _apply_item_consume_effects(item_name, consume_scope, workflow_data_dir, tab
                         continue
         if item_ref:
             break
+    
     if not item_ref:
         print(f"WARNING: Item '{item_name}' not found in items directory")
         return
+    
     variables_to_apply = item_ref.get('variable_actions', [])
     if not variables_to_apply:
         print(f"INFO: Item '{item_name}' has no variable effects to apply")
         return
+    
     print(f"  >> Applying consume effects for '{item_name}' to scope '{consume_scope}'")
     for var_effect in variables_to_apply:
         if not isinstance(var_effect, dict):
@@ -1862,13 +1925,52 @@ def _apply_operation_to_variable(variables_dict, var_name, operation, value):
         print(f"ERROR: Failed to apply operation '{operation}' to variable '{var_name}': {e}")
         variables_dict[var_name] = value
 
-def _is_item_consumable(item_name, workflow_data_dir):
-    if not item_name or not workflow_data_dir:
+def _is_item_consumable(item_identifier, workflow_data_dir):
+    if not item_identifier or not workflow_data_dir:
         return False
+    
     items_dir = os.path.join(workflow_data_dir, "resources", "data files", "items")
     if not os.path.exists(items_dir):
         print(f"WARNING: Items directory not found: {items_dir}")
         return False
+    
+    item_name = item_identifier
+    
+    if item_identifier.lower().startswith('item_'):
+        try:
+            from core.utils import _get_player_character_name, _get_player_current_setting_name
+            player_name = _get_player_character_name(workflow_data_dir)
+            current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+            
+            found_item_name = None
+            
+            if player_name:
+                actor_data, _ = _get_or_create_actor_data(None, workflow_data_dir, player_name)
+                if actor_data and 'inventory' in actor_data:
+                    for item in actor_data['inventory']:
+                        if item.get('item_id', '').lower() == item_identifier.lower():
+                            found_item_name = item.get('name')
+                            break
+            
+            if not found_item_name and current_setting_name:
+                setting_file_path, _ = _find_setting_file_prioritizing_game_dir(None, workflow_data_dir, current_setting_name)
+                if setting_file_path and os.path.exists(setting_file_path):
+                    with open(setting_file_path, 'r', encoding='utf-8') as f:
+                        setting_data = json.load(f)
+                    inventory = setting_data.get('inventory', [])
+                    for item in inventory:
+                        if item.get('item_id', '').lower() == item_identifier.lower():
+                            found_item_name = item.get('name')
+                            break
+            
+            if found_item_name:
+                item_name = found_item_name
+                print(f"[DEBUG] Found item name '{found_item_name}' for item ID '{item_identifier}'")
+            else:
+                print(f"[DEBUG] Could not find item name for item ID '{item_identifier}'")
+        except Exception as e:
+            print(f"[DEBUG] Error looking up item name for ID '{item_identifier}': {e}")
+    
     for category in os.listdir(items_dir):
         category_path = os.path.join(items_dir, category)
         if os.path.isdir(category_path):
@@ -1880,7 +1982,9 @@ def _is_item_consumable(item_name, workflow_data_dir):
                             item_data = json.load(f)
                         if item_data.get('name') == item_name:
                             properties = item_data.get('properties', '')
-                            return 'Consumable' in properties
+                            is_consumable = 'Consumable' in properties
+                            print(f"[DEBUG] Item '{item_name}' consumable: {is_consumable} (properties: {properties})")
+                            return is_consumable
                     except Exception as e:
                         print(f"ERROR: Failed to load item file {file_path}: {e}")
                         continue
