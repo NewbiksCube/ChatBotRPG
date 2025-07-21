@@ -300,9 +300,9 @@ def load_effects_from_gamestate(tab_data):
         print(f"Error loading effects from gamestate: {e}")
         return None
 
-def update_screen_effects(workflow_data_dir, blur_enabled=False, blur_radius=5, blur_speed=2000, animate_blur=True,
-                         flicker_enabled=False, flicker_intensity=0.3, flicker_frequency=500,
-                         flicker_color="white", static_enabled=False, static_intensity=0.2,
+def update_screen_effects(workflow_data_dir, blur_enabled=False, blur_radius=0, blur_speed=2000, animate_blur=True,
+                         flicker_enabled=False, flicker_intensity=0, flicker_frequency=500,
+                         flicker_color="white", static_enabled=False, static_intensity=0,
                          static_frequency=100, static_dot_size=3):
     if not workflow_data_dir:
         print("Error: No workflow data directory provided")
