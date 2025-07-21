@@ -253,7 +253,7 @@ def create_pair_widget(tab_data):
             "Rewrite Post", "Generate Setting",
             "Generate Character", "Generate Random List",
             "Text Tag", "New Scene", "Change Actor Location", "Force Narrator", "Set Screen Effect", "Skip Post", "Change Brightness", "Exit Rule Processing", "Game Over",
-            "Post Visibility", "Add Item", "Remove Item", "Move Item", "Post Streaming", "Advance Time", "Change Time Passage"
+            "Post Visibility", "Add Item", "Remove Item", "Move Item", "Determine Items", "Post Streaming", "Advance Time", "Change Time Passage"
         ]
         type_selector.addItems(action_items)
         
@@ -738,18 +738,14 @@ def create_pair_widget(tab_data):
             target_item_name_input.setVisible(is_visible)
             target_container_name_label.setVisible(is_visible)
             target_container_name_input.setVisible(is_visible)
-        
         target_container_checkbox.toggled.connect(update_target_container_visibility)
-        
         add_item_widget.setVisible(False)
         top_h_layout.addWidget(add_item_widget)
-        
         remove_item_widget = QWidget()
         remove_item_widget.setObjectName("RemoveItemWidget")
         remove_item_layout = QVBoxLayout(remove_item_widget)
         remove_item_layout.setContentsMargins(0, 0, 0, 0)
         remove_item_layout.setSpacing(3)
-        
         remove_item_details_layout = QHBoxLayout()
         remove_item_name_label = QLabel("Item Name:")
         remove_item_name_label.setFont(QFont('Consolas', 9))
@@ -758,7 +754,6 @@ def create_pair_widget(tab_data):
         remove_item_name_input.setFont(QFont('Consolas', 9))
         remove_item_name_input.setPlaceholderText("Enter item name")
         remove_item_name_input.setMinimumWidth(150)
-        
         remove_quantity_label = QLabel("Quantity:")
         remove_quantity_label.setFont(QFont('Consolas', 9))
         remove_quantity_input = QLineEdit()
@@ -766,14 +761,12 @@ def create_pair_widget(tab_data):
         remove_quantity_input.setFont(QFont('Consolas', 9))
         remove_quantity_input.setPlaceholderText("1")
         remove_quantity_input.setMaximumWidth(80)
-        
         remove_item_details_layout.addWidget(remove_item_name_label)
         remove_item_details_layout.addWidget(remove_item_name_input)
         remove_item_details_layout.addWidget(remove_quantity_label)
         remove_item_details_layout.addWidget(remove_quantity_input)
         remove_item_details_layout.addStretch()
         remove_item_layout.addLayout(remove_item_details_layout)
-        
         remove_target_layout = QHBoxLayout()
         remove_target_label = QLabel("Target:")
         remove_target_label.setFont(QFont('Consolas', 9))
@@ -787,7 +780,6 @@ def create_pair_widget(tab_data):
         remove_target_group = QButtonGroup(remove_item_widget)
         remove_target_group.addButton(remove_target_setting_radio)
         remove_target_group.addButton(remove_target_character_radio)
-        
         remove_target_name_label = QLabel("Target Name:")
         remove_target_name_label.setFont(QFont('Consolas', 9))
         remove_target_name_input = QLineEdit()
@@ -795,20 +787,17 @@ def create_pair_widget(tab_data):
         remove_target_name_input.setFont(QFont('Consolas', 9))
         remove_target_name_input.setPlaceholderText("Leave blank for current")
         remove_target_name_input.setMinimumWidth(150)
-        
         remove_target_layout.addWidget(remove_target_label)
         remove_target_layout.addWidget(remove_target_setting_radio)
         remove_target_layout.addWidget(remove_target_character_radio)
         remove_target_layout.addWidget(remove_target_name_label)
         remove_target_layout.addWidget(remove_target_name_input)
-        
         remove_target_container_checkbox = QCheckBox("Container:")
         remove_target_container_checkbox.setObjectName("RemoveItemTargetContainerCheckbox")
         remove_target_container_checkbox.setFont(QFont('Consolas', 9))
         remove_target_layout.addWidget(remove_target_container_checkbox)
         remove_target_layout.addStretch()
         remove_item_layout.addLayout(remove_target_layout)
-        
         remove_target_container_layout = QHBoxLayout()
         remove_target_item_name_label = QLabel("Item Name:")
         remove_target_item_name_label.setFont(QFont('Consolas', 9))
@@ -828,7 +817,6 @@ def create_pair_widget(tab_data):
         remove_target_container_name_input.setMinimumWidth(150)
         remove_target_container_name_input.setVisible(False)
         remove_target_container_name_label.setVisible(False)
-        
         remove_target_container_layout.addWidget(remove_target_item_name_label)
         remove_target_container_layout.addWidget(remove_target_item_name_input)
         remove_target_container_layout.addWidget(remove_target_container_name_label)
@@ -842,18 +830,61 @@ def create_pair_widget(tab_data):
             remove_target_item_name_input.setVisible(is_visible)
             remove_target_container_name_label.setVisible(is_visible)
             remove_target_container_name_input.setVisible(is_visible)
-        
         remove_target_container_checkbox.toggled.connect(update_remove_target_container_visibility)
+        remove_consume_layout = QHBoxLayout()
+        remove_consume_checkbox = QCheckBox("Consume")
+        remove_consume_checkbox.setObjectName("RemoveItemConsumeCheckbox")
+        remove_consume_checkbox.setFont(QFont('Consolas', 9))
+        remove_consume_checkbox.setToolTip("Apply item's variable effects when removed")
+        remove_consume_scope_label = QLabel("Scope:")
+        remove_consume_scope_label.setFont(QFont('Consolas', 9))
+        remove_consume_scope_label.setVisible(False)
+        remove_consume_player_radio = QRadioButton("Player")
+        remove_consume_player_radio.setObjectName("RemoveItemConsumePlayerRadio")
+        remove_consume_player_radio.setFont(QFont('Consolas', 9))
+        remove_consume_player_radio.setVisible(False)
+        remove_consume_player_radio.setChecked(True)
+        remove_consume_setting_radio = QRadioButton("Setting")
+        remove_consume_setting_radio.setObjectName("RemoveItemConsumeSettingRadio")
+        remove_consume_setting_radio.setFont(QFont('Consolas', 9))
+        remove_consume_setting_radio.setVisible(False)
+        remove_consume_character_radio = QRadioButton("Character")
+        remove_consume_character_radio.setObjectName("RemoveItemConsumeCharacterRadio")
+        remove_consume_character_radio.setFont(QFont('Consolas', 9))
+        remove_consume_character_radio.setVisible(False)
+        remove_consume_scene_chars_radio = QRadioButton("Scene Characters")
+        remove_consume_scene_chars_radio.setObjectName("RemoveItemConsumeSceneCharsRadio")
+        remove_consume_scene_chars_radio.setFont(QFont('Consolas', 9))
+        remove_consume_scene_chars_radio.setVisible(False)
+        remove_consume_scope_group = QButtonGroup(remove_item_widget)
+        remove_consume_scope_group.addButton(remove_consume_player_radio)
+        remove_consume_scope_group.addButton(remove_consume_setting_radio)
+        remove_consume_scope_group.addButton(remove_consume_character_radio)
+        remove_consume_scope_group.addButton(remove_consume_scene_chars_radio)
+        remove_consume_layout.addWidget(remove_consume_checkbox)
+        remove_consume_layout.addWidget(remove_consume_scope_label)
+        remove_consume_layout.addWidget(remove_consume_player_radio)
+        remove_consume_layout.addWidget(remove_consume_setting_radio)
+        remove_consume_layout.addWidget(remove_consume_character_radio)
+        remove_consume_layout.addWidget(remove_consume_scene_chars_radio)
+        remove_consume_layout.addStretch()
+        remove_item_layout.addLayout(remove_consume_layout)
         
+        def update_remove_consume_scope_visibility():
+            is_visible = remove_consume_checkbox.isChecked()
+            remove_consume_scope_label.setVisible(is_visible)
+            remove_consume_player_radio.setVisible(is_visible)
+            remove_consume_setting_radio.setVisible(is_visible)
+            remove_consume_character_radio.setVisible(is_visible)
+            remove_consume_scene_chars_radio.setVisible(is_visible)
+        remove_consume_checkbox.toggled.connect(update_remove_consume_scope_visibility)
         remove_item_widget.setVisible(False)
         top_h_layout.addWidget(remove_item_widget)
-        
         move_item_widget = QWidget()
         move_item_widget.setObjectName("MoveItemWidget")
         move_item_layout = QVBoxLayout(move_item_widget)
         move_item_layout.setContentsMargins(0, 0, 0, 0)
         move_item_layout.setSpacing(3)
-        
         move_item_details_layout = QHBoxLayout()
         move_item_name_label = QLabel("Item Name:")
         move_item_name_label.setFont(QFont('Consolas', 9))
@@ -862,7 +893,6 @@ def create_pair_widget(tab_data):
         move_item_name_input.setFont(QFont('Consolas', 9))
         move_item_name_input.setPlaceholderText("Enter item name")
         move_item_name_input.setMinimumWidth(150)
-        
         move_quantity_label = QLabel("Quantity:")
         move_quantity_label.setFont(QFont('Consolas', 9))
         move_quantity_input = QLineEdit()
@@ -870,14 +900,12 @@ def create_pair_widget(tab_data):
         move_quantity_input.setFont(QFont('Consolas', 9))
         move_quantity_input.setPlaceholderText("1")
         move_quantity_input.setMaximumWidth(80)
-        
         move_item_details_layout.addWidget(move_item_name_label)
         move_item_details_layout.addWidget(move_item_name_input)
         move_item_details_layout.addWidget(move_quantity_label)
         move_item_details_layout.addWidget(move_quantity_input)
         move_item_details_layout.addStretch()
         move_item_layout.addLayout(move_item_details_layout)
-        
         move_from_layout = QHBoxLayout()
         move_from_label = QLabel("From:")
         move_from_label.setFont(QFont('Consolas', 9))
@@ -891,7 +919,6 @@ def create_pair_widget(tab_data):
         move_from_group = QButtonGroup(move_item_widget)
         move_from_group.addButton(move_from_setting_radio)
         move_from_group.addButton(move_from_character_radio)
-        
         move_from_name_label = QLabel("From Name:")
         move_from_name_label.setFont(QFont('Consolas', 9))
         move_from_name_input = QLineEdit()
@@ -899,20 +926,17 @@ def create_pair_widget(tab_data):
         move_from_name_input.setFont(QFont('Consolas', 9))
         move_from_name_input.setPlaceholderText("Leave blank for current")
         move_from_name_input.setMinimumWidth(150)
-        
         move_from_layout.addWidget(move_from_label)
         move_from_layout.addWidget(move_from_setting_radio)
         move_from_layout.addWidget(move_from_character_radio)
         move_from_layout.addWidget(move_from_name_label)
         move_from_layout.addWidget(move_from_name_input)
-        
         move_from_container_checkbox = QCheckBox("Container:")
         move_from_container_checkbox.setObjectName("MoveItemFromContainerCheckbox")
         move_from_container_checkbox.setFont(QFont('Consolas', 9))
         move_from_layout.addWidget(move_from_container_checkbox)
         move_from_layout.addStretch()
         move_item_layout.addLayout(move_from_layout)
-        
         move_from_container_layout = QHBoxLayout()
         move_from_item_name_label = QLabel("Item Name:")
         move_from_item_name_label.setFont(QFont('Consolas', 9))
@@ -932,7 +956,6 @@ def create_pair_widget(tab_data):
         move_from_container_name_input.setMinimumWidth(150)
         move_from_container_name_input.setVisible(False)
         move_from_container_name_label.setVisible(False)
-        
         move_from_container_layout.addWidget(move_from_item_name_label)
         move_from_container_layout.addWidget(move_from_item_name_input)
         move_from_container_layout.addWidget(move_from_container_name_label)
@@ -946,9 +969,7 @@ def create_pair_widget(tab_data):
             move_from_item_name_input.setVisible(is_visible)
             move_from_container_name_label.setVisible(is_visible)
             move_from_container_name_input.setVisible(is_visible)
-        
         move_from_container_checkbox.toggled.connect(update_move_from_container_visibility)
-        
         move_to_layout = QHBoxLayout()
         move_to_label = QLabel("To:")
         move_to_label.setFont(QFont('Consolas', 9))
@@ -962,7 +983,6 @@ def create_pair_widget(tab_data):
         move_to_group = QButtonGroup(move_item_widget)
         move_to_group.addButton(move_to_setting_radio)
         move_to_group.addButton(move_to_character_radio)
-        
         move_to_name_label = QLabel("To Name:")
         move_to_name_label.setFont(QFont('Consolas', 9))
         move_to_name_input = QLineEdit()
@@ -970,20 +990,17 @@ def create_pair_widget(tab_data):
         move_to_name_input.setFont(QFont('Consolas', 9))
         move_to_name_input.setPlaceholderText("Leave blank for current")
         move_to_name_input.setMinimumWidth(150)
-        
         move_to_layout.addWidget(move_to_label)
         move_to_layout.addWidget(move_to_setting_radio)
         move_to_layout.addWidget(move_to_character_radio)
         move_to_layout.addWidget(move_to_name_label)
         move_to_layout.addWidget(move_to_name_input)
-        
         move_to_container_checkbox = QCheckBox("Container:")
         move_to_container_checkbox.setObjectName("MoveItemToContainerCheckbox")
         move_to_container_checkbox.setFont(QFont('Consolas', 9))
         move_to_layout.addWidget(move_to_container_checkbox)
         move_to_layout.addStretch()
         move_item_layout.addLayout(move_to_layout)
-        
         move_to_container_layout = QHBoxLayout()
         move_to_item_name_label = QLabel("Item Name:")
         move_to_item_name_label.setFont(QFont('Consolas', 9))
@@ -1003,7 +1020,6 @@ def create_pair_widget(tab_data):
         move_to_container_name_input.setMinimumWidth(150)
         move_to_container_name_input.setVisible(False)
         move_to_container_name_label.setVisible(False)
-        
         move_to_container_layout.addWidget(move_to_item_name_label)
         move_to_container_layout.addWidget(move_to_item_name_input)
         move_to_container_layout.addWidget(move_to_container_name_label)
@@ -1017,12 +1033,136 @@ def create_pair_widget(tab_data):
             move_to_item_name_input.setVisible(is_visible)
             move_to_container_name_label.setVisible(is_visible)
             move_to_container_name_input.setVisible(is_visible)
-        
         move_to_container_checkbox.toggled.connect(update_move_to_container_visibility)
-        
         move_item_widget.setVisible(False)
         top_h_layout.addWidget(move_item_widget)
+        determine_items_widget = QWidget()
+        determine_items_widget.setObjectName("DetermineItemsWidget")
+        determine_items_layout = QVBoxLayout(determine_items_widget)
+        determine_items_layout.setContentsMargins(0, 0, 0, 0)
+        determine_items_layout.setSpacing(3)
+        determine_scope_layout = QHBoxLayout()
+        determine_scope_label = QLabel("Scope:")
+        determine_scope_label.setFont(QFont('Consolas', 9))
+        determine_player_radio = QRadioButton("Player")
+        determine_player_radio.setObjectName("DetermineItemPlayerRadio")
+        determine_player_radio.setFont(QFont('Consolas', 9))
+        determine_player_radio.setChecked(True)
+        determine_character_radio = QRadioButton("Character")
+        determine_character_radio.setObjectName("DetermineItemCharacterRadio")
+        determine_character_radio.setFont(QFont('Consolas', 9))
+        determine_setting_radio = QRadioButton("Setting")
+        determine_setting_radio.setObjectName("DetermineItemSettingRadio")
+        determine_setting_radio.setFont(QFont('Consolas', 9))
+        determine_scope_group = QButtonGroup(determine_items_widget)
+        determine_scope_group.addButton(determine_player_radio)
+        determine_scope_group.addButton(determine_character_radio)
+        determine_scope_group.addButton(determine_setting_radio)
+        determine_scope_layout.addWidget(determine_scope_label)
+        determine_scope_layout.addWidget(determine_player_radio)
+        determine_scope_layout.addWidget(determine_character_radio)
+        determine_scope_layout.addWidget(determine_setting_radio)
+        determine_scope_layout.addStretch()
+        determine_items_layout.addLayout(determine_scope_layout)
+        determine_return_type_layout = QHBoxLayout()
+        determine_return_type_label = QLabel("Return Type:")
+        determine_return_type_label.setFont(QFont('Consolas', 9))
+        determine_single_item_radio = QRadioButton("Return Single Item")
+        determine_single_item_radio.setObjectName("DetermineItemsSingleItemRadio")
+        determine_single_item_radio.setFont(QFont('Consolas', 9))
+        determine_single_item_radio.setChecked(True)
+        determine_multiple_items_radio = QRadioButton("Return Multiple Items")
+        determine_multiple_items_radio.setObjectName("DetermineItemsMultipleItemsRadio")
+        determine_multiple_items_radio.setFont(QFont('Consolas', 9))
+        determine_return_type_group = QButtonGroup(determine_items_widget)
+        determine_return_type_group.addButton(determine_single_item_radio)
+        determine_return_type_group.addButton(determine_multiple_items_radio)
+        determine_return_type_layout.addWidget(determine_return_type_label)
+        determine_return_type_layout.addWidget(determine_single_item_radio)
+        determine_return_type_layout.addWidget(determine_multiple_items_radio)
+        determine_return_type_layout.addStretch()
+        determine_items_layout.addLayout(determine_return_type_layout)
+        determine_owner_layout = QHBoxLayout()
+        determine_owner_label = QLabel("Owner:")
+        determine_owner_label.setFont(QFont('Consolas', 9))
+        determine_owner_input = QLineEdit()
+        determine_owner_input.setObjectName("DetermineItemOwnerInput")
+        determine_owner_input.setFont(QFont('Consolas', 9))
+        determine_owner_input.setPlaceholderText("Enter owner name or leave empty")
+        determine_owner_layout.addWidget(determine_owner_label)
+        determine_owner_layout.addWidget(determine_owner_input)
+        determine_items_layout.addLayout(determine_owner_layout)
+        determine_description_layout = QHBoxLayout()
+        determine_description_label = QLabel("Description:")
+        determine_description_label.setFont(QFont('Consolas', 9))
+        determine_description_input = QLineEdit()
+        determine_description_input.setObjectName("DetermineItemsDescriptionInput")
+        determine_description_input.setFont(QFont('Consolas', 9))
+        determine_description_input.setPlaceholderText("Enter description or leave empty")
+        determine_description_layout.addWidget(determine_description_label)
+        determine_description_layout.addWidget(determine_description_input)
+        determine_items_layout.addLayout(determine_description_layout)
+        determine_location_layout = QHBoxLayout()
+        determine_location_label = QLabel("Location:")
+        determine_location_label.setFont(QFont('Consolas', 9))
+        determine_location_input = QLineEdit()
+        determine_location_input.setObjectName("DetermineItemsLocationInput")
+        determine_location_input.setFont(QFont('Consolas', 9))
+        determine_location_input.setPlaceholderText("Enter location or leave empty")
+        determine_location_layout.addWidget(determine_location_label)
+        determine_location_layout.addWidget(determine_location_input)
+        determine_items_layout.addLayout(determine_location_layout)
+        determine_text_layout = QHBoxLayout()
+        determine_text_label = QLabel("Search prompt:")
+        determine_text_label.setFont(QFont('Consolas', 9))
+        determine_text_input = QTextEdit()
+        determine_text_input.setObjectName("DetermineItemsTextInput")
+        determine_text_input.setFont(QFont('Consolas', 9))
+        determine_text_input.setPlaceholderText("Enter search prompt or leave empty")
+        determine_text_input.setMaximumHeight(80)
+        determine_text_layout.addWidget(determine_text_label)
+        determine_text_layout.addWidget(determine_text_input)
+        determine_items_layout.addLayout(determine_text_layout)
+        determine_text_scope_layout = QHBoxLayout()
+        determine_text_scope_label = QLabel("Search Scope:")
+        determine_text_scope_label.setFont(QFont('Consolas', 9))
+        determine_full_convo_radio = QRadioButton("Full Conversation")
+        determine_full_convo_radio.setObjectName("DetermineItemsFullConvoRadio")
+        determine_full_convo_radio.setFont(QFont('Consolas', 9))
+        determine_full_convo_radio.setChecked(True)
+        determine_user_msg_radio = QRadioButton("User Message")
+        determine_user_msg_radio.setObjectName("DetermineItemsUserMsgRadio")
+        determine_user_msg_radio.setFont(QFont('Consolas', 9))
+        determine_llm_reply_radio = QRadioButton("LLM Reply")
+        determine_llm_reply_radio.setObjectName("DetermineItemsLlmReplyRadio")
+        determine_llm_reply_radio.setFont(QFont('Consolas', 9))
+        determine_convo_llm_radio = QRadioButton("Conversation plus LLM Reply")
+        determine_convo_llm_radio.setObjectName("DetermineItemsConvoLlmRadio")
+        determine_convo_llm_radio.setFont(QFont('Consolas', 9))
+        determine_text_scope_group = QButtonGroup(determine_items_widget)
+        determine_text_scope_group.addButton(determine_full_convo_radio)
+        determine_text_scope_group.addButton(determine_user_msg_radio)
+        determine_text_scope_group.addButton(determine_llm_reply_radio)
+        determine_text_scope_group.addButton(determine_convo_llm_radio)
+        determine_text_scope_layout.addWidget(determine_text_scope_label)
+        determine_text_scope_layout.addWidget(determine_full_convo_radio)
+        determine_text_scope_layout.addWidget(determine_user_msg_radio)
+        determine_text_scope_layout.addWidget(determine_llm_reply_radio)
+        determine_text_scope_layout.addWidget(determine_convo_llm_radio)
+        determine_text_scope_layout.addStretch()
+        determine_items_layout.addLayout(determine_text_scope_layout)
+        determine_items_widget.setVisible(False)
+        top_h_layout.addWidget(determine_items_widget)
         
+        def update_determine_items_text_scope_visibility():
+            is_visible = determine_items_widget.isVisible()
+            if is_visible:
+                determine_text_input.setVisible(True)
+                determine_text_scope_label.setVisible(True)
+                determine_full_convo_radio.setVisible(True)
+                determine_user_msg_radio.setVisible(True)
+                determine_llm_reply_radio.setVisible(True)
+                determine_convo_llm_radio.setVisible(True)
         advance_time_widget = QWidget()
         advance_time_widget.setObjectName("AdvanceTimeWidget")
         advance_time_layout = QHBoxLayout(advance_time_widget)
@@ -1041,13 +1181,11 @@ def create_pair_widget(tab_data):
         advance_time_layout.addStretch()
         advance_time_widget.setVisible(False)
         top_h_layout.addWidget(advance_time_widget)
-        
         change_time_passage_widget = QWidget()
         change_time_passage_widget.setObjectName("ChangeTimePassageWidget")
         change_time_passage_layout = QVBoxLayout(change_time_passage_widget)
         change_time_passage_layout.setContentsMargins(0, 0, 0, 0)
         change_time_passage_layout.setSpacing(3)
-        
         passage_mode_layout = QHBoxLayout()
         passage_mode_label = QLabel("Mode:")
         passage_mode_label.setFont(QFont('Consolas', 9))
@@ -1066,7 +1204,6 @@ def create_pair_widget(tab_data):
         passage_mode_layout.addWidget(passage_realtime_radio)
         passage_mode_layout.addStretch()
         change_time_passage_layout.addLayout(passage_mode_layout)
-        
         multiplier_layout = QHBoxLayout()
         multiplier_label = QLabel("Multiplier:")
         multiplier_label.setFont(QFont('Consolas', 9))
@@ -1088,10 +1225,8 @@ def create_pair_widget(tab_data):
         def update_multiplier_visibility():
             is_realtime = passage_realtime_radio.isChecked()
             multiplier_input.setEnabled(is_realtime)
-        
         passage_realtime_radio.toggled.connect(update_multiplier_visibility)
         passage_static_radio.toggled.connect(update_multiplier_visibility)
-        
         change_time_passage_widget.setVisible(False)
         top_h_layout.addWidget(change_time_passage_widget)
         position_container = QWidget()
@@ -1194,7 +1329,6 @@ def create_pair_widget(tab_data):
         target_setting_layout.addWidget(target_setting_label)
         target_setting_layout.addWidget(target_setting_input, 1)
         change_location_layout.addLayout(target_setting_layout)
-
         time_advancement_layout = QHBoxLayout()
         advance_time_checkbox = QCheckBox("Advance time based on travel distance")
         advance_time_checkbox.setObjectName("ChangeLocationAdvanceTimeCheckbox")
@@ -1202,7 +1336,6 @@ def create_pair_widget(tab_data):
         advance_time_checkbox.setChecked(True)
         advance_time_checkbox.setToolTip("When enabled, game time will advance based on the path length and map scale settings")
         time_advancement_layout.addWidget(advance_time_checkbox)
-        
         speed_multiplier_label = QLabel("Speed Multiplier:")
         speed_multiplier_label.setFont(QFont('Consolas', 9))
         speed_multiplier_label.setObjectName("ChangeLocationSpeedMultiplierLabel")
@@ -1216,7 +1349,6 @@ def create_pair_widget(tab_data):
         speed_multiplier_spinner.setDecimals(2)
         speed_multiplier_spinner.setToolTip("Multiplier for travel speed (1.0 = normal speed, 2.0 = twice as fast, 0.5 = half speed)")
         speed_multiplier_spinner.setMaximumWidth(80)
-        
         time_advancement_layout.addWidget(speed_multiplier_label)
         time_advancement_layout.addWidget(speed_multiplier_spinner)
         time_advancement_layout.addStretch()
@@ -1226,10 +1358,8 @@ def create_pair_widget(tab_data):
             is_checked = advance_time_checkbox.isChecked()
             speed_multiplier_label.setVisible(is_checked)
             speed_multiplier_spinner.setVisible(is_checked)
-        
         advance_time_checkbox.toggled.connect(update_speed_multiplier_visibility)
         update_speed_multiplier_visibility()
-        
         change_location_widget.setVisible(False)
         top_h_layout.addWidget(change_location_widget)
         generate_setting_widget = create_generate_setting_widget(parent=row_widget)
@@ -1313,7 +1443,6 @@ def create_pair_widget(tab_data):
         fields_row1.addWidget(personality_checkbox)
         fields_row1.addWidget(appearance_checkbox)
         fields_layout.addLayout(fields_row1)
-        
         fields_row2 = QHBoxLayout()
         goals_checkbox = QCheckBox("Goals")
         goals_checkbox.setObjectName("GenerateCharacterGoalsCheckbox")
@@ -1345,7 +1474,6 @@ def create_pair_widget(tab_data):
         select_buttons_layout.addWidget(select_none_btn)
         select_buttons_layout.addStretch()
         fields_layout.addLayout(select_buttons_layout)
-        
         generate_character_layout.addWidget(fields_container)
         instructions_label = QLabel("Instructions:")
         instructions_label.setFont(QFont('Consolas', 9))
@@ -1383,6 +1511,7 @@ def create_pair_widget(tab_data):
         location_layout.addWidget(location_label)
         location_layout.addWidget(location_editor, 1)
         generate_character_layout.addLayout(location_layout)
+
         def update_target_actor_field():
             is_edit_mode = edit_existing_radio.isChecked()
             target_actor_editor.setEnabled(is_edit_mode)
@@ -1402,6 +1531,7 @@ def create_pair_widget(tab_data):
             for checkbox in [name_checkbox, description_checkbox, personality_checkbox, appearance_checkbox,
                            goals_checkbox, story_checkbox, abilities_checkbox, equipment_checkbox]:
                 checkbox.setChecked(False)
+
         select_all_btn.clicked.connect(select_all_fields)
         select_none_btn.clicked.connect(select_no_fields)
         select_all_fields()
@@ -1523,6 +1653,7 @@ def create_pair_widget(tab_data):
         screen_effects_layout.addWidget(parameters_widget)
         screen_effects_widget.setVisible(False)
         top_h_layout.addWidget(screen_effects_widget)
+
         def update_param_combo():
             effect_type = effect_type_combo.currentText()
             param_name_combo.clear()
@@ -1661,7 +1792,6 @@ def create_pair_widget(tab_data):
         random_panel_layout.addLayout(random_type_layout)
         random_type_stack = QStackedWidget()
         random_panel_layout.addWidget(random_type_stack)
-
         number_panel = QWidget()
         number_layout = QHBoxLayout(number_panel)
         number_layout.setContentsMargins(0, 0, 0, 0)
@@ -1761,14 +1891,11 @@ def create_pair_widget(tab_data):
             condition_layout = QHBoxLayout(condition_widget)
             condition_layout.setContentsMargins(0, 0, 0, 0)
             condition_layout.setSpacing(3)
-            
             condition_widget.setObjectName("PostVisibilityConditionRow")
-            
             name_match_widget = QWidget()
             name_match_layout = QHBoxLayout(name_match_widget)
             name_match_layout.setContentsMargins(0, 0, 0, 0)
             name_match_layout.setSpacing(3)
-            
             name_label = QLabel("Name:")
             name_label.setFont(QFont('Consolas', 9))
             name_input = QLineEdit()
@@ -1779,12 +1906,10 @@ def create_pair_widget(tab_data):
             name_match_layout.addWidget(name_label)
             name_match_layout.addWidget(name_input)
             name_match_layout.addStretch()
-            
             variable_widget = QWidget()
             variable_layout = QHBoxLayout(variable_widget)
             variable_layout.setContentsMargins(0, 0, 0, 0)
             variable_layout.setSpacing(3)
-            
             var_name_label = QLabel("Variable:")
             var_name_label.setFont(QFont('Consolas', 9))
             var_name_input = QLineEdit()
@@ -1792,13 +1917,11 @@ def create_pair_widget(tab_data):
             var_name_input.setFont(QFont('Consolas', 9))
             var_name_input.setPlaceholderText("Variable name")
             var_name_input.setMinimumWidth(100)
-            
             operator_combo = QComboBox()
             operator_combo.setObjectName("PostVisibilityOperatorCombo")
             operator_combo.setFont(QFont('Consolas', 9))
             operator_combo.addItems(["equals", "not equals", "contains", "greater than", "less than", "greater than or equal", "less than or equal"])
             operator_combo.setMinimumWidth(120)
-            
             var_value_label = QLabel("Value:")
             var_value_label.setFont(QFont('Consolas', 9))
             var_value_input = QLineEdit()
@@ -1806,7 +1929,6 @@ def create_pair_widget(tab_data):
             var_value_input.setFont(QFont('Consolas', 9))
             var_value_input.setPlaceholderText("Value to compare")
             var_value_input.setMinimumWidth(100)
-            
             var_scope_label = QLabel("Scope:")
             var_scope_label.setFont(QFont('Consolas', 9))
             var_scope_global_radio = QRadioButton("Global")
@@ -1827,7 +1949,6 @@ def create_pair_widget(tab_data):
             var_scope_group.addButton(var_scope_player_radio)
             var_scope_group.addButton(var_scope_character_radio)
             var_scope_group.addButton(var_scope_setting_radio)
-            
             variable_layout.addWidget(var_name_label)
             variable_layout.addWidget(var_name_input)
             variable_layout.addWidget(operator_combo)
@@ -1839,13 +1960,11 @@ def create_pair_widget(tab_data):
             variable_layout.addWidget(var_scope_character_radio)
             variable_layout.addWidget(var_scope_setting_radio)
             variable_layout.addStretch()
-            
             remove_btn = QPushButton("−")
             remove_btn.setObjectName("PostVisibilityRemoveConditionButton")
             remove_btn.setMaximumWidth(25)
             remove_btn.setMaximumHeight(25)
             remove_btn.setFont(QFont('Consolas', 9))
-            
             condition_layout.addWidget(name_match_widget)
             condition_layout.addWidget(variable_widget)
             condition_layout.addWidget(remove_btn)
@@ -1923,6 +2042,7 @@ def create_pair_widget(tab_data):
             is_add_item = (t == "Add Item")
             is_remove_item = (t == "Remove Item")
             is_move_item = (t == "Move Item")
+            is_determine_items = (t == "Determine Items")
             is_advance_time = (t == "Advance Time")
             is_change_time_passage = (t == "Change Time Passage")
             is_generate_operation = False
@@ -1948,7 +2068,7 @@ def create_pair_widget(tab_data):
                 is_set_var, is_generate_setting,
                 is_generate_character, is_change_location, is_force_narrator,
                 is_screen_effect, is_generate_random_list, is_change_brightness, is_exit_rule_processing, is_game_over, is_post_visibility,
-                is_add_item, is_remove_item, is_move_item, is_advance_time, is_change_time_passage
+                is_add_item, is_remove_item, is_move_item, is_determine_items, is_advance_time, is_change_time_passage
             ])
             value_editor.setVisible(value_editor_visible)
             var_name_editor.setVisible(is_set_var)
@@ -1961,6 +2081,7 @@ def create_pair_widget(tab_data):
             add_item_widget.setVisible(is_add_item)
             remove_item_widget.setVisible(is_remove_item)
             move_item_widget.setVisible(is_move_item)
+            determine_items_widget.setVisible(is_determine_items)
             advance_time_widget.setVisible(is_advance_time)
             change_time_passage_widget.setVisible(is_change_time_passage)
             position_container.setVisible(is_sys_msg)
@@ -2242,6 +2363,11 @@ def create_pair_widget(tab_data):
             'remove_item_target_container_checkbox': remove_target_container_checkbox,
             'remove_item_target_item_name_input': remove_target_item_name_input,
             'remove_item_target_container_name_input': remove_target_container_name_input,
+            'remove_item_consume_checkbox': remove_consume_checkbox,
+            'remove_item_consume_player_radio': remove_consume_player_radio,
+            'remove_item_consume_setting_radio': remove_consume_setting_radio,
+            'remove_item_consume_character_radio': remove_consume_character_radio,
+            'remove_item_consume_scene_chars_radio': remove_consume_scene_chars_radio,
             'move_item_widget': move_item_widget,
             'move_item_name_input': move_item_name_input,
             'move_item_quantity_input': move_quantity_input,
@@ -2257,6 +2383,20 @@ def create_pair_widget(tab_data):
             'move_item_to_container_checkbox': move_to_container_checkbox,
             'move_item_to_item_name_input': move_to_item_name_input,
             'move_item_to_container_name_input': move_to_container_name_input,
+            'determine_items_widget': determine_items_widget,
+            'determine_items_player_radio': determine_player_radio,
+            'determine_items_character_radio': determine_character_radio,
+            'determine_items_setting_radio': determine_setting_radio,
+            'determine_items_single_item_radio': determine_single_item_radio,
+            'determine_items_multiple_items_radio': determine_multiple_items_radio,
+            'determine_items_owner_input': determine_owner_input,
+            'determine_items_description_input': determine_description_input,
+            'determine_items_location_input': determine_location_input,
+            'determine_items_text_input': determine_text_input,
+            'determine_items_full_convo_radio': determine_full_convo_radio,
+            'determine_items_user_msg_radio': determine_user_msg_radio,
+            'determine_items_llm_reply_radio': determine_llm_reply_radio,
+            'determine_items_convo_llm_radio': determine_convo_llm_radio,
             'advance_time_widget': advance_time_widget,
             'advance_time_input': advance_time_input,
             'change_time_passage_widget': change_time_passage_widget,
@@ -2430,6 +2570,9 @@ def create_pair_widget(tab_data):
             
         elif action_type == 'Move Item':
             populate_move_item(data, row)
+            
+        elif action_type == 'Determine Items':
+            populate_determine_items(data, row)
             
         elif action_type == 'Advance Time':
             populate_advance_time(data, row)
@@ -2902,7 +3045,8 @@ def create_pair_widget(tab_data):
         target_container_enabled = data.get('target_container_enabled', False)
         target_item_name = data.get('target_item_name', '')
         target_container_name = data.get('target_container_name', '')
-        
+        consume = data.get('consume', False)
+        consume_scope = data.get('consume_scope', 'Player')
         item_name_input = row.get('remove_item_name_input')
         if item_name_input and is_valid_widget(item_name_input):
             item_name_input.setText(item_name)
@@ -2919,17 +3063,30 @@ def create_pair_widget(tab_data):
         target_name_input = row.get('remove_item_target_name_input')
         if target_name_input and is_valid_widget(target_name_input):
             target_name_input.setText(target_name)
-        
         target_container_checkbox = row.get('remove_item_target_container_checkbox')
         target_item_name_input = row.get('remove_item_target_item_name_input')
         target_container_name_input = row.get('remove_item_target_container_name_input')
-        
         if target_container_checkbox and is_valid_widget(target_container_checkbox):
             target_container_checkbox.setChecked(target_container_enabled)
         if target_item_name_input and is_valid_widget(target_item_name_input):
             target_item_name_input.setText(target_item_name)
         if target_container_name_input and is_valid_widget(target_container_name_input):
             target_container_name_input.setText(target_container_name)
+        consume_checkbox = row.get('remove_item_consume_checkbox')
+        if consume_checkbox and is_valid_widget(consume_checkbox):
+            consume_checkbox.setChecked(consume)
+        consume_player_radio = row.get('remove_item_consume_player_radio')
+        consume_setting_radio = row.get('remove_item_consume_setting_radio')
+        consume_character_radio = row.get('remove_item_consume_character_radio')
+        consume_scene_chars_radio = row.get('remove_item_consume_scene_chars_radio')
+        if consume_player_radio and is_valid_widget(consume_player_radio):
+            consume_player_radio.setChecked(consume_scope == 'Player')
+        if consume_setting_radio and is_valid_widget(consume_setting_radio):
+            consume_setting_radio.setChecked(consume_scope == 'Setting')
+        if consume_character_radio and is_valid_widget(consume_character_radio):
+            consume_character_radio.setChecked(consume_scope == 'Character')
+        if consume_scene_chars_radio and is_valid_widget(consume_scene_chars_radio):
+            consume_scene_chars_radio.setChecked(consume_scope == 'Scene Characters')
 
     def populate_move_item(data, row):
         item_name = data.get('item_name', '')
@@ -2944,7 +3101,6 @@ def create_pair_widget(tab_data):
         to_container_enabled = data.get('to_container_enabled', False)
         to_item_name = data.get('to_item_name', '')
         to_container_name = data.get('to_container_name', '')
-        
         item_name_input = row.get('move_item_name_input')
         if item_name_input and is_valid_widget(item_name_input):
             item_name_input.setText(item_name)
@@ -2971,28 +3127,75 @@ def create_pair_widget(tab_data):
         to_name_input = row.get('move_item_to_name_input')
         if to_name_input and is_valid_widget(to_name_input):
             to_name_input.setText(to_name)
-        
         from_container_checkbox = row.get('move_item_from_container_checkbox')
         from_item_name_input = row.get('move_item_from_item_name_input')
         from_container_name_input = row.get('move_item_from_container_name_input')
-        
         if from_container_checkbox and is_valid_widget(from_container_checkbox):
             from_container_checkbox.setChecked(from_container_enabled)
         if from_item_name_input and is_valid_widget(from_item_name_input):
             from_item_name_input.setText(from_item_name)
         if from_container_name_input and is_valid_widget(from_container_name_input):
             from_container_name_input.setText(from_container_name)
-        
         to_container_checkbox = row.get('move_item_to_container_checkbox')
         to_item_name_input = row.get('move_item_to_item_name_input')
         to_container_name_input = row.get('move_item_to_container_name_input')
-        
         if to_container_checkbox and is_valid_widget(to_container_checkbox):
             to_container_checkbox.setChecked(to_container_enabled)
         if to_item_name_input and is_valid_widget(to_item_name_input):
             to_item_name_input.setText(to_item_name)
         if to_container_name_input and is_valid_widget(to_container_name_input):
             to_container_name_input.setText(to_container_name)
+
+    def populate_determine_items(data, row):
+        scope = data.get('scope', 'Player')
+        return_type = data.get('return_type', 'Single Item')
+        owner = data.get('owner', '')
+        description = data.get('description', '')
+        location = data.get('location', '')
+        determine_player_radio = row.get('determine_items_player_radio')
+        determine_character_radio = row.get('determine_items_character_radio')
+        determine_setting_radio = row.get('determine_items_setting_radio')
+        if determine_player_radio and determine_character_radio and determine_setting_radio:
+            if scope == 'Player':
+                determine_player_radio.setChecked(True)
+            elif scope == 'Character':
+                determine_character_radio.setChecked(True)
+            elif scope == 'Setting':
+                determine_setting_radio.setChecked(True)
+        determine_single_item_radio = row.get('determine_items_single_item_radio')
+        determine_multiple_items_radio = row.get('determine_items_multiple_items_radio')
+        if determine_single_item_radio and determine_multiple_items_radio:
+            if return_type == 'Single Item':
+                determine_single_item_radio.setChecked(True)
+            elif return_type == 'Multiple Items':
+                determine_multiple_items_radio.setChecked(True)
+        determine_owner_input = row.get('determine_items_owner_input')
+        if determine_owner_input and is_valid_widget(determine_owner_input):
+            determine_owner_input.setText(owner)
+        determine_description_input = row.get('determine_items_description_input')
+        if determine_description_input and is_valid_widget(determine_description_input):
+            determine_description_input.setText(description)
+        determine_location_input = row.get('determine_items_location_input')
+        if determine_location_input and is_valid_widget(determine_location_input):
+            determine_location_input.setText(location)
+        text = data.get('text', '')
+        text_scope = data.get('text_scope', 'Full Conversation')
+        determine_text_input = row.get('determine_items_text_input')
+        if determine_text_input and is_valid_widget(determine_text_input):
+            determine_text_input.setPlainText(text)
+        determine_full_convo_radio = row.get('determine_items_full_convo_radio')
+        determine_user_msg_radio = row.get('determine_items_user_msg_radio')
+        determine_llm_reply_radio = row.get('determine_items_llm_reply_radio')
+        determine_convo_llm_radio = row.get('determine_items_convo_llm_radio')
+        if determine_full_convo_radio and determine_user_msg_radio and determine_llm_reply_radio and determine_convo_llm_radio:
+            if text_scope == 'Full Conversation':
+                determine_full_convo_radio.setChecked(True)
+            elif text_scope == 'User Message':
+                determine_user_msg_radio.setChecked(True)
+            elif text_scope == 'LLM Reply':
+                determine_llm_reply_radio.setChecked(True)
+            elif text_scope == 'Conversation plus LLM Reply':
+                determine_convo_llm_radio.setChecked(True)
 
     def populate_screen_effect(data, row):
         effect_type = data.get('effect_type', 'Blur')
@@ -3035,7 +3238,6 @@ def create_pair_widget(tab_data):
     def populate_change_time_passage(data, row):
         passage_mode = data.get('passage_mode', 'static')
         time_multiplier = data.get('time_multiplier', 1.0)
-        
         passage_static_radio = row.get('passage_static_radio')
         passage_realtime_radio = row.get('passage_realtime_radio')
         if passage_static_radio and passage_realtime_radio:
@@ -3043,7 +3245,6 @@ def create_pair_widget(tab_data):
                 passage_static_radio.setChecked(True)
             else:
                 passage_realtime_radio.setChecked(True)
-        
         multiplier_input = row.get('multiplier_input')
         if multiplier_input and is_valid_widget(multiplier_input):
             multiplier_input.setValue(time_multiplier)
