@@ -487,6 +487,20 @@ def load_game_state(self):
                 self.files_to_delete_on_exit = []
             self.files_to_delete_on_exit.extend(renamed_files)
             _cleanup_old_backup_files_in_directory(game_dir)
+        
+        right_splitter = tab_data.get('right_splitter')
+        workflow_data_dir = tab_data.get('workflow_data_dir')
+        if right_splitter and workflow_data_dir:
+            try:
+                from core.utils import _get_player_current_setting_name
+                current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+                right_splitter.update_setting_name(current_setting_name, workflow_data_dir)
+                right_splitter.load_character_data()
+                right_splitter.update_game_time()
+                print(f"Load: Updated right splitter with setting: {current_setting_name}")
+            except Exception as e:
+                print(f"Load: Error updating right splitter: {e}")
+        
         if hasattr(self, 'medium_click_sound') and self.medium_click_sound:
             try:
                 self.medium_click_sound.play()
