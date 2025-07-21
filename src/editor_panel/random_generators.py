@@ -4,7 +4,7 @@ import random
 import copy
 import re
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-                           QTextEdit, QLineEdit, QTabWidget, QScrollArea,
+                           QTextEdit, QLineEdit, QScrollArea,
                            QSizePolicy, QListWidget, QMessageBox, QInputDialog, QTableWidget, QTableWidgetItem, QMenu, QAction, QSplitter, QSpinBox, QHeaderView, QCheckBox, QFrame, QButtonGroup, QRadioButton, QStackedWidget)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -21,11 +21,7 @@ class RandomGeneratorsWidget(QWidget):
         self.base_color = self.theme_settings.get('base_color', '#00ff66')
         self.text_color = self.theme_settings.get('text_color', '#ffffff')
         self.generator_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'generators')
-        self.resource_generator_dir = self.generator_dir
-        self.session_generator_dir = os.path.join(self.workflow_data_dir, 'game', 'generators')
-        if not os.path.exists(self.session_generator_dir):
-            os.makedirs(self.session_generator_dir, exist_ok=True)
-        self.generator_mode = 'resource'
+        self.current_data = {"tables": [], "name": ""}
         self.is_loading = False
         self.initUI()
         self.load_generators()
@@ -42,80 +38,26 @@ class RandomGeneratorsWidget(QWidget):
     def initUI(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
-        
-        # Create scroll area for the entire content
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll_area.setStyleSheet(f"background-color: {self.theme_settings.get('bg_color', '#2B2B2B')}; border: none;")
-        
-        # Create a container widget for the scroll area
         self.scroll_content = QWidget()
         self.scroll_content.setStyleSheet(f"background-color: {self.theme_settings.get('bg_color', '#2B2B2B')};")
         self.scroll_content_layout = QVBoxLayout(self.scroll_content)
         self.scroll_content_layout.setContentsMargins(0, 0, 0, 0)
         self.scroll_content_layout.setSpacing(10)
-        
         title_label = QLabel("Random Generators")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setFont(QFont('Consolas', 12, QFont.Bold))
         title_label.setStyleSheet(f"color: {self.base_color};")
         self.scroll_content_layout.addWidget(title_label)
-        self.mode_tabs = QTabWidget()
-        self.mode_tabs.setObjectName("ResourceSessionTabs")
-        self.mode_tabs.setDocumentMode(True)
-        self.mode_tabs.setFixedHeight(40)
-        self.resource_tab = QWidget()
-        self.mode_tabs.addTab(self.resource_tab, "Resource Files")
-        self.session_tab = QWidget()
-        self.mode_tabs.addTab(self.session_tab, "Current Game")
-        self.mode_tabs.setTabPosition(QTabWidget.North)
-        self.mode_tabs.tabBar().setExpanding(True)
-        tab_style = f"""
-            QTabWidget::pane {{
-                border: none;
-                background: transparent;
-            }}
-            QTabBar {{
-                alignment: center;
-            }}
-            QTabWidget {{
-                alignment: center;
-            }}
-            QTabBar::tab {{
-                background-color: transparent;
-                color: {self.base_color};
-                padding: 8px 16px;
-                min-width: 140px; /* Make tabs wider */
-                border: 1px solid {self.base_color};
-                border-radius: 4px;
-                margin-right: 4px;
-                text-align: center; /* Center text */
-            }}
-            QTabBar::tab:selected {{
-                background-color: {self.base_color};
-                color: #ffffff; /* White text for contrast on selected tab */
-            }}
-            QTabBar::tab:!selected {{
-                background-color: transparent;
-                color: {self.base_color};
-            }}
-            QTabWidget::tab-bar {{
-                alignment: center; /* Center the tab bar */
-                border-bottom: 2px solid {self.base_color}; /* Add line under tabs */
-            }}
-        """
-        self.mode_tabs.setStyleSheet(tab_style)
-        self.mode_tabs.currentChanged.connect(self._handle_tab_change)
-        self.scroll_content_layout.addSpacing(5)
-        self.scroll_content_layout.addWidget(self.mode_tabs)
-        self.scroll_content_layout.addSpacing(5)
         top_section = QHBoxLayout()
         top_section.setContentsMargins(0, 0, 0, 0)
         top_section_widget = QWidget()
         top_section_widget.setLayout(top_section)
-        top_section_widget.setMaximumHeight(200)
+        top_section_widget.setMaximumHeight(250)
         list_col = QVBoxLayout()
         list_col.setContentsMargins(0, 0, 5, 0)
         list_header = QLabel("Generators")
@@ -124,7 +66,7 @@ class RandomGeneratorsWidget(QWidget):
         list_col.addWidget(list_header)
         self.generator_list = QListWidget()
         self.generator_list.setObjectName("RulesList")
-        self.generator_list.setMinimumHeight(150)
+        self.generator_list.setMinimumHeight(180)
         self.generator_list.setFont(QFont('Consolas', 10))
         self.generator_list.setSelectionMode(self.generator_list.SingleSelection)
         self.generator_list.setAlternatingRowColors(True)
@@ -140,30 +82,32 @@ class RandomGeneratorsWidget(QWidget):
         """)
         self.generator_list.setFocusPolicy(Qt.NoFocus)
         list_col.addWidget(self.generator_list, 1)
+        
+        list_col.addSpacing(10)
 
         list_btn_row = QHBoxLayout()
         self.add_btn = QPushButton("Add Generator")
         self.add_btn.setStyleSheet(f"""
             background-color: {self.base_color}; 
-            color: #ffffff;
+            color: #000000;
             padding: 8px 12px;
         """)
         self.delete_btn = QPushButton("Delete")
         self.delete_btn.setStyleSheet(f"""
             background-color: {self.base_color}; 
-            color: #ffffff;
+            color: #000000;
             padding: 8px 12px;
         """)
         self.duplicate_btn = QPushButton("Duplicate")
         self.duplicate_btn.setStyleSheet(f"""
             background-color: {self.base_color}; 
-            color: #ffffff;
+            color: #000000;
             padding: 8px 12px;
         """)
         self.rename_btn = QPushButton("Rename")
         self.rename_btn.setStyleSheet(f"""
             background-color: {self.base_color}; 
-            color: #ffffff;
+            color: #000000;
             padding: 8px 12px;
         """)
         list_btn_row.addWidget(self.add_btn)
@@ -221,7 +165,7 @@ class RandomGeneratorsWidget(QWidget):
         self.sample_btn = QPushButton("Sample")
         self.sample_btn.setStyleSheet(f"""
             background-color: {self.base_color}; 
-            color: #ffffff;
+            color: #000000;
             padding: 8px 12px;
         """)
         self.sample_btn.clicked.connect(self.generate_sample)
@@ -289,21 +233,6 @@ class RandomGeneratorsWidget(QWidget):
         permutate_options_layout.addWidget(self.objects_checkbox)
         permutate_options_layout.addWidget(self.weights_checkbox)
         permutate_options_layout.addStretch()
-        self.list_source_group = QButtonGroup(self)
-        self.resource_file_radio = QRadioButton("Resource File")
-        self.current_game_radio = QRadioButton("Current Game")
-        self.resource_file_radio.setStyleSheet(radio_style)
-        self.current_game_radio.setStyleSheet(radio_style)
-        self.list_source_group.addButton(self.resource_file_radio)
-        self.list_source_group.addButton(self.current_game_radio)
-        self.resource_file_radio.setChecked(True)
-        self.new_list_options_widget = QWidget()
-        new_list_options_layout = QHBoxLayout(self.new_list_options_widget)
-        new_list_options_layout.setContentsMargins(0, 0, 0, 0)
-        new_list_options_layout.addStretch()
-        new_list_options_layout.addWidget(self.resource_file_radio)
-        new_list_options_layout.addWidget(self.current_game_radio)
-        new_list_options_layout.addStretch()
         self.new_generator_name_widget = QWidget()
         new_generator_name_layout = QHBoxLayout(self.new_generator_name_widget)
         new_generator_name_layout.setContentsMargins(0, 0, 0, 0)
@@ -325,7 +254,6 @@ class RandomGeneratorsWidget(QWidget):
         new_generator_name_layout.addWidget(self.new_generator_name_input)
         new_generator_name_layout.addStretch()
         self.new_generator_name_widget.setVisible(True)
-        new_generate_col.addWidget(self.new_list_options_widget)
         radio_layout = QHBoxLayout()
         radio_layout.addWidget(self.new_list_radio)
         radio_layout.addWidget(self.permutate_radio)
@@ -353,7 +281,7 @@ class RandomGeneratorsWidget(QWidget):
         self.new_generate_btn = QPushButton("Generate")
         self.new_generate_btn.setStyleSheet(f"""
             background-color: {self.base_color}; 
-            color: #ffffff;
+            color: #000000;
             padding: 8px 12px;
         """)
         self.new_generate_btn.clicked.connect(self._handle_generate_button)
@@ -393,16 +321,14 @@ class RandomGeneratorsWidget(QWidget):
         self._add_table_display_column()
         self.detail_widget.setLayout(main_detail_layout)
         self.scroll_content_layout.addWidget(self.detail_widget)
-        
-        # Set the scroll content as the scroll area widget
         self.scroll_area.setWidget(self.scroll_content)
         layout.addWidget(self.scroll_area)
-        
         self.add_btn.clicked.connect(self.add_generator)
         self.delete_btn.clicked.connect(self.delete_generator)
         self.duplicate_btn.clicked.connect(self.duplicate_generator)
         self.rename_btn.clicked.connect(self.rename_generator)
         self.generator_list.itemSelectionChanged.connect(self.on_generator_selected)
+        
         self.setLayout(layout)
 
     def load_generators(self):
@@ -444,8 +370,6 @@ class RandomGeneratorsWidget(QWidget):
             os.makedirs(self.generator_dir)
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        
-        # Play add sound
         main_ui = self._get_main_ui()
         if main_ui and hasattr(main_ui, 'add_rule_sound') and main_ui.add_rule_sound:
             try:
@@ -669,11 +593,16 @@ class RandomGeneratorsWidget(QWidget):
         self.table_displays.clear()
         row = self.generator_list.currentRow()
         if row < 0:
-            for table_display in self.table_displays:
-                table_display['table_widget'].setRowCount(0)
-                if table_display.get('title_editor'):
-                    table_display['title_editor'].setText("")
+            self.current_data = {"tables": [], "name": ""}
+            while len(self.table_displays) > 0:
+                self._remove_table_display_column()
+            if not self.table_displays:
+                self._add_table_display_column()
+            if self.table_displays:
+                self.table_displays[0]['title_editor'].setText("Table 1")
+                self._populate_single_table(self.table_displays[0]['table_widget'], [])
             self.hierarchy_info.setText("Generator:")
+            self.is_loading = False
             return
         name = self.generator_list.item(row).text()
         fname = self.generator_files.get(name)
@@ -911,12 +840,12 @@ class RandomGeneratorsWidget(QWidget):
         item_btn_layout.setContentsMargins(5, 5, 5, 5)
         item_btn_layout.setSpacing(10)
         delete_item_btn = QPushButton("Delete Item")
-        delete_item_btn.setStyleSheet(f"background-color: {self.base_color}; color: #ffffff; padding: 8px 12px;")
+        delete_item_btn.setStyleSheet(f"background-color: {self.base_color}; color: #000000; padding: 8px 12px;")
         delete_item_btn.setFixedHeight(self.sample_btn.sizeHint().height())
         delete_item_btn.clicked.connect(lambda _, t_idx=col_idx: self._delete_hierarchy_item(t_idx))
         item_btn_layout.addWidget(delete_item_btn)
         add_item_btn = QPushButton("Add Item")
-        add_item_btn.setStyleSheet(f"background-color: {self.base_color}; color: #ffffff; padding: 8px 12px;")
+        add_item_btn.setStyleSheet(f"background-color: {self.base_color}; color: #000000; padding: 8px 12px;")
         add_item_btn.setFixedHeight(self.sample_btn.sizeHint().height())
         add_item_btn.clicked.connect(lambda _, t_idx=col_idx: self._add_hierarchy_item(t_idx))
         item_btn_layout.addWidget(add_item_btn)
@@ -954,14 +883,17 @@ class RandomGeneratorsWidget(QWidget):
             return
         last_table_display = self.table_displays.pop()
         scroll_area = last_table_display['scroll_area']
-        scroll_area_index = self.hierarchy_splitter.indexOf(scroll_area)
-        if scroll_area_index > 0:
-            widget_before = self.hierarchy_splitter.widget(scroll_area_index - 1)
-            if isinstance(widget_before, QFrame):
-                 widget_before.setParent(None)
-                 widget_before.deleteLater()
-        scroll_area.setParent(None) 
-        scroll_area.deleteLater()
+        try:
+            scroll_area_index = self.hierarchy_splitter.indexOf(scroll_area)
+            if scroll_area_index > 0:
+                widget_before = self.hierarchy_splitter.widget(scroll_area_index - 1)
+                if isinstance(widget_before, QFrame):
+                     widget_before.setParent(None)
+                     widget_before.deleteLater()
+            scroll_area.setParent(None) 
+            scroll_area.deleteLater()
+        except RuntimeError:
+            pass
         self._save_current_generator()
 
     def generate_sample(self):
@@ -1072,8 +1004,10 @@ class RandomGeneratorsWidget(QWidget):
             QMessageBox.critical(self, "Save Error", f"Error saving generator: {e}") 
 
     def _add_hierarchy_item(self, table_idx):
+        if not hasattr(self, 'current_data') or 'tables' not in self.current_data:
+            self.current_data = {"tables": [], "name": ""}
         if table_idx >= len(self.table_displays) or table_idx >= len(self.current_data['tables']):
-            QMessageBox.warning(self, "Error", "Table index out of bounds.")
+            QMessageBox.information(self, "No Generator Selected", "Please add or select a generator first.")
             return
         table_widget = self.table_displays[table_idx]['table_widget']
         table_data = self.current_data['tables'][table_idx]
@@ -1088,8 +1022,10 @@ class RandomGeneratorsWidget(QWidget):
         self._save_current_generator()
 
     def _delete_hierarchy_item(self, table_idx):
+        if not hasattr(self, 'current_data') or 'tables' not in self.current_data:
+            self.current_data = {"tables": [], "name": ""}
         if table_idx >= len(self.table_displays) or table_idx >= len(self.current_data['tables']):
-            QMessageBox.warning(self, "Error", "Table index out of bounds.")
+            QMessageBox.information(self, "No Generator Selected", "Please add or select a generator first.")
             return
         table_widget = self.table_displays[table_idx]['table_widget']
         selected_rows = table_widget.selectionModel().selectedRows()
@@ -1111,8 +1047,10 @@ class RandomGeneratorsWidget(QWidget):
         self._save_current_generator()
 
     def _edit_hierarchy_item(self, table_idx, row):
+        if not hasattr(self, 'current_data') or 'tables' not in self.current_data:
+            self.current_data = {"tables": [], "name": ""}
         if table_idx >= len(self.table_displays) or table_idx >= len(self.current_data['tables']):
-            QMessageBox.warning(self, "Error", "Table index out of bounds.")
+            QMessageBox.information(self, "No Generator Selected", "Please add or select a generator first.")
             return
         table_widget = self.table_displays[table_idx]['table_widget']
         table_data = self.current_data['tables'][table_idx]
@@ -1142,6 +1080,8 @@ class RandomGeneratorsWidget(QWidget):
         table_widget.selectRow(row)
 
     def _move_hierarchy_item_up(self, table_idx, row):
+        if not hasattr(self, 'current_data') or 'tables' not in self.current_data:
+            self.current_data = {"tables": [], "name": ""}
         if table_idx >= len(self.current_data['tables']) or row <= 0 or row >= len(self.current_data['tables'][table_idx]['items']):
             return
         items = self.current_data['tables'][table_idx]['items']
@@ -1151,6 +1091,8 @@ class RandomGeneratorsWidget(QWidget):
         self._save_current_generator()
         
     def _move_hierarchy_item_down(self, table_idx, row):
+        if not hasattr(self, 'current_data') or 'tables' not in self.current_data:
+            self.current_data = {"tables": [], "name": ""}
         if table_idx >= len(self.current_data['tables']) or row < 0 or row >= len(self.current_data['tables'][table_idx]['items']) - 1:
             return
         items = self.current_data['tables'][table_idx]['items']
@@ -1160,6 +1102,8 @@ class RandomGeneratorsWidget(QWidget):
         self._save_current_generator()
 
     def _on_hierarchy_item_changed(self, item, table_idx):
+        if not hasattr(self, 'current_data') or 'tables' not in self.current_data:
+            self.current_data = {"tables": [], "name": ""}
         if table_idx >= len(self.table_displays) or table_idx >= len(self.current_data['tables']):
             return
         table_widget = self.table_displays[table_idx]['table_widget']
@@ -1194,8 +1138,7 @@ class RandomGeneratorsWidget(QWidget):
         self.base_color = theme_settings.get('base_color', '#00ff66')
         self.text_color = theme_settings.get('text_color', '#ffffff')
         bg_color = theme_settings.get('bg_color', '#2B2B2B')
-        
-        # Theme the scroll area and main widget
+        darker_bg = theme_settings.get('darker_bg', '#1E1E1E')
         if hasattr(self, 'scroll_area'):
             self.scroll_area.setStyleSheet(f"""
                 QScrollArea {{
@@ -1241,73 +1184,22 @@ class RandomGeneratorsWidget(QWidget):
         if hasattr(self, 'scroll_content'):
             self.scroll_content.setStyleSheet(f"background-color: {bg_color};")
         
-        # Fix button text colors to be white instead of black
+        # Fix button text colors to be black for better visibility
         for child in self.findChildren((QPushButton, QLabel)):
             if isinstance(child, QPushButton) and not child.objectName().startswith("TabButton"):
-                child.setStyleSheet(f"background-color: {self.base_color}; color: {self.text_color}; padding: 8px 12px;")
+                child.setStyleSheet(f"background-color: {self.base_color}; color: #000000; padding: 8px 12px;")
             elif isinstance(child, QLabel) and child.text() == "Random Generators":
                 child.setStyleSheet(f"color: {self.base_color};")
             elif isinstance(child, QLabel):
                 child.setStyleSheet(f"color: {self.text_color};") 
         
-        if hasattr(self, 'mode_tabs'):
-            tab_style = f"""
-                QTabWidget::pane {{
-                    border: none;
-                    background: transparent;
-                }}
-                QTabBar {{
-                    alignment: center;
-                }}
-                QTabWidget {{
-                    alignment: center;
-                }}
-                QTabBar::tab {{
-                    background-color: transparent;
-                    color: {self.base_color};
-                    padding: 8px 16px;
-                    min-width: 140px; /* Make tabs wider */
-                    border: 1px solid {self.base_color};
-                    border-radius: 4px;
-                    margin-right: 4px;
-                    text-align: center; /* Center text */
-                }}
-                QTabBar::tab:selected {{
-                    background-color: {self.base_color};
-                    color: {bg_color}; /* Dark background for contrast on selected tab */
-                }}
-                QTabBar::tab:!selected {{
-                    background-color: transparent;
-                    color: {self.base_color};
-                }}
-                QTabWidget::tab-bar {{
-                    alignment: center; /* Center the tab bar */
-                    border-bottom: 2px solid {self.base_color}; /* Add line under tabs */
-                }}
-            """
-            self.mode_tabs.setStyleSheet(tab_style)
 
-    def _handle_tab_change(self, index):
-        mode = 'resource' if index == 0 else 'session'
-        self._switch_generator_mode(mode)
 
-    def _switch_generator_mode(self, mode):
-        self.mode_tabs.blockSignals(True)
-        if self.generator_mode == mode:
-            self.mode_tabs.setCurrentIndex(0 if mode == 'resource' else 1)
-            self.mode_tabs.blockSignals(False)
-            return
-        self.generator_mode = mode
-        self.generator_dir = self.resource_generator_dir if mode == 'resource' else self.session_generator_dir
-        self.mode_tabs.setCurrentIndex(0 if mode == 'resource' else 1)
-        self.generator_list.setCurrentRow(-1)
-        self.load_generators()
-        self.on_generator_selected()
-        self.mode_tabs.blockSignals(False)
+
         
     def _handle_generate_button(self):
         is_permutate = self.permutate_radio.isChecked()
-        use_resource = self.resource_file_radio.isChecked()
+        use_resource = True
         generator_path = None
         selected_generator_name = None
         if is_permutate:
@@ -1343,8 +1235,8 @@ class RandomGeneratorsWidget(QWidget):
                 permutate_objects=permutate_objects,
                 permutate_weights=permutate_weights,
                 generator_json_path=generator_path,
-                resource_folder=self.resource_generator_dir,
-                game_folder=self.session_generator_dir,
+                resource_folder=self.generator_dir,
+                game_folder=self.generator_dir,
                 model_override=model_override,
                 generator_name=new_generator_name
             )
