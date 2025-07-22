@@ -1009,6 +1009,12 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
         target_type = obj.get('target_type', 'Setting')
         target_name = obj.get('target_name', '')
         generate = obj.get('generate', False)
+        generate_description = obj.get('generate_description', False)
+        generate_location = obj.get('generate_location', False)
+        generate_instructions = obj.get('generate_instructions', '')
+        attach_scene_context = obj.get('attach_scene_context', False)
+        attach_location_desc = obj.get('attach_location_desc', False)
+        attach_character_desc = obj.get('attach_character_desc', False)
         target_container_enabled = obj.get('target_container_enabled', False)
         target_item_name = obj.get('target_item_name', '')
         target_container_name = obj.get('target_container_name', '')
@@ -1024,6 +1030,94 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
         owner = _substitute_variables_in_string(owner, tab_data, character_name)
         description = _substitute_variables_in_string(description, tab_data, character_name)
         location = _substitute_variables_in_string(location, tab_data, character_name)
+        
+        if (generate_description and not description) or (generate_location and not location) or generate:
+            try:
+                context_parts = []
+                if attach_scene_context:
+                    context_list = tab_data.get('context', [])
+                    current_scene = tab_data.get('scene_number', 1)
+                    current_scene_messages = [msg for msg in context_list 
+                                             if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene]
+                    if current_scene_messages:
+                        scene_context = '\n'.join([f"{msg.get('role', 'unknown').capitalize()}: {msg.get('content', '')}" 
+                                                   for msg in current_scene_messages[-5:]])  # Last 5 messages
+                        context_parts.append(f"Scene Context:\n{scene_context}")
+                
+                if attach_location_desc:
+                    current_setting_name = _get_player_current_setting_name(workflow_data_dir)
+                    if current_setting_name:
+                        setting_file_path = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, current_setting_name)
+                        if isinstance(setting_file_path, tuple):
+                            setting_file_path = setting_file_path[0]
+                        if setting_file_path and os.path.exists(setting_file_path):
+                            try:
+                                with open(setting_file_path, 'r', encoding='utf-8') as f:
+                                    setting_data = json.load(f)
+                                    setting_desc = setting_data.get('description', '')
+                                    if setting_desc:
+                                        context_parts.append(f"Location Description:\n{setting_desc}")
+                            except Exception:
+                                pass
+                
+                if attach_character_desc and character_name:
+                    class DummySelf:
+                        pass
+                    dummy_self = DummySelf()
+                    character_file_path = _find_actor_file_path(dummy_self, workflow_data_dir, character_name)
+                    if character_file_path and os.path.exists(character_file_path):
+                        try:
+                            with open(character_file_path, 'r', encoding='utf-8') as f:
+                                character_data = json.load(f)
+                                character_desc = character_data.get('description', '')
+                                if character_desc:
+                                    context_parts.append(f"Character Description:\n{character_desc}")
+                        except Exception:
+                            pass
+                
+                context_text = ""
+                if context_parts:
+                    context_text = "\n\n".join(context_parts) + "\n\n"
+                
+                if generate_instructions:
+                    instructions = generate_instructions
+                else:
+                    instructions = f"Generate details for an item called '{item_name}'."
+                    if generate_description and not description and generate_location and not location:
+                        instructions += " Provide ONLY a brief description (under 100 words) on the first line, and a brief location (under 50 words) on the second line. Do not include any other text."
+                    elif generate_description and not description:
+                        instructions += " Provide ONLY a brief, descriptive description (under 100 words). Do not include any other text."
+                    elif generate_location and not location:
+                        instructions += " Provide ONLY a brief, logical location description (under 50 words). Do not include any other text."
+                
+                if context_text:
+                    instructions = f"{context_text}Instructions: {instructions}"
+                
+                model = self.get_current_model()
+                max_tokens = 200
+                temperature = 0.7
+                context = [
+                    {"role": "user", "content": instructions}
+                ]
+                result = self.run_utility_inference_sync(context, model, max_tokens, temperature)
+                
+                if result and result.strip():
+                    result = result.strip()
+                    
+                    if generate_description and not description and generate_location and not location:
+                        lines = result.split('\n')
+                        if len(lines) >= 2:
+                            description = lines[0].strip()
+                            location = lines[1].strip()
+                        else:
+                            description = result
+                    elif generate_description and not description:
+                        description = result
+                    elif generate_location and not location:
+                        location = result
+                        
+            except Exception as e:
+                print(f"Warning: Failed to generate details for item '{item_name}': {e}")
         if not target_name and current_setting_name:
             target_name = current_setting_name
         target_file_path = None
