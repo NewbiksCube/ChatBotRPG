@@ -704,7 +704,13 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                         add_item_generate_checkbox = action_row_widget.findChild(QCheckBox, "AddItemGenerateCheckbox")
                                         add_item_owner_input = action_row_widget.findChild(QLineEdit, "AddItemOwnerInput")
                                         add_item_description_input = action_row_widget.findChild(QLineEdit, "AddItemDescriptionInput")
+                                        add_item_description_generate_checkbox = action_row_widget.findChild(QCheckBox, "AddItemDescriptionGenerateCheckbox")
                                         add_item_location_input = action_row_widget.findChild(QLineEdit, "AddItemLocationInput")
+                                        add_item_location_generate_checkbox = action_row_widget.findChild(QCheckBox, "AddItemLocationGenerateCheckbox")
+                                        add_item_generate_instructions_editor = action_row_widget.findChild(QTextEdit, "AddItemGenerateInstructionsEditor")
+                                        add_item_attach_scene_context_checkbox = action_row_widget.findChild(QCheckBox, "AddItemAttachSceneContextCheckbox")
+                                        add_item_attach_location_desc_checkbox = action_row_widget.findChild(QCheckBox, "AddItemAttachLocationDescCheckbox")
+                                        add_item_attach_character_desc_checkbox = action_row_widget.findChild(QCheckBox, "AddItemAttachCharacterDescCheckbox")
                                         add_item_target_setting_radio = action_row_widget.findChild(QRadioButton, "AddItemTargetSettingRadio")
                                         add_item_target_character_radio = action_row_widget.findChild(QRadioButton, "AddItemTargetCharacterRadio")
                                         add_item_target_name_input = action_row_widget.findChild(QLineEdit, "AddItemTargetNameInput")
@@ -753,6 +759,54 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                                 action_obj["location"] = ""
                                         else:
                                             action_obj["location"] = ""
+                                        
+                                        if add_item_description_generate_checkbox:
+                                            try:
+                                                action_obj["generate_description"] = add_item_description_generate_checkbox.isChecked()
+                                            except RuntimeError:
+                                                action_obj["generate_description"] = False
+                                        else:
+                                            action_obj["generate_description"] = False
+                                        
+                                        if add_item_location_generate_checkbox:
+                                            try:
+                                                action_obj["generate_location"] = add_item_location_generate_checkbox.isChecked()
+                                            except RuntimeError:
+                                                action_obj["generate_location"] = False
+                                        else:
+                                            action_obj["generate_location"] = False
+                                        
+                                        if add_item_generate_instructions_editor:
+                                            try:
+                                                action_obj["generate_instructions"] = add_item_generate_instructions_editor.toPlainText().strip()
+                                            except RuntimeError:
+                                                action_obj["generate_instructions"] = ""
+                                        else:
+                                            action_obj["generate_instructions"] = ""
+                                        
+                                        if add_item_attach_scene_context_checkbox:
+                                            try:
+                                                action_obj["attach_scene_context"] = add_item_attach_scene_context_checkbox.isChecked()
+                                            except RuntimeError:
+                                                action_obj["attach_scene_context"] = False
+                                        else:
+                                            action_obj["attach_scene_context"] = False
+                                        
+                                        if add_item_attach_location_desc_checkbox:
+                                            try:
+                                                action_obj["attach_location_desc"] = add_item_attach_location_desc_checkbox.isChecked()
+                                            except RuntimeError:
+                                                action_obj["attach_location_desc"] = False
+                                        else:
+                                            action_obj["attach_location_desc"] = False
+                                        
+                                        if add_item_attach_character_desc_checkbox:
+                                            try:
+                                                action_obj["attach_character_desc"] = add_item_attach_character_desc_checkbox.isChecked()
+                                            except RuntimeError:
+                                                action_obj["attach_character_desc"] = False
+                                        else:
+                                            action_obj["attach_character_desc"] = False
                                         
                                         if add_item_target_setting_radio:
                                             try:
