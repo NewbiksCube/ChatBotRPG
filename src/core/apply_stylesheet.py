@@ -6049,12 +6049,12 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
     #LeftSplitterContainer QPushButton:checked {{
         background-color: {base_color};
         border: 1px solid {base_color};
-        color: {darker_bg};
+        color: white;
     }}
     #LeftSplitterContainer QPushButton:checked:hover {{
         background-color: {brighter};
         border: 1px solid {brighter};
-        color: {darker_bg};
+        color: white;
     }}
     /* --- End Left Splitter Button Styling --- */
 
@@ -6198,24 +6198,47 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
     }}
 
     /* Inventory Radio Buttons */
-    QRadioButton#InventoryConsumableRadio, QRadioButton#InventoryWeaponRadio, QRadioButton#InventoryWearableRadio {{
+    QRadioButton#InventoryConsumableRadio, QRadioButton#InventoryWeaponRadio, QRadioButton#InventoryWearableRadio, QRadioButton#InventoryReadableRadio, QRadioButton#InventoryLiquidRadio {{
         color: {base_color};
         font: 9pt "Consolas";
         spacing: 4px;
         background-color: transparent;
     }}
-    QRadioButton#InventoryConsumableRadio::indicator, QRadioButton#InventoryWeaponRadio::indicator, QRadioButton#InventoryWearableRadio::indicator {{
+    QRadioButton#InventoryConsumableRadio::indicator, QRadioButton#InventoryWeaponRadio::indicator, QRadioButton#InventoryWearableRadio::indicator, QRadioButton#InventoryReadableRadio::indicator, QRadioButton#InventoryLiquidRadio::indicator {{
         width: 12px;
         height: 12px;
         border-radius: 6px;
         border: 1px solid {base_color};
         background: {bg_color};
     }}
-    QRadioButton#InventoryConsumableRadio::indicator:checked, QRadioButton#InventoryWeaponRadio::indicator:checked, QRadioButton#InventoryWearableRadio::indicator:checked {{
+    QRadioButton#InventoryConsumableRadio::indicator:checked, QRadioButton#InventoryWeaponRadio::indicator:checked, QRadioButton#InventoryWearableRadio::indicator:checked, QRadioButton#InventoryReadableRadio::indicator:checked, QRadioButton#InventoryLiquidRadio::indicator:checked {{
         background: {highlight};
         border: 1px solid {brighter};
     }}
-    QRadioButton#InventoryConsumableRadio::indicator:hover, QRadioButton#InventoryWeaponRadio::indicator:hover, QRadioButton#InventoryWearableRadio::indicator:hover {{
+    QRadioButton#InventoryConsumableRadio::indicator:hover, QRadioButton#InventoryWeaponRadio::indicator:hover, QRadioButton#InventoryWearableRadio::indicator:hover, QRadioButton#InventoryReadableRadio::indicator:hover, QRadioButton#InventoryLiquidRadio::indicator:hover {{
+        border: 1px solid {brighter};
+        background: transparent;
+    }}
+
+    /* Container Liquid Checkboxes */
+    QCheckBox#InventoryContainerLiquidCheckbox {{
+        color: {base_color};
+        font: 8pt "Consolas";
+        spacing: 4px;
+        background-color: transparent;
+    }}
+    QCheckBox#InventoryContainerLiquidCheckbox::indicator {{
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        border: 1px solid {base_color};
+        background: {bg_color};
+    }}
+    QCheckBox#InventoryContainerLiquidCheckbox::indicator:checked {{
+        background: {highlight};
+        border: 1px solid {brighter};
+    }}
+    QCheckBox#InventoryContainerLiquidCheckbox::indicator:hover {{
         border: 1px solid {brighter};
         background: transparent;
     }}
