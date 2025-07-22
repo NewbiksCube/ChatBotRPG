@@ -119,6 +119,12 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
         selection-color: white;
     }}
     
+    QComboBox#InventoryVarEffectTypeCombo, QComboBox#InventoryVarOperationCombo {{
+        min-width: 92px !important;
+        font: 9pt "Consolas" !important;
+        padding: 4px 8px !important;
+    }}
+    
     QPushButton {{ 
         color: {base_color}; 
         background-color: {bg_color}; 
@@ -320,6 +326,80 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
     /* Remove margin between - and + tab buttons */
     QTabBar::tab:last-child, QTabBar::tab:only-one {{
         margin-right: 0;
+    }}
+    
+    /* Style tab scroll buttons */
+    QTabBar::scroller {{
+        background-color: transparent;
+        border: none;
+        spacing: 2px;
+    }}
+    
+    QTabBar QToolButton {{
+        background-color: rgba(0, 0, 0, 0.7);
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        color: {base_color};
+        padding: 4px;
+        margin: 2px;
+        min-width: 20px;
+        min-height: 20px;
+        max-width: 20px;
+        max-height: 20px;
+        width: 20px;
+        height: 20px;
+    }}
+    
+    QTabBar QToolButton:first {{
+        background-color: rgba(0, 0, 0, 0.7);
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        color: {base_color};
+        padding: 4px;
+        margin: 2px;
+        min-width: 20px;
+        min-height: 20px;
+        max-width: 20px;
+        max-height: 20px;
+        width: 20px;
+        height: 20px;
+    }}
+    
+    QTabBar QToolButton:last {{
+        background-color: rgba(0, 0, 0, 0.7);
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        color: {base_color};
+        padding: 4px;
+        margin: 2px;
+        min-width: 20px;
+        min-height: 20px;
+        max-width: 20px;
+        max-height: 20px;
+        width: 20px;
+        height: 20px;
+    }}
+    
+    QTabBar QToolButton:hover {{
+        background-color: rgba(0, 0, 0, 0.8);
+        border: 1px solid {brighter};
+        color: white;
+    }}
+    
+    QTabBar QToolButton:pressed {{
+        background-color: {base_color};
+        border: 1px solid {base_color};
+        color: #000000;
+    }}
+    
+    QTextEdit#InventoryReadableTextInput {{
+        color: {base_color};
+        background-color: {bg_color};
+        border: 2px solid {base_color};
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 10pt "Consolas";
+        padding: 4px;
     }}
     
     QTextEdit#InputField {{ 
