@@ -5,8 +5,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QTabWidget, QPushButt
                              QDialog, QFormLayout, QSpinBox, QTextEdit, QDialogButtonBox,
                              QScrollArea, QSplitter, QButtonGroup, QStackedWidget,
                              QListWidget, QListWidgetItem)
-from PyQt5.QtGui import QFont, QDrag
-from PyQt5.QtCore import Qt, QMimeData
+from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt
 import os
 import json
 import re
@@ -239,30 +239,25 @@ class ItemInstanceWidget(QWidget):
     def _remove_item_from_list(self, target_item_data, items_list=None):
         if items_list is None:
             items_list = self.current_items
-        
         for i, item_data in enumerate(items_list):
             if item_data.get('item_id') == target_item_data.get('item_id'):
                 items_list.pop(i)
                 return True
-            
             contains = item_data.get('contains', [])
             if self._remove_item_from_list(target_item_data, contains):
                 return True
-        
         return False
     
     def _edit_item_instance(self, item, column):
         item_data = item.data(0, Qt.UserRole)
         if not item_data:
             return
-        
         dialog = ItemInstanceDialog(self, self.workflow_data_dir, item_data)
         if dialog.exec_() == QDialog.Accepted:
             new_item_data = dialog.get_item_data()
             new_item_data['owner'] = self.owner_id
             new_item_data['location'] = self.location_id
             new_item_data['contains'] = item_data.get('contains', [])
-            
             self._update_item_in_list(item_data.get('item_id'), new_item_data)
             self._load_items()
             self._save_items()
@@ -270,16 +265,13 @@ class ItemInstanceWidget(QWidget):
     def _update_item_in_list(self, target_item_id, new_item_data, items_list=None):
         if items_list is None:
             items_list = self.current_items
-        
         for i, item_data in enumerate(items_list):
             if item_data.get('item_id') == target_item_id:
                 items_list[i] = new_item_data
                 return True
-            
             contains = item_data.get('contains', [])
             if self._update_item_in_list(target_item_id, new_item_data, contains):
                 return True
-        
         return False
     
     def _save_items(self):
@@ -298,6 +290,8 @@ class InventoryCategoryPage(QWidget):
         super().__init__(parent)
         self.category_name = category_name
         self.parent_manager = parent
+        self.select_sound = None
+        self._init_sound()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
         item_management_layout = QHBoxLayout()
@@ -320,8 +314,8 @@ class InventoryCategoryPage(QWidget):
         layout.addLayout(item_management_layout)
         self.item_table_widget = QTableWidget()
         self.item_table_widget.setObjectName("InventoryTableWidget_Tab")
-        self.item_table_widget.setColumnCount(7)
-        self.item_table_widget.setHorizontalHeaderLabels(["Name", "Properties", "Containers", "Variables", "Base Value", "Weight", "Description"])
+        self.item_table_widget.setColumnCount(8)
+        self.item_table_widget.setHorizontalHeaderLabels(["Name", "Properties", "Containers", "Variables", "Base Value", "Weight", "Tags", "Description"])
         self.item_table_widget.horizontalHeader().setObjectName("InventoryTableWidget_Tab_HorizontalHeader")
         self.item_table_widget.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
         self.item_table_widget.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
@@ -329,10 +323,12 @@ class InventoryCategoryPage(QWidget):
         self.item_table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Interactive)
         self.item_table_widget.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
         self.item_table_widget.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        self.item_table_widget.horizontalHeader().setSectionResizeMode(6, QHeaderView.Stretch)
+        self.item_table_widget.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
+        self.item_table_widget.horizontalHeader().setSectionResizeMode(7, QHeaderView.Stretch)
         self.item_table_widget.setColumnWidth(1, 250)
         self.item_table_widget.setColumnWidth(2, 250)
-        self.item_table_widget.setColumnWidth(3, 500)
+        self.item_table_widget.setColumnWidth(3, 450)
+        self.item_table_widget.setColumnWidth(6, 150)
         self.item_table_widget.verticalHeader().setObjectName("InventoryTableWidget_Tab_VerticalHeader")
         self.item_table_widget.verticalHeader().setVisible(False)
         self.item_table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -341,6 +337,7 @@ class InventoryCategoryPage(QWidget):
         self.item_table_widget.itemChanged.connect(self._on_item_data_changed)
         self.item_table_widget.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.item_table_widget.verticalHeader().setDefaultSectionSize(60)
+        self.item_table_widget.itemSelectionChanged.connect(self._on_row_selection_changed)
         layout.addWidget(self.item_table_widget)
         self._load_items_from_disk()
     def _create_properties_widget(self, properties="Consumable"):
@@ -367,11 +364,37 @@ class InventoryCategoryPage(QWidget):
         second_row.addStretch()
         layout.addLayout(first_row)
         layout.addLayout(second_row)
-        widget.setMinimumHeight(60)
+        equipment_slot_layout = QHBoxLayout()
+        equipment_slot_layout.setSpacing(8)
+        equipment_slot_combo = QComboBox()
+        equipment_slot_combo.setObjectName("InventoryEquipmentSlotCombo")
+        equipment_slot_combo.addItems([
+            "Head", "Neck", "Left Shoulder", "Right Shoulder", "Left Hand", 
+            "Right Hand", "Upper Outer", "Upper Middle", "Upper Inner",
+            "Lower Outer", "Lower Middle", "Lower Inner", "Left Foot Inner", 
+            "Right Foot Inner", "Left Foot Outer", "Right Foot Outer"
+        ])
+        equipment_slot_combo.setVisible(False)
+        equipment_slot_layout.addWidget(equipment_slot_combo)
+        equipment_slot_layout.addStretch()
+        layout.addLayout(equipment_slot_layout)
+        readable_text_layout = QHBoxLayout()
+        readable_text_layout.setSpacing(8)
+        readable_text_input = QTextEdit()
+        readable_text_input.setObjectName("InventoryReadableTextInput")
+        readable_text_input.setPlaceholderText("Enter the text content of this readable item...")
+        readable_text_input.setMaximumHeight(60)
+        readable_text_input.setVisible(False)
+        readable_text_layout.addWidget(readable_text_input)
+        readable_text_layout.addStretch()
+        layout.addLayout(readable_text_layout)
+        widget.setMinimumHeight(120)
         widget.consumable_checkbox = consumable_checkbox
         widget.wearable_checkbox = wearable_checkbox
         widget.readable_checkbox = readable_checkbox
         widget.liquid_checkbox = liquid_checkbox
+        widget.equipment_slot_combo = equipment_slot_combo
+        widget.readable_text_input = readable_text_input
         if isinstance(properties, str):
             if properties.lower() == "wearable":
                 wearable_checkbox.setChecked(True)
@@ -394,8 +417,8 @@ class InventoryCategoryPage(QWidget):
         if not any([consumable_checkbox.isChecked(), wearable_checkbox.isChecked(), readable_checkbox.isChecked(), liquid_checkbox.isChecked()]):
             consumable_checkbox.setChecked(True)
         consumable_checkbox.stateChanged.connect(lambda: self._on_properties_changed())
-        wearable_checkbox.stateChanged.connect(lambda: self._on_properties_changed())
-        readable_checkbox.stateChanged.connect(lambda: self._on_properties_changed())
+        wearable_checkbox.stateChanged.connect(lambda: self._on_wearable_changed(widget))
+        readable_checkbox.stateChanged.connect(lambda: self._on_readable_changed(widget))
         liquid_checkbox.stateChanged.connect(lambda: self._on_properties_changed())
         return widget
 
@@ -408,34 +431,9 @@ class InventoryCategoryPage(QWidget):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(2, 2, 2, 2)
         layout.setSpacing(2)
-        
-        if not containers:
-            no_containers_label = QLabel("None")
-            no_containers_label.setObjectName("InventoryContainerLabel")
-            no_containers_label.setStyleSheet("font: 9pt 'Consolas';")
-            layout.addWidget(no_containers_label)
-        else:
-            for container_name in containers:
-                container_row = QHBoxLayout()
-                container_row.setSpacing(4)
-                
-                container_label = QLabel(container_name)
-                container_label.setObjectName("InventoryContainerLabel")
-                container_label.setStyleSheet("font: 9pt 'Consolas';")
-                container_label.setMaximumWidth(120)
-                
-                liquid_checkbox = QCheckBox("Holds Liquids")
-                liquid_checkbox.setObjectName("InventoryContainerLiquidCheckbox")
-                liquid_checkbox.setChecked(container_name in liquid_containers)
-                liquid_checkbox.stateChanged.connect(lambda state, name=container_name, w=widget: self._on_container_liquid_changed(w, name, state))
-                
-                container_row.addWidget(container_label)
-                container_row.addWidget(liquid_checkbox)
-                container_row.addStretch()
-                layout.addLayout(container_row)
-        
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(4)
+        buttons_layout.addStretch()
         add_container_btn = QPushButton("+")
         add_container_btn.setObjectName("AddConditionButton")
         add_container_btn.setMaximumWidth(22)
@@ -448,22 +446,49 @@ class InventoryCategoryPage(QWidget):
         remove_container_btn.setMaximumHeight(22)
         remove_container_btn.setToolTip("Remove container")
         remove_container_btn.clicked.connect(lambda: self._remove_container_item(widget, containers, liquid_containers))
-        buttons_layout.addWidget(add_container_btn)
+        remove_container_btn.setVisible(len(containers) > 0)
         buttons_layout.addWidget(remove_container_btn)
-        buttons_layout.addStretch()
+        buttons_layout.addWidget(add_container_btn)
         layout.addLayout(buttons_layout)
-        
+        if not containers:
+            no_containers_label = QLabel("None")
+            no_containers_label.setObjectName("InventoryContainerLabel")
+            no_containers_label.setStyleSheet("font: 9pt 'Consolas';")
+            layout.addWidget(no_containers_label)
+        else:
+            for container_name in containers:
+                container_row = QHBoxLayout()
+                container_row.setSpacing(4)
+                container_label = QLabel(container_name)
+                container_label.setObjectName("InventoryContainerLabel")
+                container_label.setStyleSheet("font: 9pt 'Consolas';")
+                container_label.setMaximumWidth(120)
+                liquid_checkbox = QCheckBox("Holds Liquids")
+                liquid_checkbox.setObjectName("InventoryContainerLiquidCheckbox")
+                liquid_checkbox.setChecked(container_name in liquid_containers)
+                liquid_checkbox.stateChanged.connect(lambda state, name=container_name, w=widget: self._on_container_liquid_changed(w, name, state))
+                container_row.addWidget(container_label)
+                container_row.addWidget(liquid_checkbox)
+                container_row.addStretch()
+                layout.addLayout(container_row)
         widget.containers = containers
         widget.liquid_containers = liquid_containers
+        widget.add_container_btn = add_container_btn
+        widget.remove_container_btn = remove_container_btn
         widget.setMinimumHeight(40)
         return widget
 
     def _add_container_item(self, widget, containers, liquid_containers):
         container_name, ok = QInputDialog.getText(self, "Add Container", "Enter container name:")
         if ok and container_name.strip():
+            print(f"_add_container_item: Adding container '{container_name.strip()}'")
             containers.append(container_name.strip())
             widget.containers = containers
-            self._on_containers_changed()
+            print(f"_add_container_item: Updated containers list: {containers}")
+            self._update_containers_widget_display(widget, containers, liquid_containers)
+            print("_add_container_item: Calling _save_container_changes")
+            self._save_container_changes(widget)
+            self._play_add_sound()
 
     def _remove_container_item(self, widget, containers, liquid_containers):
         if not containers:
@@ -475,20 +500,84 @@ class InventoryCategoryPage(QWidget):
                 liquid_containers.remove(container_name)
             widget.containers = containers
             widget.liquid_containers = liquid_containers
-            self._on_containers_changed()
+            self._update_containers_widget_display(widget, containers, liquid_containers)
+            self._save_container_changes(widget)
+            self._play_delete_sound()
 
     def _on_container_liquid_changed(self, widget, container_name, state):
         if not hasattr(widget, 'liquid_containers'):
             widget.liquid_containers = []
-        
         if state == Qt.Checked:
             if container_name not in widget.liquid_containers:
                 widget.liquid_containers.append(container_name)
         else:
             if container_name in widget.liquid_containers:
                 widget.liquid_containers.remove(container_name)
-        
-        self._on_containers_changed()
+        self._save_container_changes(widget)
+    
+    def _update_containers_widget_display(self, widget, containers, liquid_containers):
+        if not widget or not hasattr(widget, 'layout'):
+            return
+        layout = widget.layout()
+        if not layout:
+            return
+        while layout.count() > 1:
+            item = layout.takeAt(1)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                while item.layout().count() > 0:
+                    child_item = item.layout().takeAt(0)
+                    if child_item.widget():
+                        child_item.widget().deleteLater()
+        if hasattr(widget, 'remove_container_btn'):
+            widget.remove_container_btn.setVisible(len(containers) > 0)
+        if not containers:
+            no_containers_label = QLabel("None")
+            no_containers_label.setObjectName("InventoryContainerLabel")
+            no_containers_label.setStyleSheet("font: 9pt 'Consolas';")
+            layout.addWidget(no_containers_label)
+        else:
+            for container_name in containers:
+                container_row = QHBoxLayout()
+                container_row.setSpacing(4)
+                container_label = QLabel(container_name)
+                container_label.setObjectName("InventoryContainerLabel")
+                container_label.setStyleSheet("font: 9pt 'Consolas';")
+                container_label.setMaximumWidth(120)
+                liquid_checkbox = QCheckBox("Holds Liquids")
+                liquid_checkbox.setObjectName("InventoryContainerLiquidCheckbox")
+                liquid_checkbox.setChecked(container_name in liquid_containers)
+                liquid_checkbox.stateChanged.connect(lambda state, name=container_name, w=widget: self._on_container_liquid_changed(w, name, state))
+                container_row.addWidget(container_label)
+                container_row.addWidget(liquid_checkbox)
+                container_row.addStretch()
+                layout.addLayout(container_row)
+
+    def _save_container_changes(self, widget):
+        if not widget:
+            print("_save_container_changes: No widget provided")
+            return
+        current = widget
+        while current and not isinstance(current, QTableWidget):
+            current = current.parent()
+        if not isinstance(current, QTableWidget):
+            print(f"_save_container_changes: Could not find QTableWidget parent")
+            return
+        table = current
+        for row in range(table.rowCount()):
+            for col in range(table.columnCount()):
+                cell_widget = table.cellWidget(row, col)
+                if cell_widget == widget:
+                    name_item = table.item(row, 0)
+                    if name_item:
+                        file_path = name_item.data(Qt.UserRole)
+                        if file_path:
+                            data = self._get_item_data_from_table_row(row)
+                            success = self._save_json(file_path, data)
+                    else:
+                        print("_save_container_changes: No name item found")
+                    return
 
     def _on_containers_changed(self):
         sender = self.sender()
@@ -513,10 +602,12 @@ class InventoryCategoryPage(QWidget):
         containers = []
         liquid_containers = []
         if not widget or not hasattr(widget, 'containers'):
+            print(f"_get_containers_from_widget: No widget or no containers attr. Widget: {widget}, has containers: {hasattr(widget, 'containers') if widget else False}")
             return containers, liquid_containers
         containers = widget.containers.copy()
         if hasattr(widget, 'liquid_containers'):
             liquid_containers = widget.liquid_containers.copy()
+        print(f"_get_containers_from_widget: Returning containers: {containers}, liquid_containers: {liquid_containers}")
         return containers, liquid_containers
     def _create_variable_actions_widget(self, variable_actions=None):
         if variable_actions is None:
@@ -549,7 +640,19 @@ class InventoryCategoryPage(QWidget):
         for action in variable_actions:
             self._add_variable_action_row(main_widget, action)
         if not variable_actions:
-            self._add_variable_action_row(main_widget)
+            button_row = QWidget()
+            button_layout = QHBoxLayout(button_row)
+            button_layout.setContentsMargins(0, 0, 0, 0)
+            button_layout.setSpacing(4)
+            button_layout.addStretch()
+            add_button = QPushButton("+")
+            add_button.setObjectName("AddConditionButton")
+            add_button.setMaximumWidth(22)
+            add_button.setMaximumHeight(22)
+            add_button.setToolTip("Add variable action")
+            add_button.clicked.connect(lambda: self._add_variable_action_row(main_widget))
+            button_layout.addWidget(add_button)
+            actions_layout.addWidget(button_row)
         main_widget.updateSize()
         return main_widget
     def _add_variable_action_row(self, parent_widget, action_data=None):
@@ -557,46 +660,53 @@ class InventoryCategoryPage(QWidget):
             action_data = {
                 "variable_name": "",
                 "operation": "set",
-                "value": ""
+                "value": "",
+                "effect_type": "Consumption"
             }
         row_widget = QWidget()
         row_layout = QHBoxLayout(row_widget)
         row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.setSpacing(4)
+        effect_type_combo = QComboBox()
+        effect_type_combo.setObjectName("InventoryVarEffectTypeCombo")
+        effect_type_combo.addItems(["Consumption", "Carry", "Equipped"])
+        effect_type_combo.setCurrentText(action_data.get("effect_type", "Consumption"))
+        effect_type_combo.setMaximumHeight(20)
+        effect_type_combo.currentTextChanged.connect(self._on_variable_action_changed)
         var_name_input = QLineEdit(action_data.get("variable_name", ""))
         var_name_input.setObjectName("InventoryVarNameInput")
         var_name_input.setPlaceholderText("Variable name")
-        var_name_input.setMaximumWidth(100)
         var_name_input.textChanged.connect(self._on_variable_action_changed)
         operation_combo = QComboBox()
         operation_combo.setObjectName("InventoryVarOperationCombo")
         operation_combo.addItems(["set", "increment", "decrement", "multiply", "divide"])
         operation_combo.setCurrentText(action_data.get("operation", "set"))
-        operation_combo.setMaximumWidth(80)
+        operation_combo.setMaximumHeight(20)
         operation_combo.currentTextChanged.connect(self._on_variable_action_changed)
         value_input = QLineEdit(action_data.get("value", ""))
         value_input.setObjectName("InventoryVarValueInput")
         value_input.setPlaceholderText("Value")
-        value_input.setMaximumWidth(70)
         value_input.textChanged.connect(self._on_variable_action_changed)
         add_button = QPushButton("+")
         add_button.setObjectName("AddConditionButton")
         add_button.setMaximumWidth(22)
         add_button.setMaximumHeight(22)
         add_button.setToolTip("Add variable action")
-        add_button.clicked.connect(lambda: self._add_variable_action_row(parent_widget))
+        add_button.clicked.connect(lambda: self._add_variable_action_with_sound(parent_widget))
         remove_button = QPushButton("-")
         remove_button.setObjectName("RemoveConditionButton")
         remove_button.setMaximumWidth(22)
         remove_button.setMaximumHeight(22)
         remove_button.setToolTip("Remove this variable action")
         remove_button.clicked.connect(lambda: self._remove_this_variable_action_row(row_widget, parent_widget))
+        row_layout.addWidget(effect_type_combo)
         row_layout.addWidget(var_name_input)
         row_layout.addWidget(operation_combo)
         row_layout.addWidget(value_input)
         row_layout.addStretch()
         row_layout.addWidget(add_button)
         row_layout.addWidget(remove_button)
+        row_widget.effect_type_combo = effect_type_combo
         row_widget.var_name_input = var_name_input
         row_widget.operation_combo = operation_combo
         row_widget.value_input = value_input
@@ -612,17 +722,31 @@ class InventoryCategoryPage(QWidget):
                 self._on_variable_action_changed()
     def _remove_this_variable_action_row(self, row_widget, parent_widget):
         layout = parent_widget.actions_layout
-        will_be_empty = layout.count() <= 1
         for i in range(layout.count()):
             item = layout.itemAt(i)
             if item and item.widget() == row_widget:
                 layout.takeAt(i)
                 row_widget.deleteLater()
-                if will_be_empty:
-                    self._add_variable_action_row(parent_widget)
+                
+                if layout.count() == 0:
+                    button_row = QWidget()
+                    button_layout = QHBoxLayout(button_row)
+                    button_layout.setContentsMargins(0, 0, 0, 0)
+                    button_layout.setSpacing(4)
+                    button_layout.addStretch()
+                    add_button = QPushButton("+")
+                    add_button.setObjectName("AddConditionButton")
+                    add_button.setMaximumWidth(22)
+                    add_button.setMaximumHeight(22)
+                    add_button.setToolTip("Add variable action")
+                    add_button.clicked.connect(lambda: self._add_variable_action_with_sound(parent_widget))
+                    button_layout.addWidget(add_button)
+                    layout.addWidget(button_row)
+                
                 if hasattr(parent_widget, 'updateSize') and callable(parent_widget.updateSize):
                     parent_widget.updateSize()
                 self._on_variable_action_changed()
+                self._play_delete_sound()
                 break
     def _on_variable_action_changed(self):
         sender = self.sender()
@@ -672,7 +796,8 @@ class InventoryCategoryPage(QWidget):
                         action = {
                             "variable_name": var_name,
                             "operation": row_widget.operation_combo.currentText(),
-                            "value": row_widget.value_input.text().strip()
+                            "value": row_widget.value_input.text().strip(),
+                            "effect_type": row_widget.effect_type_combo.currentText()
                         }
                         actions.append(action)
         return actions
@@ -724,8 +849,20 @@ class InventoryCategoryPage(QWidget):
             name_item.setToolTip(f"{'Game' if is_game_file else 'Resource'} file: {file_path}")
             self.item_table_widget.setItem(row, 0, name_item)
             properties_widget = self._create_properties_widget(data.get("properties", "Consumable"))
+            if hasattr(properties_widget, 'equipment_slot_combo') and data.get("equipment_slot"):
+                equipment_slot = data.get("equipment_slot")
+                index = properties_widget.equipment_slot_combo.findText(equipment_slot)
+                if index >= 0:
+                    properties_widget.equipment_slot_combo.setCurrentIndex(index)
+                properties_widget.equipment_slot_combo.setVisible(True)
+            if hasattr(properties_widget, 'readable_text_input') and data.get("readable_text"):
+                readable_text = data.get("readable_text")
+                properties_widget.readable_text_input.setPlainText(readable_text)
+                properties_widget.readable_text_input.setVisible(True)
             self.item_table_widget.setCellWidget(row, 1, properties_widget)
-            containers_widget = self._create_containers_widget(data.get("containers", []), data.get("liquid_containers", []))
+            containers_data = data.get("containers", [])
+            liquid_containers_data = data.get("liquid_containers", [])
+            containers_widget = self._create_containers_widget(containers_data, liquid_containers_data)
             self.item_table_widget.setCellWidget(row, 2, containers_widget)
             variable_actions = data.get("variable_actions", [])
             variables_widget = self._create_variable_actions_widget(variable_actions)
@@ -737,8 +874,10 @@ class InventoryCategoryPage(QWidget):
             self.item_table_widget.setItem(row, 4, value_item)
             weight_item = QTableWidgetItem(str(data.get("weight", "0")))
             self.item_table_widget.setItem(row, 5, weight_item)
+            tags_item = QTableWidgetItem(data.get("tags", ""))
+            self.item_table_widget.setItem(row, 6, tags_item)
             desc_item = QTableWidgetItem(data.get("description", ""))
-            self.item_table_widget.setItem(row, 6, desc_item)
+            self.item_table_widget.setItem(row, 7, desc_item)
         self.item_table_widget.blockSignals(False)
         for row in range(self.item_table_widget.rowCount()):
             self.item_table_widget.resizeRowToContents(row)
@@ -766,6 +905,7 @@ class InventoryCategoryPage(QWidget):
             "variable_actions": [],
             "base_value": "0",
             "weight": "0",
+            "tags": "",
             "description": ""
         }
         if not self._save_json(item_path, default_data):
@@ -845,8 +985,12 @@ class InventoryCategoryPage(QWidget):
                 selected_properties.append("Consumable")
             if hasattr(properties_widget, 'wearable_checkbox') and properties_widget.wearable_checkbox.isChecked():
                 selected_properties.append("Wearable")
+                if hasattr(properties_widget, 'equipment_slot_combo') and properties_widget.equipment_slot_combo.isVisible():
+                    data['equipment_slot'] = properties_widget.equipment_slot_combo.currentText()
             if hasattr(properties_widget, 'readable_checkbox') and properties_widget.readable_checkbox.isChecked():
                 selected_properties.append("Readable")
+                if hasattr(properties_widget, 'readable_text_input') and properties_widget.readable_text_input.isVisible():
+                    data['readable_text'] = properties_widget.readable_text_input.toPlainText().strip()
             if hasattr(properties_widget, 'liquid_checkbox') and properties_widget.liquid_checkbox.isChecked():
                 selected_properties.append("Liquid")
             if len(selected_properties) > 1:
@@ -860,10 +1004,13 @@ class InventoryCategoryPage(QWidget):
         containers_widget = self.item_table_widget.cellWidget(row, 2)
         if containers_widget:
             containers, liquid_containers = self._get_containers_from_widget(containers_widget)
+            print(f"_get_item_data_from_table_row: Containers from widget: {containers}")
+            print(f"_get_item_data_from_table_row: Liquid containers from widget: {liquid_containers}")
             data['containers'] = containers
             if liquid_containers:
                 data['liquid_containers'] = liquid_containers
         else:
+            print("_get_item_data_from_table_row: No containers widget found")
             data['containers'] = []
         variables_widget = self.item_table_widget.cellWidget(row, 3)
         if variables_widget:
@@ -874,7 +1021,9 @@ class InventoryCategoryPage(QWidget):
         data['base_value'] = value_item.text() if value_item else "0"
         weight_item = self.item_table_widget.item(row, 5)
         data['weight'] = weight_item.text() if weight_item else "0"
-        desc_item = self.item_table_widget.item(row, 6)
+        tags_item = self.item_table_widget.item(row, 6)
+        data['tags'] = tags_item.text() if tags_item else ""
+        desc_item = self.item_table_widget.item(row, 7)
         data['description'] = desc_item.text() if desc_item else ""
         return data
     def _load_json(self, file_path):
@@ -918,6 +1067,17 @@ class InventoryCategoryPage(QWidget):
                             self._on_item_data_changed(dummy_item)
                             return
             current = parent
+            
+    def _on_wearable_changed(self, widget):
+        if hasattr(widget, 'equipment_slot_combo'):
+            widget.equipment_slot_combo.setVisible(widget.wearable_checkbox.isChecked())
+        self._on_properties_changed()
+        
+    def _on_readable_changed(self, widget):
+        if hasattr(widget, 'readable_text_input'):
+            widget.readable_text_input.setVisible(widget.readable_checkbox.isChecked())
+        self._on_properties_changed()
+        
     def _widget_contains_checkbox(self, widget, checkbox):
         if widget == checkbox:
             return True
@@ -930,6 +1090,52 @@ class InventoryCategoryPage(QWidget):
         if hasattr(widget, 'liquid_checkbox') and widget.liquid_checkbox == checkbox:
             return True
         return False
+    
+    def _init_sound(self):
+        try:
+            import pygame
+            mixer_initialized = pygame.mixer.get_init()
+            if not mixer_initialized:
+                pygame.mixer.init()
+                mixer_initialized_after_attempt = pygame.mixer.get_init()
+                if not mixer_initialized_after_attempt:
+                    return
+            self.select_sound = pygame.mixer.Sound("sounds/selectMessage.mp3")
+            self.add_sound = pygame.mixer.Sound("sounds/AddRule.mp3")
+            self.delete_sound = pygame.mixer.Sound("sounds/DeleteRule.mp3")
+        except Exception as e:
+            print(f"Error initializing sounds: {e}")
+            self.select_sound = None
+            self.add_sound = None
+            self.delete_sound = None
+    
+    def _on_row_selection_changed(self):
+        if self.select_sound:
+            try:
+                self.select_sound.play()
+            except Exception as e:
+                print(f"Error playing select sound: {e}")
+                self.select_sound = None
+    
+    def _play_add_sound(self):
+        if self.add_sound:
+            try:
+                self.add_sound.play()
+            except Exception as e:
+                print(f"Error playing add sound: {e}")
+                self.add_sound = None
+    
+    def _play_delete_sound(self):
+        if self.delete_sound:
+            try:
+                self.delete_sound.play()
+            except Exception as e:
+                print(f"Error playing delete sound: {e}")
+                self.delete_sound = None
+    
+    def _add_variable_action_with_sound(self, parent_widget):
+        self._add_variable_action_row(parent_widget)
+        self._play_add_sound()
 
 class DraggableTabWidget(QTabWidget):
     def __init__(self, parent=None):
@@ -961,11 +1167,33 @@ class DraggableTabWidget(QTabWidget):
                     QMessageBox.warning(self, "Category Exists", 
                                        f"Category '{new_name}' already exists.")
                     return
-            
+            old_sanitized = sanitize_path_name(current_name)
+            new_sanitized = sanitize_path_name(new_name)
+            if old_sanitized != new_sanitized:
+                inventory_manager = self._get_inventory_manager()
+                if inventory_manager:
+                    old_dir = os.path.join(inventory_manager.workflow_data_dir, 'resources', 'data files', 'items', old_sanitized)
+                    new_dir = os.path.join(inventory_manager.workflow_data_dir, 'resources', 'data files', 'items', new_sanitized)
+                    if os.path.exists(old_dir) and not os.path.exists(new_dir):
+                        try:
+                            import shutil
+                            shutil.move(old_dir, new_dir)
+                        except OSError as e:
+                            QMessageBox.warning(self, "Rename Error", 
+                                               f"Could not rename folder: {e}")
+                            return
             self.setTabText(tab_index, new_name)
-            
-            if hasattr(self.parent(), '_save_tab_order'):
-                self.parent()._save_tab_order()
+            inventory_manager = self._get_inventory_manager()
+            if inventory_manager and hasattr(inventory_manager, '_save_tab_order'):
+                inventory_manager._save_tab_order()
+    
+    def _get_inventory_manager(self):
+        parent = self.parent()
+        while parent:
+            if hasattr(parent, 'workflow_data_dir') and hasattr(parent, '_save_tab_order'):
+                return parent
+            parent = parent.parent()
+        return None
 
 class InventoryManagerWidget(QWidget):
     def __init__(self, parent=None, workflow_data_dir=None, theme_colors=None):
@@ -1031,7 +1259,6 @@ class InventoryManagerWidget(QWidget):
         references_layout.addLayout(tab_management_layout)
         self.tab_widget = DraggableTabWidget()
         self.tab_widget.setObjectName("InventoryTabWidget")
-
         self.tab_widget.currentChanged.connect(self._play_tab_switch_sound)
         self.tab_widget.tabBar().tabMoved.connect(self._on_tab_moved)
         references_layout.addWidget(self.tab_widget)
@@ -1211,7 +1438,6 @@ class InventoryManagerWidget(QWidget):
             }}
         """
         self.containers_scroll_area.setStyleSheet(containers_style)
-        
         self._update_all_container_table_styles()
 
     def _update_all_container_table_styles(self):
@@ -1675,28 +1901,23 @@ class InventoryManagerWidget(QWidget):
     def _update_container_item_in_memory(self, table, row):
         if not hasattr(table, 'level') or not hasattr(table, 'item_name') or not hasattr(table, 'container_name'):
             return
-        
         level = table.level
         parent_item_name = table.item_name
         parent_container_name = table.container_name
-        
         item_id_item = table.item(row, 0)
         name_item = table.item(row, 1)
         quantity_item = table.item(row, 2)
         owner_item = table.item(row, 3)
         description_item = table.item(row, 4)
         location_item = table.item(row, 5)
-        
         if not item_id_item or not item_id_item.text().strip():
             return
-        
         item_id = item_id_item.text().strip()
         item_name = name_item.text().strip() if name_item else ''
         quantity = int(quantity_item.text().strip()) if quantity_item and quantity_item.text().strip().isdigit() else 1
         owner = owner_item.text().strip() if owner_item else ''
         description = description_item.text().strip() if description_item else ''
         location = location_item.text().strip() if location_item else ''
-        
         updated_item = {
             'item_id': item_id,
             'name': item_name,
@@ -1706,7 +1927,6 @@ class InventoryManagerWidget(QWidget):
             'location': location,
             'containers': {}
         }
-        
         if item_name:
             reference_containers = self._get_containers_for_item(item_name)
             for ref_container_name in reference_containers:
@@ -2261,8 +2481,6 @@ class InventoryManagerWidget(QWidget):
                 container_table.show()
         load_containers_in_level_order()
 
-
-
     def _update_containers_label(self, item_name):
         if item_name:
             self.containers_label.setText(f"{item_name} Containers:")
@@ -2403,29 +2621,40 @@ class InventoryManagerWidget(QWidget):
         self._update_containers_label(item_name)
 
     def _load_categories(self):
-        categories = set()
-        resource_items_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'items')
-        if os.path.isdir(resource_items_dir):
-            for folder_name in os.listdir(resource_items_dir):
-                folder_path = os.path.join(resource_items_dir, folder_name)
-                if os.path.isdir(folder_path):
-                    display_name = folder_name.replace('_', ' ').title()
-                    categories.add(display_name)
-        game_items_dir = os.path.join(self.workflow_data_dir, 'game', 'items')
-        if os.path.isdir(game_items_dir):
-            for folder_name in os.listdir(game_items_dir):
-                folder_path = os.path.join(game_items_dir, folder_name)
-                if os.path.isdir(folder_path):
-                    display_name = folder_name.replace('_', ' ').title()
-                    categories.add(display_name)
-        if not categories:
-            categories = {"All", "Weapons", "Armor", "Sumables"}
         self._load_tab_order()
-        for category in sorted(categories):
-            self._create_category_tab(category)
-        self._apply_tab_order()
+        
+        if hasattr(self, 'saved_tab_order') and self.saved_tab_order:
+            for category_name in self.saved_tab_order:
+                self._create_category_tab(category_name)
+        else:
+            categories = set()
+            resource_items_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'items')
+            if os.path.isdir(resource_items_dir):
+                for folder_name in os.listdir(resource_items_dir):
+                    folder_path = os.path.join(resource_items_dir, folder_name)
+                    if os.path.isdir(folder_path):
+                        display_name = folder_name.replace('_', ' ').title()
+                        categories.add(display_name)
+            game_items_dir = os.path.join(self.workflow_data_dir, 'game', 'items')
+            if os.path.isdir(game_items_dir):
+                for folder_name in os.listdir(game_items_dir):
+                    folder_path = os.path.join(game_items_dir, folder_name)
+                    if os.path.isdir(folder_path):
+                        display_name = folder_name.replace('_', ' ').title()
+                        categories.add(display_name)
+            if not categories:
+                categories = {"All", "Weapons", "Armor", "Sumables"}
+            for category in sorted(categories):
+                self._create_category_tab(category)
 
     def _create_category_tab(self, category_name):
+        sanitized_category = sanitize_path_name(category_name)
+        category_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'items', sanitized_category)
+        try:
+            os.makedirs(category_dir, exist_ok=True)
+        except OSError as e:
+            print(f"Could not create category directory for '{category_name}': {e}")
+        
         page_widget = InventoryCategoryPage(category_name, self)
         self.tab_widget.addTab(page_widget, category_name)
         page_widget._load_items_from_disk()
@@ -2511,14 +2740,11 @@ class InventoryManagerWidget(QWidget):
         
         if not os.path.exists(order_file):
             return
-        
         try:
             with open(order_file, 'r', encoding='utf-8') as f:
                 saved_order = json.load(f)
-            
             if not isinstance(saved_order, list):
                 return
-            
             self.saved_tab_order = saved_order
         except Exception as e:
             print(f"Error loading tab order: {e}")
@@ -2526,27 +2752,22 @@ class InventoryManagerWidget(QWidget):
     def _apply_tab_order(self):
         if not hasattr(self, 'saved_tab_order') or not self.saved_tab_order:
             return
-        
         current_tabs = []
         for i in range(self.tab_widget.count()):
             current_tabs.append(self.tab_widget.tabText(i))
-        
         ordered_tabs = []
         for saved_tab in self.saved_tab_order:
             if saved_tab in current_tabs:
                 ordered_tabs.append(saved_tab)
-        
         for tab_name in current_tabs:
             if tab_name not in ordered_tabs:
                 ordered_tabs.append(tab_name)
-        
         for i, tab_name in enumerate(ordered_tabs):
             current_index = None
             for j in range(self.tab_widget.count()):
                 if self.tab_widget.tabText(j) == tab_name:
                     current_index = j
                     break
-            
             if current_index is not None and current_index != i:
                 self.tab_widget.tabBar().moveTab(current_index, i)
 
@@ -2615,10 +2836,8 @@ class InventoryManagerWidget(QWidget):
         self.instances_table.setItem(row, 3, QTableWidgetItem(""))
         self.instances_table.setItem(row, 4, QTableWidgetItem(""))
         self.instances_table.setItem(row, 5, QTableWidgetItem(""))
-        
         if not hasattr(self, 'current_inventory_data'):
             self.current_inventory_data = []
-        
         new_item = {
             'item_id': self.instances_table.item(row, 0).text().strip(),
             'name': '',
@@ -2629,7 +2848,6 @@ class InventoryManagerWidget(QWidget):
             'containers': {}
         }
         self.current_inventory_data.append(new_item)
-        
         self._save_current_inventory()
         main_ui = self._get_main_ui()
         if main_ui and hasattr(main_ui, 'add_rule_sound') and main_ui.add_rule_sound:
@@ -2731,7 +2949,6 @@ class InventoryManagerWidget(QWidget):
                             widgets_to_remove.extend(find_and_remove_widgets_recursively(child_widget, target_level))
             return widgets_to_remove
         widgets_to_remove = []
-        
         for i in range(self.containers_layout.count()):
             item = self.containers_layout.itemAt(i)
             if item and item.widget():
