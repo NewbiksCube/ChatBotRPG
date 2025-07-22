@@ -660,6 +660,10 @@ def create_pair_widget(tab_data):
         add_description_input.setFont(QFont('Consolas', 9))
         add_description_input.setPlaceholderText("Item description (optional)")
         add_description_input.setMinimumWidth(150)
+        add_description_generate_checkbox = QCheckBox("Generate")
+        add_description_generate_checkbox.setObjectName("AddItemDescriptionGenerateCheckbox")
+        add_description_generate_checkbox.setFont(QFont('Consolas', 9))
+        add_description_generate_checkbox.setToolTip("Generate the description dynamically")
         add_location_label = QLabel("Location:")
         add_location_label.setFont(QFont('Consolas', 9))
         add_location_input = QLineEdit()
@@ -667,12 +671,18 @@ def create_pair_widget(tab_data):
         add_location_input.setFont(QFont('Consolas', 9))
         add_location_input.setPlaceholderText("Item location (optional)")
         add_location_input.setMinimumWidth(120)
+        add_location_generate_checkbox = QCheckBox("Generate")
+        add_location_generate_checkbox.setObjectName("AddItemLocationGenerateCheckbox")
+        add_location_generate_checkbox.setFont(QFont('Consolas', 9))
+        add_location_generate_checkbox.setToolTip("Generate the location dynamically")
         add_item_metadata_layout.addWidget(add_owner_label)
         add_item_metadata_layout.addWidget(add_owner_input)
         add_item_metadata_layout.addWidget(add_description_label)
         add_item_metadata_layout.addWidget(add_description_input)
+        add_item_metadata_layout.addWidget(add_description_generate_checkbox)
         add_item_metadata_layout.addWidget(add_location_label)
         add_item_metadata_layout.addWidget(add_location_input)
+        add_item_metadata_layout.addWidget(add_location_generate_checkbox)
         add_item_metadata_layout.addStretch()
         add_item_layout.addLayout(add_item_metadata_layout)
         target_layout = QHBoxLayout()
@@ -732,6 +742,70 @@ def create_pair_widget(tab_data):
         target_container_layout.addStretch()
         add_item_layout.addLayout(target_container_layout)
         
+        generate_instructions_widget = QWidget()
+        generate_instructions_layout = QVBoxLayout(generate_instructions_widget)
+        generate_instructions_layout.setContentsMargins(0, 0, 0, 0)
+        generate_instructions_layout.setSpacing(5)
+        
+        theme_colors = tab_data.get('settings', {})
+        base_color = theme_colors.get('base_color', '#00FF66')
+        darker_bg = theme_colors.get('darker_bg', '#303030')
+        
+        generate_instructions_header = QLabel("Generate Instructions:")
+        generate_instructions_header.setFont(QFont('Consolas', 10, QFont.Bold))
+        generate_instructions_header.setStyleSheet(f"color: {base_color};")
+        generate_instructions_layout.addWidget(generate_instructions_header)
+        
+        generate_instructions_editor = QTextEdit()
+        generate_instructions_editor.setObjectName("AddItemGenerateInstructionsEditor")
+        generate_instructions_editor.setFont(QFont('Consolas', 10))
+        generate_instructions_editor.setPlaceholderText("Enter instructions for generating item details...")
+        generate_instructions_editor.setMaximumHeight(80)
+        generate_instructions_editor.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {darker_bg};
+                color: {base_color};
+                border: 1px solid {base_color};
+                border-radius: 3px;
+                padding: 5px;
+            }}
+        """)
+        generate_instructions_layout.addWidget(generate_instructions_editor)
+        
+        context_attach_layout = QHBoxLayout()
+        context_attach_layout.setContentsMargins(0, 0, 0, 0)
+        context_attach_layout.setSpacing(10)
+        
+        attach_scene_context_checkbox = QCheckBox("Attach Scene Context")
+        attach_scene_context_checkbox.setObjectName("AddItemAttachSceneContextCheckbox")
+        attach_scene_context_checkbox.setFont(QFont('Consolas', 9))
+        attach_scene_context_checkbox.setToolTip("Include current scene context in generation")
+        
+        attach_location_desc_checkbox = QCheckBox("Attach Location Description")
+        attach_location_desc_checkbox.setObjectName("AddItemAttachLocationDescCheckbox")
+        attach_location_desc_checkbox.setFont(QFont('Consolas', 9))
+        attach_location_desc_checkbox.setToolTip("Include current location description in generation")
+        
+        attach_character_desc_checkbox = QCheckBox("Attach Character Description")
+        attach_character_desc_checkbox.setObjectName("AddItemAttachCharacterDescCheckbox")
+        attach_character_desc_checkbox.setFont(QFont('Consolas', 9))
+        attach_character_desc_checkbox.setToolTip("Include current character description in generation")
+        
+        context_attach_layout.addWidget(attach_scene_context_checkbox)
+        context_attach_layout.addWidget(attach_location_desc_checkbox)
+        context_attach_layout.addWidget(attach_character_desc_checkbox)
+        context_attach_layout.addStretch()
+        
+        generate_instructions_layout.addLayout(context_attach_layout)
+        generate_instructions_widget.setVisible(False)
+        add_item_layout.addWidget(generate_instructions_widget)
+        
+        def update_generate_instructions_visibility():
+            show_instructions = (generate_checkbox.isChecked() or 
+                               add_description_generate_checkbox.isChecked() or 
+                               add_location_generate_checkbox.isChecked())
+            generate_instructions_widget.setVisible(show_instructions)
+        
         def update_target_container_visibility():
             is_visible = target_container_checkbox.isChecked()
             target_item_name_label.setVisible(is_visible)
@@ -739,6 +813,9 @@ def create_pair_widget(tab_data):
             target_container_name_label.setVisible(is_visible)
             target_container_name_input.setVisible(is_visible)
         target_container_checkbox.toggled.connect(update_target_container_visibility)
+        generate_checkbox.toggled.connect(update_generate_instructions_visibility)
+        add_description_generate_checkbox.toggled.connect(update_generate_instructions_visibility)
+        add_location_generate_checkbox.toggled.connect(update_generate_instructions_visibility)
         add_item_widget.setVisible(False)
         top_h_layout.addWidget(add_item_widget)
         remove_item_widget = QWidget()
@@ -2347,7 +2424,13 @@ def create_pair_widget(tab_data):
             'add_item_generate_checkbox': generate_checkbox,
             'add_item_owner_input': add_owner_input,
             'add_item_description_input': add_description_input,
+            'add_item_description_generate_checkbox': add_description_generate_checkbox,
             'add_item_location_input': add_location_input,
+            'add_item_location_generate_checkbox': add_location_generate_checkbox,
+            'add_item_generate_instructions_editor': generate_instructions_editor,
+            'add_item_attach_scene_context_checkbox': attach_scene_context_checkbox,
+            'add_item_attach_location_desc_checkbox': attach_location_desc_checkbox,
+            'add_item_attach_character_desc_checkbox': attach_character_desc_checkbox,
             'add_item_target_setting_radio': target_setting_radio,
             'add_item_target_character_radio': target_character_radio,
             'add_item_target_name_input': target_name_input,
@@ -2996,6 +3079,8 @@ def create_pair_widget(tab_data):
         target_type = data.get('target_type', 'Setting')
         target_name = data.get('target_name', '')
         generate = data.get('generate', False)
+        generate_description = data.get('generate_description', False)
+        generate_location = data.get('generate_location', False)
         target_container_enabled = data.get('target_container_enabled', False)
         target_item_name = data.get('target_item_name', '')
         target_container_name = data.get('target_container_name', '')
@@ -3018,6 +3103,33 @@ def create_pair_widget(tab_data):
         generate_checkbox = row.get('add_item_generate_checkbox')
         if generate_checkbox and is_valid_widget(generate_checkbox):
             generate_checkbox.setChecked(generate)
+        generate_description_checkbox = row.get('add_item_description_generate_checkbox')
+        if generate_description_checkbox and is_valid_widget(generate_description_checkbox):
+            generate_description_checkbox.setChecked(generate_description)
+        generate_location_checkbox = row.get('add_item_location_generate_checkbox')
+        if generate_location_checkbox and is_valid_widget(generate_location_checkbox):
+            generate_location_checkbox.setChecked(generate_location)
+        
+        generate_instructions = data.get('generate_instructions', '')
+        attach_scene_context = data.get('attach_scene_context', False)
+        attach_location_desc = data.get('attach_location_desc', False)
+        attach_character_desc = data.get('attach_character_desc', False)
+        
+        generate_instructions_editor = row.get('add_item_generate_instructions_editor')
+        if generate_instructions_editor and is_valid_widget(generate_instructions_editor):
+            generate_instructions_editor.setPlainText(generate_instructions)
+        
+        attach_scene_context_checkbox = row.get('add_item_attach_scene_context_checkbox')
+        if attach_scene_context_checkbox and is_valid_widget(attach_scene_context_checkbox):
+            attach_scene_context_checkbox.setChecked(attach_scene_context)
+        
+        attach_location_desc_checkbox = row.get('add_item_attach_location_desc_checkbox')
+        if attach_location_desc_checkbox and is_valid_widget(attach_location_desc_checkbox):
+            attach_location_desc_checkbox.setChecked(attach_location_desc)
+        
+        attach_character_desc_checkbox = row.get('add_item_attach_character_desc_checkbox')
+        if attach_character_desc_checkbox and is_valid_widget(attach_character_desc_checkbox):
+            attach_character_desc_checkbox.setChecked(attach_character_desc)
         target_setting_radio = row.get('add_item_target_setting_radio')
         if target_setting_radio and is_valid_widget(target_setting_radio):
             target_setting_radio.setChecked(target_type == 'Setting')
