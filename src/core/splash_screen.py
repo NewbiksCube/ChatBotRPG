@@ -7,7 +7,7 @@ class SplashScreen(QSplashScreen):
     def __init__(self, message="Loading ChatBot RPG", width=900, height=600, bg_color="#121218", fg_color="#00FF66"):
         self._base_message = message
         self._title = "CHATBOT RPG"
-        self._subtitle = "Text Adventure Gaming Platform"
+        self._subtitle = "Text Adventure Platform"
         settings = QSettings("ChatBotRPG", "ChatBotRPG")
         last_active_tab = settings.value("lastActiveTabName", "", type=str)
         if last_active_tab:
@@ -42,7 +42,10 @@ class SplashScreen(QSplashScreen):
             '0', '1', 'A', 'E', 'F', 'G', 'H', 'K', 'M', 'N', 'R', 'T', 'V', 'X', 'Z',
             '@', '#', '$', '%', '&', '*', '=', '+', '-',
             '∆', 'Ω', 'Σ', 'Λ', 'Ψ', 'Φ', 'Ξ', '∑', '∇', '∂', 'µ', 'π', 'λ', 'ω',
-            'ｱ', 'ｳ', 'ｶ', 'ｸ', 'ｹ', 'ｺ'
+            'ｱ', 'ｳ', 'ｶ', 'ｸ', 'ｹ', 'ｺ',
+            'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᛉ', 'ᛋ', 'ᛏ', 'ᛒ', 'ᛗ', 'ᛚ', 'ᛝ', 'ᛟ', 'ᛞ',
+            '𐍈', '𐌰', '𐌱', '𐌲', '𐌳', '𐌴', '𐌵', '𐌶', '𐌷', '𐌸', '𐌹', '𐌺', '𐌻', '𐌼', '𐌽', '𐌾', '𐌿',
+            '✦', '✧', '✩', '✫', '✬', '✭', '✮', '✯', '✰', '✶', '✷', '✸', '✹', '✺', '✻', '✼', '✽', '✾', '✿'
         ]
         for i in range(150):
             x = random.randint(0, width)
