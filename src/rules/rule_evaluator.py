@@ -811,6 +811,8 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
             raw_instructions = action_obj.get('instructions', '').strip()
             instructions = self._substitute_variables_in_string(raw_instructions, tab_data, actor_for_substitution)
             location = action_obj.get('location', '').strip()
+            if location:
+                location = self._substitute_placeholders_in_condition_value(location, tab_data, actor_for_substitution)
             attach_context = action_obj.get('attach_context', False)
             generation_mode = action_obj.get('generation_mode', 'Create New')
             target_directory = action_obj.get('target_directory', 'Game')
@@ -845,9 +847,15 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
             final_location_for_gen = location
             if not final_location_for_gen and tab_data:
                 current_setting = tab_data.get('current_setting_name', '')
+                if not current_setting and workflow_dir:
+                    from core.utils import _get_player_current_setting_name
+                    current_setting = _get_player_current_setting_name(workflow_dir)
+                    if current_setting and current_setting != "Unknown Setting":
+                        tab_data['current_setting_name'] = current_setting
                 if current_setting: 
                     final_location_for_gen = current_setting
             if workflow_dir:
+                print(f"    >> Generate Character: workflow_dir found: {workflow_dir}")
                 try:
                     if generation_mode == 'Edit Existing':
                         from generate.generate_actor import trigger_actor_edit_from_rule
@@ -901,6 +909,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                                     traceback.print_exc()
                             QTimer.singleShot(1000, refresh_character_context)
                     else:
+                        print(f"    >> Generate Character: Calling trigger_actor_creation_from_rule with fields: {fields_to_generate}")
                         from generate.generate_actor import trigger_actor_creation_from_rule
                         trigger_actor_creation_from_rule(
                             fields_to_generate=fields_to_generate,
@@ -918,6 +927,8 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                             reload_actors_for_setting(workflow_dir, final_location_for_gen)
                 except Exception as e:
                     print(f"    ERROR: Failed to trigger enhanced character generation: {e}")
+                    import traceback
+                    traceback.print_exc()
         elif action_type == 'Generate Random List':
             _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
         elif action_type == 'Skip Post':
