@@ -47,6 +47,7 @@ class ActorGenerationWorker(QObject):
 
     def run(self):
         try:
+            print(f"  >> ActorGenerationWorker.run() started with fields: {self.fields_to_generate}")
             ordered_fields = [f for f in GENERATION_ORDER if f in self.fields_to_generate]
             generated_data = {}
             character_name = self.actor_data.get('name', '').strip()
@@ -56,7 +57,17 @@ class ActorGenerationWorker(QObject):
                 ordered_fields.insert(0, 'name')
 
             for field in ordered_fields:
+                print(f"  >> Generating field: {field}")
                 context = self._prepare_context(field_to_exclude=field)
+                
+                if self.additional_instructions and '[CURRENT SCENE CONTEXT]' in self.additional_instructions:
+                    scene_context_start = self.additional_instructions.find('[CURRENT SCENE CONTEXT]')
+                    scene_context_end = self.additional_instructions.find('[/CURRENT SCENE CONTEXT]')
+                    if scene_context_start != -1 and scene_context_end != -1:
+                        scene_context = self.additional_instructions[scene_context_start + 20:scene_context_end].strip()
+                        context = f"Current Scene Context:\n{scene_context}\n\nCharacter Information:\n{context}"
+                        print(f"  >> Added scene context to prompt context")
+                
                 character_name = self.actor_data.get('name', '').strip() or "Unnamed Character"
                 url_type = self.model_override if self.model_override else get_default_utility_model()
                 retry_count = 0
@@ -70,13 +81,34 @@ class ActorGenerationWorker(QObject):
                         if not existing_name:
                              name_prompt_instruction = "Create a name for a character based on the information below. Output just the name without any formatting or extra text."
                         
-                        prompt = f"""{name_prompt_instruction}\n\nCurrent Character Sheet:\n{context}\n\nNew Name:"""
+                        if self.additional_instructions:
+                            instruction_prefix = f"SPECIFIC INSTRUCTIONS: {self.additional_instructions}\n\n"
+                            print(f"  >> Using additional instructions: {self.additional_instructions}")
+                        else:
+                            instruction_prefix = ""
+                            print(f"  >> No additional instructions provided")
+                        
+                        prompt = f"""{instruction_prefix}{name_prompt_instruction}\n\nCurrent Character Sheet:\n{context}\n\nNew Name:"""
+                        print(f"  >> Final prompt for {field}:\n{prompt}")
                     elif field == 'description':
-                        prompt = f"""Given the following information about a character named {character_name}, write a detailed, vivid description of their background, personality, and physical presence. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nDescription:"""
+                        if self.additional_instructions:
+                            instruction_prefix = f"SPECIFIC INSTRUCTIONS: {self.additional_instructions}\n\n"
+                            print(f"  >> Using additional instructions: {self.additional_instructions}")
+                        else:
+                            instruction_prefix = ""
+                            print(f"  >> No additional instructions provided")
+                        prompt = f"""{instruction_prefix}Given the following information about a character named {character_name}, write a detailed, vivid description of their background, personality, and physical presence. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nDescription:"""
+                        print(f"  >> Final prompt for {field}:\n{prompt}")
                     elif field == 'personality':
-                        prompt = f"""Given the following information about a character named {character_name}, write a detailed personality profile. Focus on temperament, values, quirks, and how the character interacts with others. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nPersonality:"""
+                        instruction_prefix = ""
+                        if self.additional_instructions:
+                            instruction_prefix = f"SPECIFIC INSTRUCTIONS: {self.additional_instructions}\n\n"
+                        prompt = f"""{instruction_prefix}Given the following information about a character named {character_name}, write a detailed personality profile. Focus on temperament, values, quirks, and how the character interacts with others. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nPersonality:"""
                     elif field == 'appearance':
-                        prompt = f"""Given the following information about a character named {character_name}, write a detailed physical appearance section. Include build, facial features, hair, eyes, distinguishing marks, and typical clothing style. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nAppearance:"""
+                        instruction_prefix = ""
+                        if self.additional_instructions:
+                            instruction_prefix = f"SPECIFIC INSTRUCTIONS: {self.additional_instructions}\n\n"
+                        prompt = f"""{instruction_prefix}Given the following information about a character named {character_name}, write a detailed physical appearance section. Include build, facial features, hair, eyes, distinguishing marks, and typical clothing style. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nAppearance:"""
                     elif field == 'goals':
                         prompt = f"""Given the following information about a character named {character_name}, list the character's main goals and motivations. Include both short-term and long-term ambitions, and explain why these goals matter to the character. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nGoals:"""
                     elif field == 'story':
@@ -84,8 +116,11 @@ class ActorGenerationWorker(QObject):
                     elif field == 'abilities':
                         prompt = f"""Given the following information about a character named {character_name}, describe the character's notable abilities, skills, and talents. Include both mundane and extraordinary abilities, and explain how they were acquired or developed. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nAbilities:"""
                     elif field == 'equipment':
+                        instruction_prefix = ""
+                        if self.additional_instructions:
+                            instruction_prefix = f"SPECIFIC INSTRUCTIONS: {self.additional_instructions}\n\n"
                         prompt = (
-                            f"You are an expert wardrobe designer. Given the following character information for {character_name}, "
+                            f"{instruction_prefix}You are an expert wardrobe designer. Given the following character information for {character_name}, "
                             "generate a JSON object representing the character's worn equipment. "
                             "The equipment should match the character's theme, type, and station. "
                             "Respect the genre (e.g., medieval, modern, sci-fi)."
@@ -139,8 +174,8 @@ class ActorGenerationWorker(QObject):
                             prompt += f"\n\nThis is retry #{retry_count}. Please ensure your response is a valid JSON object with ALL required keys!"
                         else:
                             prompt += f"\n\nThis is retry #{retry_count}. Please ensure your response is not empty!"
-                    if self.additional_instructions:
-                        prompt += f"\n\nAdditional Instructions:\n{self.additional_instructions}"
+
+                    print(f"  >> Calling make_inference for field: {field}")
                     llm_response = make_inference(
                         context=[{"role": "user", "content": prompt}],
                         user_message=prompt,
@@ -150,6 +185,7 @@ class ActorGenerationWorker(QObject):
                         temperature=0.7,
                         is_utility_call=True
                     )
+                    print(f"  >> make_inference returned for field {field}: {llm_response[:100]}...")
                     if field == 'equipment':
                         import json, re
                         try:
@@ -197,14 +233,19 @@ class ActorGenerationWorker(QObject):
                     else:
                         generated_data[field] = f"[No {field} could be generated]"
                         self.actor_data[field] = generated_data[field]
+            print(f"  >> Generation complete, emitting signal with data: {list(generated_data.keys())}")
             if self._is_running:
                 self.generation_complete.emit(generated_data)
         except Exception as e:
             error_message = f"Error during actor generation: {e}"
+            print(f"  >> Generation error: {error_message}")
             if self._is_running:
                 self.generation_error.emit(error_message)
 
     def _prepare_context(self, field_to_exclude: str = None) -> str:
+        print(f"  >> _prepare_context called with field_to_exclude: {field_to_exclude}")
+        print(f"  >> Current actor_data: {self.actor_data}")
+        
         context_parts = []
         name = self.actor_data.get('name', '').strip()
         if name:
@@ -233,12 +274,16 @@ class ActorGenerationWorker(QObject):
                         context_parts.append(f"{field_name.replace('_', ' ').title()}:\n{formatted_items}")
                 else:
                     context_parts.append(f"{field_name.replace('_', ' ').title()}: {field_value}")
-        return "\n\n".join(context_parts)
+        
+        final_context = "\n\n".join(context_parts)
+        print(f"  >> Final context for field '{field_to_exclude}':\n{final_context}")
+        return final_context
     def stop(self):
         self._is_running = False
 
 
 def generate_actor_fields_async(actor_data: ActorData, fields_to_generate: list[str], model_override=None, additional_instructions=None):
+    print(f"  >> generate_actor_fields_async called with fields: {fields_to_generate}")
     valid_fields = [f for f in fields_to_generate if f in GENERATABLE_FIELDS]
     if not valid_fields:
         print(f"Error: No valid fields specified for generation. Requested: {fields_to_generate}, Valid: {GENERATABLE_FIELDS}")
@@ -332,9 +377,6 @@ def _handle_generation_complete_from_rule(generated_data, workflow_data_dir, loc
         print(f"Successfully saved generated actor '{actor_name}' to {save_path}")
     else:
         print(f"ERROR: Failed to save generated actor '{actor_name}' to {save_path}")
-    thread_id = QThread.currentThreadId()
-    if thread_id in _generation_threads:
-        del _generation_threads[thread_id]
     if location and actor_name != "Unnamed Actor":
         print(f"  Attempting to add '{actor_name}' to setting named '{location}'")
         session_settings_base_dir = os.path.join(workflow_data_dir, 'game', 'settings')
@@ -383,9 +425,12 @@ def _handle_generation_complete_from_rule(generated_data, workflow_data_dir, loc
             print(f"[WARN] Could not reload actors for setting '{location}': {e}")
 
 def _handle_generation_error_from_rule(error_message):
-    thread_id = QThread.currentThreadId()
-    if thread_id in _generation_threads:
-        del _generation_threads[thread_id]
+    print(f"GenerateActor: Error during generation: {error_message}")
+    current_thread = QThread.currentThread()
+    for thread_id, (thread, worker) in list(_generation_threads.items()):
+        if thread == current_thread:
+            del _generation_threads[thread_id]
+            break
 
 def trigger_actor_generation_from_rule(instructions, location, workflow_data_dir):
     initial_actor_data = {'location': location or ""}
@@ -397,7 +442,7 @@ def trigger_actor_generation_from_rule(instructions, location, workflow_data_dir
     )
     if result:
         thread, worker = result
-        thread_id = thread.currentThreadId()
+        thread_id = id(thread)
         _generation_threads[thread_id] = (thread, worker)
         worker.generation_complete.connect(lambda data, loc=location: _handle_generation_complete_from_rule(data, workflow_data_dir, loc))
         worker.generation_error.connect(_handle_generation_error_from_rule)
@@ -406,13 +451,16 @@ def trigger_actor_generation_from_rule(instructions, location, workflow_data_dir
         thread.finished.connect(thread.deleteLater)
 
 def trigger_actor_creation_from_rule(fields_to_generate, instructions, location, workflow_data_dir, target_directory='Game', model_override=None):
+    print(f"  >> trigger_actor_creation_from_rule called with fields: {fields_to_generate}")
     if not fields_to_generate:
         fields_to_generate = GENERATABLE_FIELDS.copy()
         valid_fields = [f for f in fields_to_generate if f in GENERATABLE_FIELDS]
         if not valid_fields:
+            print(f"  >> No valid fields found, returning")
             return
         fields_to_generate = valid_fields
     initial_actor_data = {'location': location or ""}
+    print(f"  >> Calling generate_actor_fields_async with fields: {fields_to_generate}")
     result = generate_actor_fields_async(
         initial_actor_data,
         fields_to_generate,
@@ -421,7 +469,8 @@ def trigger_actor_creation_from_rule(fields_to_generate, instructions, location,
     )
     if result:
         thread, worker = result
-        thread_id = thread.currentThreadId()
+        thread_id = id(thread)
+        print(f"  >> Character generation started with thread_id: {thread_id}")
         _generation_threads[thread_id] = (thread, worker)
         worker.generation_complete.connect(
             lambda data, loc=location, target_dir=target_directory: 
@@ -463,7 +512,7 @@ def trigger_actor_edit_from_rule(target_actor_name, fields_to_generate, instruct
     )
     if result:
         thread, worker = result
-        thread_id = thread.currentThreadId()
+        thread_id = id(thread)
         _generation_threads[thread_id] = (thread, worker)
         worker.generation_complete.connect(
             lambda data, actor_path=actor_file_path, loc=location, target_dir=target_directory: 
@@ -497,6 +546,7 @@ def _find_existing_actor_file(actor_name, workflow_data_dir, target_directory):
 
 
 def _handle_enhanced_creation_complete(generated_data, workflow_data_dir, location, target_directory):
+    print(f"  >> _handle_enhanced_creation_complete called with actor: {generated_data.get('name', 'Unnamed Actor')}")
     actor_name = generated_data.get('name', 'Unnamed Actor').strip()
     if not actor_name:
         actor_name = "Unnamed Actor"
@@ -524,9 +574,17 @@ def _handle_enhanced_creation_complete(generated_data, workflow_data_dir, locati
     while os.path.exists(save_path):
         save_path = os.path.join(actors_dir, f"{base_filename}_{counter}.json")
         counter += 1
-    thread_id = QThread.currentThreadId()
-    if thread_id in _generation_threads:
-        del _generation_threads[thread_id]
+    print(f"  >> Saving character to: {save_path}")
+    if _save_json_from_gen(save_path, final_actor_data):
+        print(f"  >> Successfully saved character '{actor_name}' to {save_path}")
+    else:
+        print(f"  >> ERROR: Failed to save character '{actor_name}' to {save_path}")
+    
+    current_thread = QThread.currentThread()
+    for thread_id, (thread, worker) in list(_generation_threads.items()):
+        if thread == current_thread:
+            del _generation_threads[thread_id]
+            break
     if location and actor_name != "Unnamed Actor":
         _add_actor_to_setting(actor_name, location, workflow_data_dir)
 
@@ -554,9 +612,11 @@ def _handle_enhanced_edit_complete(generated_data, actor_file_path, workflow_dat
                     _remove_actor_from_setting(actor_name, old_location, workflow_data_dir)
                 if new_location:
                     _add_actor_to_setting(actor_name, new_location, workflow_data_dir)
-    thread_id = QThread.currentThreadId()
-    if thread_id in _generation_threads:
-        del _generation_threads[thread_id]
+    current_thread = QThread.currentThread()
+    for thread_id, (thread, worker) in list(_generation_threads.items()):
+        if thread == current_thread:
+            del _generation_threads[thread_id]
+            break
 
 
 def _add_actor_to_setting(actor_name, location, workflow_data_dir):
