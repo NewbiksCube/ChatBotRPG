@@ -20,6 +20,7 @@ class WorldMapDisplay(QLabel):
         self._zoom = 1.0
         self._zoom_level = 0
         self._zoom_step_factor = 1.15
+        self._zoom_baseline_multiplier = 1.0
         self._max_zoom_level_allowed = 20
         self._pan = [0, 0]
         self._dragging = False
@@ -121,7 +122,7 @@ class WorldMapDisplay(QLabel):
             if isinstance(orig_image, QImage) and not orig_image.isNull():
                 self._original_image = orig_image.copy()
                 if not preserve_view_state:
-                    self._zoom = 1.0
+                    self._zoom = 1.0 * self._zoom_baseline_multiplier
                     self._zoom_level = 0
                     self._pan = [0, 0]
                 self._update_display_image()
@@ -152,7 +153,7 @@ class WorldMapDisplay(QLabel):
         elif delta < 0:
             self._zoom_level = max(-self._max_zoom_level_allowed, self._zoom_level - 1)
         old_zoom = self._zoom
-        new_zoom_factor = math.pow(self._zoom_step_factor, self._zoom_level)
+        new_zoom_factor = math.pow(self._zoom_step_factor, self._zoom_level) * self._zoom_baseline_multiplier
         self._zoom = new_zoom_factor
         min_abs_zoom = self._min_zoom()
         if self._original_image and not self._original_image.isNull():
@@ -269,11 +270,10 @@ class WorldMapDisplay(QLabel):
         if self._player_pos is None or self._original_image is None:
             return
         if self.width() <= 0 or self.height() <= 0:
-            QTimer.singleShot(100, self._center_on_player)
             return
         try:
             self._zoom_level = 1
-            self._zoom = math.pow(self._zoom_step_factor, self._zoom_level)
+            self._zoom = math.pow(self._zoom_step_factor, self._zoom_level) * self._zoom_baseline_multiplier
             player_x = self._player_pos[0]
             player_y = self._player_pos[1]
             widget_center_x = self.width() / 2
@@ -337,7 +337,7 @@ def update_map_theme(map_widget, theme_settings):
     map_display.setBorderColor(border_color)
     map_display.set_tint_color(base_color)
 
-def update_player_position(map_widget, workflow_data_dir):
+def update_player_position(map_widget, workflow_data_dir, should_center=False):
     if not map_widget:
         return
     map_display = None
@@ -383,47 +383,20 @@ def update_player_position(map_widget, workflow_data_dir):
         if not setting_file_path:
             map_display.clear_player_position()
             return
-        path_parts = os.path.normpath(setting_file_path).split(os.sep)
-        try:
-            settings_index = next(i for i, part in enumerate(path_parts) if part == 'settings')
-            if settings_index + 3 < len(path_parts):
-                world_name = path_parts[settings_index + 1]
-                region_name = path_parts[settings_index + 2] 
-                location_name = path_parts[settings_index + 3]
-            else:
-                map_display.clear_player_position()
-                return
-        except (StopIteration, IndexError) as e:
-            map_display.clear_player_position()
-            return
-        world_map_data_file = os.path.join(workflow_data_dir, 'resources', 'data files', 'settings', world_name, 'world_map_data.json')
-        if not os.path.exists(world_map_data_file):
-            map_display.clear_player_position()
-            return
         
         try:
-            with open(world_map_data_file, 'r', encoding='utf-8') as f:
-                world_data = json.load(f)
+            with open(setting_file_path, 'r', encoding='utf-8') as f:
+                setting_data = json.load(f)
+            
+            pos_x = setting_data.get('x')
+            pos_y = setting_data.get('y')
+            
+            if pos_x is not None and pos_y is not None:
+                map_display.set_player_position((float(pos_x), float(pos_y)), current_setting, should_center=should_center)
+                return
         except Exception as e:
-            map_display.clear_player_position()
-            return
-        dots = world_data.get('dots', [])
-        for i, dot in enumerate(dots):
-            if len(dot) >= 5:
-                linked_name = dot[4]
-                if linked_name and linked_name == current_setting:
-                    pos_x = dot[0]
-                    pos_y = dot[1]
-                    map_display.set_player_position((float(pos_x), float(pos_y)), current_setting, should_center=True)
-                    return
-        for i, dot in enumerate(dots):
-            if len(dot) >= 5:
-                linked_name = dot[4]
-                if linked_name and linked_name == location_name:
-                    pos_x = dot[0]
-                    pos_y = dot[1]
-                    map_display.set_player_position((float(pos_x), float(pos_y)), current_setting, should_center=True)
-                    return
+            pass
+        
         map_display.clear_player_position()
     except Exception as e:
         map_display.clear_player_position()

@@ -19,6 +19,8 @@ class RightSplitterWidget(QWidget):
         self.theme_settings = theme_settings if theme_settings is not None else {}
         self.main_app = parent
         self._workflow_data_dir = None
+        self._last_loaded_setting = None
+        self._player_just_moved = False
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -59,6 +61,8 @@ class RightSplitterWidget(QWidget):
         if value:
             self.load_character_data()
             self._update_game_time()
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(100, self._initialize_player_position)
 
     def _create_setting_page(self):
         page = QWidget()
@@ -89,6 +93,11 @@ class RightSplitterWidget(QWidget):
         try:
             from player_panel.world_map import create_world_map
             self.setting_minimap_widget = create_world_map(parent=self, theme_settings=self.theme_settings)
+            try:
+                if hasattr(self.setting_minimap_widget, 'map_display'):
+                    self.setting_minimap_widget.map_display._zoom_baseline_multiplier = 1.0 / 1.5
+            except Exception:
+                pass
             self.setting_minimap_widget.setObjectName("SettingMiniMap")
         except ImportError:
             self.setting_minimap_widget = QWidget()
@@ -241,7 +250,6 @@ class RightSplitterWidget(QWidget):
         title_label.setObjectName("CharacterSectionTitle")
         title_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(title_label)
-        
         return frame
 
     def _apply_button_theme(self):
@@ -353,14 +361,11 @@ class RightSplitterWidget(QWidget):
             display_name = get_display_name_from_setting(setting_name)
             if hasattr(self, 'setting_name_label'):
                 self.setting_name_label.setText(display_name)
-            
             setting_description = "--"
             if workflow_data_dir and setting_name and setting_name != "--":
                 setting_description = self._load_setting_description(setting_name, workflow_data_dir)
-            
             if hasattr(self, 'setting_description_label'):
                 self.setting_description_label.setText(setting_description)
-            
             if workflow_data_dir:
                 self.workflow_data_dir = workflow_data_dir
             if hasattr(self, 'workflow_data_dir') and self.workflow_data_dir:
@@ -389,7 +394,6 @@ class RightSplitterWidget(QWidget):
                             if relative_path.startswith(".."):
                                 rel_components = relative_path.replace('\\', '/').split('/')
                                 current_path = base_path
-                                
                                 i = 0
                                 while i < len(rel_components) and rel_components[i] == "..":
                                     parent = os.path.dirname(current_path)
@@ -536,7 +540,6 @@ class RightSplitterWidget(QWidget):
                                                 pass
                                         if qimage_for_map:
                                             break
-                                    
                                     if qimage_for_map:
                                         break
                                     parent_dir = os.path.dirname(current_dir)
@@ -557,17 +560,22 @@ class RightSplitterWidget(QWidget):
                         if qimage_for_map and not qimage_for_map.isNull():
                             try:
                                 if hasattr(self, '_last_loaded_setting') and self._last_loaded_setting == setting_name:
-                                    if hasattr(self.setting_minimap_widget, 'map_display'):
-                                        update_player_position(self.setting_minimap_widget.map_display, workflow_data_dir)
+                                    if not self._player_just_moved:
+                                        if hasattr(self.setting_minimap_widget, 'map_display'):
+                                            update_player_position(self.setting_minimap_widget.map_display, workflow_data_dir, should_center=False)
+                                        else:
+                                            update_player_position(self.setting_minimap_widget, workflow_data_dir, should_center=False)
                                     else:
-                                        update_player_position(self.setting_minimap_widget, workflow_data_dir)
+                                        self._player_just_moved = False
                                 else:
-                                    set_map_image_from_qimage(self.setting_minimap_widget, qimage_for_map, preserve_view_state=False)
-                                    
-                                    if hasattr(self.setting_minimap_widget, 'map_display'):
-                                        update_player_position(self.setting_minimap_widget.map_display, workflow_data_dir)
+                                    set_map_image_from_qimage(self.setting_minimap_widget, qimage_for_map, preserve_view_state=True)
+                                    if not self._player_just_moved:
+                                        if hasattr(self.setting_minimap_widget, 'map_display'):
+                                            update_player_position(self.setting_minimap_widget.map_display, workflow_data_dir, should_center=False)
+                                        else:
+                                            update_player_position(self.setting_minimap_widget, workflow_data_dir, should_center=False)
                                     else:
-                                        update_player_position(self.setting_minimap_widget, workflow_data_dir)
+                                        self._player_just_moved = False
                                 self._last_loaded_setting = setting_name
                             except Exception:
                                 try:
@@ -590,12 +598,10 @@ class RightSplitterWidget(QWidget):
     def _load_setting_description(self, setting_name, workflow_data_dir):
         if not workflow_data_dir or not setting_name or setting_name == "--":
             return "--"
-        
         try:
             setting_file = None
             game_settings_dir = os.path.join(workflow_data_dir, "game", "settings")
             resources_settings_dir = os.path.join(workflow_data_dir, "resources", "data files", "settings")
-            
             for settings_dir in [game_settings_dir, resources_settings_dir]:
                 if os.path.exists(settings_dir):
                     for root, dirs, files in os.walk(settings_dir):
@@ -616,13 +622,11 @@ class RightSplitterWidget(QWidget):
                             break
                     if setting_file:
                         break
-            
             if setting_file:
                 with open(setting_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 description = data.get('description', '--')
                 return description if description else "--"
-            
             return "--"
         except Exception:
             return "--"
@@ -830,6 +834,8 @@ class RightSplitterWidget(QWidget):
         self.stacked_widget.setCurrentIndex(tab_index)
         if tab_index == 0:
             self.load_character_data()
+        elif tab_index == 2:
+            self._initialize_player_position()
     
     def _switch_to_character_tab(self):
         self.stacked_widget.setCurrentIndex(0)
@@ -857,3 +863,27 @@ class RightSplitterWidget(QWidget):
             self.game_time_label.setText("Game Time: --")
         except Exception as e:
             self.game_time_label.setText("Game Time: --")
+    
+    def _initialize_player_position(self):
+        if not self._workflow_data_dir:
+            return
+        
+        try:
+            from core.utils import _get_player_current_setting_name
+            current_setting = _get_player_current_setting_name(self._workflow_data_dir)
+            if current_setting and current_setting != "Unknown Setting":
+                pass
+                
+                if hasattr(self, 'setting_name_label'):
+                    self.setting_name_label.setText(current_setting)
+                
+                self._last_loaded_setting = current_setting
+                
+                if hasattr(self, 'setting_minimap_widget') and self.setting_minimap_widget:
+                    from player_panel.world_map import update_player_position
+                    if hasattr(self.setting_minimap_widget, 'map_display'):
+                        update_player_position(self.setting_minimap_widget.map_display, self._workflow_data_dir, should_center=True)
+                    else:
+                        update_player_position(self.setting_minimap_widget, self._workflow_data_dir, should_center=True)
+        except Exception as e:
+            pass
