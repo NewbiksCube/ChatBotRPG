@@ -294,14 +294,10 @@ def load_effects_from_gamestate(tab_data):
     try:
         with open(gamestate_path, 'r', encoding='utf-8') as f:
             gamestate = json.load(f)
-        old_effects = gamestate.get('effects', {})
         effects_by_id = gamestate.get('effects_by_id', {})
+        if not effects_by_id:
+            return None
         combined_effects = {}
-        for effect_type, effect_config in old_effects.items():
-            if effect_type not in combined_effects:
-                combined_effects[effect_type] = {}
-            for param_name, param_value in effect_config.items():
-                combined_effects[effect_type][param_name] = param_value
         for effect_id, effects in effects_by_id.items():
             for effect_type, effect_config in effects.items():
                 if effect_type not in combined_effects:
@@ -314,7 +310,6 @@ def load_effects_from_gamestate(tab_data):
                             combined_effects[effect_type][param_name] = max(combined_effects[effect_type][param_name], param_value)
                         else:
                             combined_effects[effect_type][param_name] = param_value
-        
         return combined_effects
     except Exception as e:
         print(f"Error loading effects from gamestate: {e}")
@@ -339,27 +334,6 @@ def update_screen_effects(workflow_data_dir, blur_enabled=False, blur_radius=0, 
             print(f"Error loading gamestate.json: {e}")
     if 'timers' not in gamestate:
         gamestate['timers'] = {'active_timers': []}
-
-    effects = gamestate.get('effects', {})
-    effects['blur'] = {
-        'enabled': blur_enabled,
-        'radius': blur_radius,
-        'animation_speed': blur_speed,
-        'animate': animate_blur
-    }
-    effects['flicker'] = {
-        'enabled': flicker_enabled,
-        'intensity': flicker_intensity,
-        'frequency': flicker_frequency,
-        'color': flicker_color
-    }
-    effects['static'] = {
-        'enabled': static_enabled,
-        'intensity': static_intensity,
-        'frequency': static_frequency,
-        'dot_size': static_dot_size
-    }
-    gamestate['effects'] = effects
 
     if 'effects_by_id' not in gamestate:
         gamestate['effects_by_id'] = {}
@@ -396,7 +370,7 @@ def update_screen_effects(workflow_data_dir, blur_enabled=False, blur_radius=0, 
         return False
 
 def clear_all_screen_effects(workflow_data_dir):
-    """Clear all screen effects from both old and new formats"""
+    """Clear all screen effects from effects_by_id format"""
     if not workflow_data_dir:
         print("Error: No workflow data directory provided")
         return False
@@ -407,13 +381,6 @@ def clear_all_screen_effects(workflow_data_dir):
     try:
         with open(gamestate_path, 'r', encoding='utf-8') as f:
             gamestate = json.load(f)
-        if 'effects' in gamestate:
-            gamestate['effects'] = {
-                "blur": {"enabled": False, "radius": 0, "animation_speed": 2000, "animate": False},
-                "flicker": {"enabled": False, "intensity": 0, "frequency": 1000, "color": "white"},
-                "static": {"enabled": False, "intensity": 0, "frequency": 200, "dot_size": 1},
-                "darken_brighten": {"enabled": False, "factor": 1.0, "animation_speed": 2000, "animate": False}
-            }
         if 'effects_by_id' in gamestate:
             gamestate['effects_by_id'] = {}
         if 'effects_ids_order' in gamestate:
