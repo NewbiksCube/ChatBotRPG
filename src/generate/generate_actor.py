@@ -17,14 +17,14 @@ class ActorData(typing.TypedDict, total=False):
     goals: str
     story: str
     equipment: dict[str, str]
-    abilities: str
+    portrait: dict
     location: str
 
 GENERATABLE_FIELDS: typing.Final[list[str]] = [
-    "name", "description", "personality", "appearance", "goals", "story", "equipment", "abilities"
+    "name", "description", "personality", "appearance", "goals", "story", "equipment"
 ]
 GENERATION_ORDER: typing.Final[list[str]] = [
-    "name", "description", "personality", "appearance", "goals", "story", "abilities", "equipment"
+    "name", "description", "personality", "appearance", "goals", "story", "equipment"
 ]
 EQUIPMENT_JSON_KEYS: typing.Final[list[str]] = [
     "head", "neck", "left_shoulder", "right_shoulder", "left_hand", "right_hand",
@@ -47,7 +47,8 @@ class ActorGenerationWorker(QObject):
 
     def run(self):
         try:
-            print(f"  >> ActorGenerationWorker.run() started with fields: {self.fields_to_generate}")
+            print(f"DEBUG: ActorGenerationWorker.run() started")
+            print(f"DEBUG: Fields to generate: {self.fields_to_generate}")
             ordered_fields = [f for f in GENERATION_ORDER if f in self.fields_to_generate]
             generated_data = {}
             character_name = self.actor_data.get('name', '').strip()
@@ -57,7 +58,6 @@ class ActorGenerationWorker(QObject):
                 ordered_fields.insert(0, 'name')
 
             for field in ordered_fields:
-                print(f"  >> Generating field: {field}")
                 context = self._prepare_context(field_to_exclude=field)
                 
                 if self.additional_instructions and '[CURRENT SCENE CONTEXT]' in self.additional_instructions:
@@ -66,7 +66,6 @@ class ActorGenerationWorker(QObject):
                     if scene_context_start != -1 and scene_context_end != -1:
                         scene_context = self.additional_instructions[scene_context_start + 20:scene_context_end].strip()
                         context = f"Current Scene Context:\n{scene_context}\n\nCharacter Information:\n{context}"
-                        print(f"  >> Added scene context to prompt context")
                 
                 character_name = self.actor_data.get('name', '').strip() or "Unnamed Character"
                 url_type = self.model_override if self.model_override else get_default_utility_model()
@@ -77,44 +76,41 @@ class ActorGenerationWorker(QObject):
                 while not success and retry_count < max_retries:
                     if field == 'name':
                         existing_name = self.actor_data.get('name', '').strip()
-                        name_prompt_instruction = f"Invent a new, creative name for a character based on the information below. Avoid simply repeating the existing name ('{existing_name}') if provided. Output just the name without any formatting or extra text."
-                        if not existing_name:
-                             name_prompt_instruction = "Create a name for a character based on the information below. Output just the name without any formatting or extra text."
                         
                         if self.additional_instructions:
                             instruction_prefix = f"SPECIFIC INSTRUCTIONS: {self.additional_instructions}\n\n"
-                            print(f"  >> Using additional instructions: {self.additional_instructions}")
                         else:
                             instruction_prefix = ""
-                            print(f"  >> No additional instructions provided")
+                        
+                        if existing_name:
+                            name_prompt_instruction = f"The character's name is '{existing_name}'. Output just this name without any formatting or extra text."
+                        else:
+                            name_prompt_instruction = f"Invent a new, creative name for a character based on the information below. Avoid simply repeating the existing name ('{existing_name}') if provided. Output just the name without any formatting or extra text."
+                            if not existing_name:
+                                 name_prompt_instruction = "Create a name for a character based on the information below. Output just the name without any formatting or extra text."
                         
                         prompt = f"""{instruction_prefix}{name_prompt_instruction}\n\nCurrent Character Sheet:\n{context}\n\nNew Name:"""
-                        print(f"  >> Final prompt for {field}:\n{prompt}")
                     elif field == 'description':
                         if self.additional_instructions:
                             instruction_prefix = f"SPECIFIC INSTRUCTIONS: {self.additional_instructions}\n\n"
-                            print(f"  >> Using additional instructions: {self.additional_instructions}")
                         else:
                             instruction_prefix = ""
-                            print(f"  >> No additional instructions provided")
-                        prompt = f"""{instruction_prefix}Given the following information about a character named {character_name}, write a detailed, vivid description of their background, personality, and physical presence. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nDescription:"""
-                        print(f"  >> Final prompt for {field}:\n{prompt}")
+                        prompt = f"""{instruction_prefix}Given the following information about a character named {character_name}, write a single cohesive paragraph describing their background, role, and character essence. Focus on who they are, what they do, and their place in the world. Write in natural narrative style - no bullet points, lists, or fragmented sentences. Keep it to one well-developed paragraph that flows naturally.\n\nCurrent Character Sheet:\n{context}\n\nDescription:"""
                     elif field == 'personality':
                         instruction_prefix = ""
                         if self.additional_instructions:
                             instruction_prefix = f"SPECIFIC INSTRUCTIONS: {self.additional_instructions}\n\n"
-                        prompt = f"""{instruction_prefix}Given the following information about a character named {character_name}, write a detailed personality profile. Focus on temperament, values, quirks, and how the character interacts with others. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nPersonality:"""
+                        prompt = f"""{instruction_prefix}Given the following information about a character named {character_name}, create a comprehensive comma-separated list of personality traits. Include both positive and negative traits, behavioral patterns, values, quirks, and how they interact with others. Focus on psychological and behavioral characteristics only. Do not write sentences or explanations - just traits separated by commas. Aim for 15-25 traits that capture the full personality spectrum.\n\nCurrent Character Sheet:\n{context}\n\nPersonality:"""
                     elif field == 'appearance':
                         instruction_prefix = ""
                         if self.additional_instructions:
                             instruction_prefix = f"SPECIFIC INSTRUCTIONS: {self.additional_instructions}\n\n"
-                        prompt = f"""{instruction_prefix}Given the following information about a character named {character_name}, write a detailed physical appearance section. Include build, facial features, hair, eyes, distinguishing marks, and typical clothing style. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nAppearance:"""
+                        prompt = f"""{instruction_prefix}Given the following information about a character named {character_name}, create a comprehensive comma-separated list of physical appearance traits. Include build, height, skin tone, hair color/style, eye color, facial features, distinguishing marks, posture, movement patterns, and any unique physical characteristics. Focus ONLY on physical traits - do not include clothing, accessories, or equipment. Do not write sentences or explanations - just physical descriptors separated by commas. Aim for 15-25 traits that capture the complete physical appearance.\n\nCurrent Character Sheet:\n{context}\n\nAppearance:"""
                     elif field == 'goals':
                         prompt = f"""Given the following information about a character named {character_name}, list the character's main goals and motivations. Include both short-term and long-term ambitions, and explain why these goals matter to the character. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nGoals:"""
                     elif field == 'story':
                         prompt = f"""Given the following information about a character named {character_name}, write a short backstory or narrative that explains how {character_name} became who they are. Focus on key events, relationships, and turning points. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nStory:"""
-                    elif field == 'abilities':
-                        prompt = f"""Given the following information about a character named {character_name}, describe the character's notable abilities, skills, and talents. Include both mundane and extraordinary abilities, and explain how they were acquired or developed. Output plain text only, no markdown formatting.\n\nCurrent Character Sheet:\n{context}\n\nAbilities:"""
+
                     elif field == 'equipment':
                         instruction_prefix = ""
                         if self.additional_instructions:
@@ -175,7 +171,6 @@ class ActorGenerationWorker(QObject):
                         else:
                             prompt += f"\n\nThis is retry #{retry_count}. Please ensure your response is not empty!"
 
-                    print(f"  >> Calling make_inference for field: {field}")
                     llm_response = make_inference(
                         context=[{"role": "user", "content": prompt}],
                         user_message=prompt,
@@ -185,7 +180,7 @@ class ActorGenerationWorker(QObject):
                         temperature=0.7,
                         is_utility_call=True
                     )
-                    print(f"  >> make_inference returned for field {field}: {llm_response[:100]}...")
+
                     if field == 'equipment':
                         import json, re
                         try:
@@ -233,19 +228,18 @@ class ActorGenerationWorker(QObject):
                     else:
                         generated_data[field] = f"[No {field} could be generated]"
                         self.actor_data[field] = generated_data[field]
-            print(f"  >> Generation complete, emitting signal with data: {list(generated_data.keys())}")
             if self._is_running:
+                print(f"DEBUG: Emitting generation_complete signal with data: {list(generated_data.keys())}")
                 self.generation_complete.emit(generated_data)
+            else:
+                print(f"DEBUG: Worker stopped, not emitting signal")
         except Exception as e:
             error_message = f"Error during actor generation: {e}"
-            print(f"  >> Generation error: {error_message}")
+            print(f"DEBUG: Exception in worker run method: {e}")
             if self._is_running:
                 self.generation_error.emit(error_message)
 
     def _prepare_context(self, field_to_exclude: str = None) -> str:
-        print(f"  >> _prepare_context called with field_to_exclude: {field_to_exclude}")
-        print(f"  >> Current actor_data: {self.actor_data}")
-        
         context_parts = []
         name = self.actor_data.get('name', '').strip()
         if name:
@@ -276,14 +270,12 @@ class ActorGenerationWorker(QObject):
                     context_parts.append(f"{field_name.replace('_', ' ').title()}: {field_value}")
         
         final_context = "\n\n".join(context_parts)
-        print(f"  >> Final context for field '{field_to_exclude}':\n{final_context}")
         return final_context
     def stop(self):
         self._is_running = False
 
 
 def generate_actor_fields_async(actor_data: ActorData, fields_to_generate: list[str], model_override=None, additional_instructions=None):
-    print(f"  >> generate_actor_fields_async called with fields: {fields_to_generate}")
     valid_fields = [f for f in fields_to_generate if f in GENERATABLE_FIELDS]
     if not valid_fields:
         print(f"Error: No valid fields specified for generation. Requested: {fields_to_generate}, Valid: {GENERATABLE_FIELDS}")
@@ -308,8 +300,11 @@ def create_generate_actor_widget(parent=None):
     return widget
 
 def sanitize_path_name(name):
-    sanitized = re.sub(r'[^a-zA-Z0-9_\-\. ]', '', name).strip()
+    base = str(name).splitlines()[0]
+    sanitized = re.sub(r'[^a-zA-Z0-9_\-\. ]', '', base).strip()
     sanitized = sanitized.replace(' ', '_').lower()
+    if len(sanitized) > 80:
+        sanitized = sanitized[:80]
     return sanitized or 'untitled'
 
 def _save_json_from_gen(file_path, data):
@@ -349,13 +344,14 @@ def _load_json_from_gen(file_path):
 _generation_threads = {}
 
 def _handle_generation_complete_from_rule(generated_data, workflow_data_dir, location):
-    actor_name = generated_data.get('name', 'Unnamed Actor').strip()
-    if not actor_name:
-        actor_name = "Unnamed Actor"
+    name_raw = generated_data.get('name', 'Unnamed Actor')
+    actor_name = str(name_raw).splitlines()[0].strip() or "Unnamed Actor"
+    if len(actor_name) > 80:
+        actor_name = actor_name[:80].strip()
     final_actor_data = {**generated_data}
     final_actor_data['name'] = actor_name
     final_actor_data['isPlayer'] = False
-    for key in ['description', 'personality', 'appearance', 'status', 'goals', 'story', 'abilities', 'location', 'left_hand_holding', 'right_hand_holding']:
+    for key in ['description', 'personality', 'appearance', 'status', 'goals', 'story', 'location', 'left_hand_holding', 'right_hand_holding']:
         final_actor_data.setdefault(key, "")
     final_actor_data.setdefault('relations', {})
     equip_data = final_actor_data.get('equipment')
@@ -425,6 +421,7 @@ def _handle_generation_complete_from_rule(generated_data, workflow_data_dir, loc
             print(f"[WARN] Could not reload actors for setting '{location}': {e}")
 
 def _handle_generation_error_from_rule(error_message):
+    print(f"DEBUG: _handle_generation_error_from_rule called with error: {error_message}")
     print(f"GenerateActor: Error during generation: {error_message}")
     current_thread = QThread.currentThread()
     for thread_id, (thread, worker) in list(_generation_threads.items()):
@@ -450,36 +447,50 @@ def trigger_actor_generation_from_rule(instructions, location, workflow_data_dir
         worker.generation_error.connect(thread.quit)
         thread.finished.connect(thread.deleteLater)
 
-def trigger_actor_creation_from_rule(fields_to_generate, instructions, location, workflow_data_dir, target_directory='Game', model_override=None):
-    print(f"  >> trigger_actor_creation_from_rule called with fields: {fields_to_generate}")
+def trigger_actor_creation_from_rule(fields_to_generate, instructions, location, workflow_data_dir, target_directory='Game', model_override=None, current_setting_name=None):
+    print(f"DEBUG: trigger_actor_creation_from_rule called with:")
+    print(f"  fields_to_generate: {fields_to_generate}")
+    print(f"  location: '{location}'")
+    print(f"  workflow_data_dir: {workflow_data_dir}")
+    print(f"  target_directory: {target_directory}")
+    print(f"  current_setting_name: '{current_setting_name}'")
+    
     if not fields_to_generate:
         fields_to_generate = GENERATABLE_FIELDS.copy()
         valid_fields = [f for f in fields_to_generate if f in GENERATABLE_FIELDS]
         if not valid_fields:
-            print(f"  >> No valid fields found, returning")
+            print("DEBUG: No valid fields to generate")
             return
         fields_to_generate = valid_fields
+    
     initial_actor_data = {'location': location or ""}
-    print(f"  >> Calling generate_actor_fields_async with fields: {fields_to_generate}")
+    
+    print(f"DEBUG: Initial actor data: {initial_actor_data}")
+    
     result = generate_actor_fields_async(
         initial_actor_data,
         fields_to_generate,
         model_override=model_override,
         additional_instructions=instructions if instructions else None
     )
+    
     if result:
         thread, worker = result
         thread_id = id(thread)
-        print(f"  >> Character generation started with thread_id: {thread_id}")
         _generation_threads[thread_id] = (thread, worker)
+        print(f"DEBUG: Created generation thread {thread_id}")
+        
         worker.generation_complete.connect(
-            lambda data, loc=location, target_dir=target_directory: 
-            _handle_enhanced_creation_complete(data, workflow_data_dir, loc, target_dir)
+            lambda data, loc=location, target_dir=target_directory, current_setting=current_setting_name: 
+            _handle_enhanced_creation_complete(data, workflow_data_dir, loc, target_dir, current_setting)
         )
         worker.generation_error.connect(_handle_generation_error_from_rule)
         worker.generation_complete.connect(thread.quit)
         worker.generation_error.connect(thread.quit)
         thread.finished.connect(thread.deleteLater)
+        print(f"DEBUG: Connected signals for thread {thread_id}")
+    else:
+        print("DEBUG: Failed to create generation thread")
 
 
 def trigger_actor_edit_from_rule(target_actor_name, fields_to_generate, instructions, location, workflow_data_dir, target_directory='Game', model_override=None):
@@ -545,15 +556,22 @@ def _find_existing_actor_file(actor_name, workflow_data_dir, target_directory):
     return None
 
 
-def _handle_enhanced_creation_complete(generated_data, workflow_data_dir, location, target_directory):
-    print(f"  >> _handle_enhanced_creation_complete called with actor: {generated_data.get('name', 'Unnamed Actor')}")
-    actor_name = generated_data.get('name', 'Unnamed Actor').strip()
-    if not actor_name:
-        actor_name = "Unnamed Actor"
+def _handle_enhanced_creation_complete(generated_data, workflow_data_dir, location, target_directory, current_setting_name=None):
+    print(f"DEBUG: _handle_enhanced_creation_complete called with:")
+    print(f"  generated_data keys: {list(generated_data.keys())}")
+    print(f"  workflow_data_dir: {workflow_data_dir}")
+    print(f"  location: '{location}'")
+    print(f"  target_directory: {target_directory}")
+    print(f"  current_setting_name: '{current_setting_name}'")
+    
+    name_raw = generated_data.get('name', 'Unnamed Actor')
+    actor_name = str(name_raw).splitlines()[0].strip() or "Unnamed Actor"
+    if len(actor_name) > 80:
+        actor_name = actor_name[:80].strip()
     final_actor_data = {**generated_data}
     final_actor_data['name'] = actor_name
     final_actor_data['isPlayer'] = False
-    for key in ['description', 'personality', 'appearance', 'status', 'goals', 'story', 'abilities', 'location', 'left_hand_holding', 'right_hand_holding']:
+    for key in ['description', 'personality', 'appearance', 'status', 'goals', 'story', 'location', 'left_hand_holding', 'right_hand_holding']:
         final_actor_data.setdefault(key, "")
     final_actor_data.setdefault('relations', {})
     final_actor_data.setdefault('variables', {})
@@ -574,19 +592,46 @@ def _handle_enhanced_creation_complete(generated_data, workflow_data_dir, locati
     while os.path.exists(save_path):
         save_path = os.path.join(actors_dir, f"{base_filename}_{counter}.json")
         counter += 1
-    print(f"  >> Saving character to: {save_path}")
     if _save_json_from_gen(save_path, final_actor_data):
-        print(f"  >> Successfully saved character '{actor_name}' to {save_path}")
+        print(f"Successfully saved generated actor '{actor_name}' to {save_path}")
     else:
-        print(f"  >> ERROR: Failed to save character '{actor_name}' to {save_path}")
+        print(f"ERROR: Failed to save generated actor '{actor_name}' to {save_path}")
+        return
     
     current_thread = QThread.currentThread()
     for thread_id, (thread, worker) in list(_generation_threads.items()):
         if thread == current_thread:
             del _generation_threads[thread_id]
             break
-    if location and actor_name != "Unnamed Actor":
-        _add_actor_to_setting(actor_name, location, workflow_data_dir)
+    print(f"DEBUG: _handle_enhanced_creation_complete - location='{location}', actor_name='{actor_name}', current_setting_name='{current_setting_name}'")
+    if actor_name != "Unnamed Actor":
+        if location:
+            print(f"DEBUG: Adding actor '{actor_name}' to specified setting '{location}'")
+            _add_actor_to_setting(actor_name, location, workflow_data_dir)
+        elif current_setting_name:
+            print(f"DEBUG: Adding actor '{actor_name}' to current setting '{current_setting_name}' (location was empty)")
+            _add_actor_to_setting(actor_name, current_setting_name, workflow_data_dir)
+        else:
+            from core.utils import _find_player_character_file
+            player_file_path, player_name = _find_player_character_file(workflow_data_dir)
+            if player_file_path:
+                player_data = _load_json_from_gen(player_file_path)
+                if player_data and player_data.get('location'):
+                    player_location = player_data.get('location')
+                    print(f"DEBUG: Adding actor '{actor_name}' to player's current location '{player_location}' (no location or current_setting_name)")
+                    _add_actor_to_setting(actor_name, player_location, workflow_data_dir)
+                else:
+                    from core.utils import _get_player_current_setting_name
+                    fallback_setting = _get_player_current_setting_name(workflow_data_dir)
+                    print(f"DEBUG: Adding actor '{actor_name}' to fallback setting '{fallback_setting}' (no location, current_setting_name, or player location)")
+                    _add_actor_to_setting(actor_name, fallback_setting, workflow_data_dir)
+            else:
+                from core.utils import _get_player_current_setting_name
+                fallback_setting = _get_player_current_setting_name(workflow_data_dir)
+                print(f"DEBUG: Adding actor '{actor_name}' to fallback setting '{fallback_setting}' (no location, current_setting_name, or player file)")
+                _add_actor_to_setting(actor_name, fallback_setting, workflow_data_dir)
+    else:
+        print(f"DEBUG: NOT adding actor to setting - actor_name='{actor_name}' is Unnamed Actor")
 
 
 def _handle_enhanced_edit_complete(generated_data, actor_file_path, workflow_data_dir, location, target_directory):
@@ -620,37 +665,57 @@ def _handle_enhanced_edit_complete(generated_data, actor_file_path, workflow_dat
 
 
 def _add_actor_to_setting(actor_name, location, workflow_data_dir):
+    print(f"DEBUG: _add_actor_to_setting called - actor_name='{actor_name}', location='{location}'")
     session_settings_base_dir = os.path.join(workflow_data_dir, 'game', 'settings')
     base_settings_base_dir = os.path.join(workflow_data_dir, 'resources', 'data files', 'settings')
+    print(f"DEBUG: Looking for setting '{location}' in session dir: {session_settings_base_dir}")
+    print(f"DEBUG: Looking for setting '{location}' in base dir: {base_settings_base_dir}")
+    
     def find_setting_file(settings_dir, setting_name):
+        print(f"DEBUG: Searching in directory: {settings_dir}")
+        if not os.path.exists(settings_dir):
+            print(f"DEBUG: Directory does not exist: {settings_dir}")
+            return None, None
         for root, dirs, files in os.walk(settings_dir):
             dirs[:] = [d for d in dirs if d.lower() != 'saves']
             for filename in files:
                 if filename.lower().endswith('_setting.json'):
                     file_path = os.path.join(root, filename)
+                    print(f"DEBUG: Found setting file: {file_path}")
                     setting_data = _load_json_from_gen(file_path)
                     current_setting_name = setting_data.get('name', '').strip()
+                    print(f"DEBUG: Setting name in file: '{current_setting_name}' vs looking for: '{setting_name}'")
                     if current_setting_name.lower() == setting_name.strip().lower():
+                        print(f"DEBUG: MATCH FOUND! Setting file: {file_path}")
                         return file_path, setting_data
+        print(f"DEBUG: No matching setting file found in {settings_dir}")
         return None, None
+    
     session_file, session_data = find_setting_file(session_settings_base_dir, location)
     if session_file:
+        print(f"DEBUG: Found session setting file: {session_file}")
         target_file = session_file
         target_data = session_data
     else:
+        print(f"DEBUG: No session setting file found, checking base directory")
         base_file, base_data = find_setting_file(base_settings_base_dir, location)
         if base_file:
+            print(f"DEBUG: Found base setting file: {base_file}")
             rel_path = os.path.relpath(base_file, base_settings_base_dir)
             session_file = os.path.join(session_settings_base_dir, rel_path)
+            print(f"DEBUG: Creating session copy at: {session_file}")
             os.makedirs(os.path.dirname(session_file), exist_ok=True)
             import shutil
             shutil.copy2(base_file, session_file)
             target_file = session_file
             target_data = _load_json_from_gen(session_file)
         else:
+            print(f"DEBUG: ERROR: Could not find setting file for '{location}' in either session or base dir.")
             target_file = None
             target_data = None
+    
     if target_file and target_data is not None:
+        print(f"DEBUG: Successfully found target file: {target_file}")
         characters = target_data.get('characters', [])
         if not isinstance(characters, list):
             print(f"      Warning: 'characters' field in {target_file} is not a list. Resetting.")
@@ -658,13 +723,20 @@ def _add_actor_to_setting(actor_name, location, workflow_data_dir):
         if actor_name not in characters:
             characters.append(actor_name)
             target_data['characters'] = characters
+            print(f"DEBUG: Adding '{actor_name}' to characters list in {target_file}")
             if not _save_json_from_gen(target_file, target_data):
                 print(f"      ERROR: Failed to save updated characters list to '{target_file}'")
+            else:
+                print(f"DEBUG: Successfully saved updated characters list to '{target_file}'")
+        else:
+            print(f"DEBUG: Actor '{actor_name}' already in characters list")
         try:
             from core.utils import reload_actors_for_setting
             reload_actors_for_setting(workflow_data_dir, location)
         except Exception as e:
             print(f"[WARN] Could not reload actors for setting '{location}': {e}")
+    else:
+        print(f"DEBUG: ERROR: No target file or data found for setting '{location}'")
 
 
 def _remove_actor_from_setting(actor_name, location, workflow_data_dir):

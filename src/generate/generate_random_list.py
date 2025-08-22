@@ -6,11 +6,13 @@ from datetime import datetime
 from core.make_inference import make_inference
 from config import get_default_utility_model
 
+print("=== generate_random_list.py MODULE LOADED ===")
+
 
 DEFAULT_SYSTEM_PROMPT = """
 You are an expert game development assistant helping create random generators for a single-player text adventure game. Your task is to analyze instructions and create or modify JSON generator files that follow a specific format.
 
-A generator consists of one or more tables, each with a title and a list of items. Each item has a name, weight, and generate flag.
+A generator consists of one or more tables, each with a title and a list of items. Each item has a name and weight.
 Format:
 {
   "name": "Generator Name",
@@ -18,20 +20,21 @@ Format:
     {
       "title": "Table Name",
       "items": [
-        {"name": "Item Name", "weight": 1, "generate": true},
-        {"name": "Another Item", "weight": 3, "generate": false}
+        {"name": "Item Name", "weight": 1},
+        {"name": "Another Item", "weight": 3}
       ]
     }
   ]
 }
 
 Each table represents a category of elements (like "Professions", "Personalities", etc). Items in the tables are weighted options, where higher weights make them more likely to be selected.
-The "generate" flag determines if this item should be included when generating random combinations.
 
 Remember to ensure valid JSON. Weights should be positive integers. Be creative but relevant to the instructions.
 """
 
 def get_model_response(system_prompt, user_prompt, model_override=None):
+    print(f"DEBUG: get_model_response called with user_prompt: '{user_prompt}'")
+    print(f"DEBUG: user_prompt length: {len(user_prompt)} characters")
     try:
         QApplication.processEvents()
         url_type = model_override
@@ -48,14 +51,18 @@ def get_model_response(system_prompt, user_prompt, model_override=None):
                 print(f"Could not load cot_model from settings: {e}")
         if not url_type:
             url_type = get_default_utility_model()
+        context_to_send = [{"role": "system", "content": system_prompt},
+                          {"role": "user", "content": user_prompt}]
+        print(f"DEBUG: System prompt being sent: '{system_prompt}'")
+        print(f"DEBUG: Full context being sent to API: {context_to_send}")
+        print(f"DEBUG: Total context length: {sum(len(msg.get('content', '')) for msg in context_to_send)} characters")
         QApplication.processEvents()
         response = make_inference(
-            context=[{"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}],
+            context=context_to_send,
             user_message=user_prompt,
             character_name="Generator",
             url_type=url_type,
-            max_tokens=2000,
+            max_tokens=4000,
             temperature=0.7,
             is_utility_call=True
         )
@@ -69,6 +76,7 @@ def sanitize_filename(name):
     return sanitized or 'untitled_generator'
 
 def create_new_generator(instructions, use_resource=True, resource_folder=None, game_folder=None, generator_name=None):
+    print(f"DEBUG: create_new_generator called with instructions: '{instructions}'")
     default_name = f"Generator {datetime.now().strftime('%Y%m%d_%H%M%S')}"
     if generator_name:
         print(f"Using user-provided generator name: {generator_name}")
@@ -87,6 +95,7 @@ def create_new_generator(instructions, use_resource=True, resource_folder=None, 
     Create a random generator based on these instructions: "{instructions}"
     
     """
+    print(f"DEBUG: Final user_prompt being sent to AI: '{user_prompt}'")
     if not generator_name:
         user_prompt += """
     First, create a SHORT, DISTINCTIVE NAME for this generator (max 3-4 words). The name should clearly indicate the purpose.
@@ -98,12 +107,11 @@ def create_new_generator(instructions, use_resource=True, resource_folder=None, 
     Create multiple tables as needed with at least 10-15 varied items per table with appropriate weights.
     """
     user_prompt += """
-    Set the "generate" flag to true for items that should be included in random combinations.
-    
     Respond ONLY with the complete, valid JSON object.
     """
     try:
         ai_response = get_model_response(DEFAULT_SYSTEM_PROMPT, user_prompt)
+        print(f"DEBUG: AI response received: '{ai_response}'")
         if ai_response.startswith("ERROR:"):
             return {"status": "error", "message": ai_response}
         try:
@@ -176,7 +184,7 @@ def permutate_generator(generator_data, instructions, permutate_objects=False, p
             items_info.append(f"{item.get('name', 'Unknown')} (weight: {item.get('weight', 1)})")
         tables_info.append(f"Table {i+1}: {table.get('title', f'Table {i+1}')}\nItems: {', '.join(items_info[:10])}{' [...]' if len(items_info) > 10 else ''}")
     tables_description = "\n\n".join(tables_info)
-    user_prompt = f"""
+    user_prompt = f"""INSTRUCTIONS:
     I need to permutate a generator named "{generator_data.get('name', 'Unknown Generator')}" based on these instructions: "{instructions}"
     
     {'I need to modify the ITEMS in each table.' if permutate_objects else ''}
@@ -228,7 +236,8 @@ def generate_random_list(instructions, is_permutate=False, use_resource=True, pe
     if not instructions.strip():
         return "Error: Instructions cannot be empty"
     if is_permutate and (not generator_json_path or not os.path.exists(generator_json_path)):
-        return "Error: Please select a valid generator to permutate"
+        print(f"WARNING: Could not find generator '{generator_name}' for permutation. Falling back to creating new generator.")
+        is_permutate = False
     target_folder = game_folder if not use_resource else resource_folder
     if not target_folder or not os.path.exists(target_folder):
         return f"Error: Target folder does not exist: {target_folder}"

@@ -8,13 +8,16 @@ from rules.apply_rules import _apply_string_operation_mode
 def generate_summary(self, context, instructions, var_name, var_scope, var_filepath=None, character_name=None, tab_data=None, set_var_mode='replace', delimiter='/'):
     if not var_name:
         return None
+    if instructions and tab_data and character_name:
+        from rules.apply_rules import _substitute_variables_in_string
+        instructions = _substitute_variables_in_string(instructions, tab_data, character_name)
     prompt = f"""{instructions.strip() if instructions else ''}\n\nContext:\n{context.strip() if context else ''}\n\nGenerate a summary or value for the variable '{var_name}'. Output only the value as plain text."""
     result = make_inference(
         context=[{"role": "user", "content": prompt}],
         user_message=prompt,
         character_name=None,
         url_type=get_default_utility_model(),
-        max_tokens=1024,
+        max_tokens=8192,
         temperature=0.7,
         is_utility_call=True
     )
