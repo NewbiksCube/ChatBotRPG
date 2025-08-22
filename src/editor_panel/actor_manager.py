@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QHBoxLayout, QPushButton, QLabel, QTextEdit, QMessageBox, QInputDialog, QScrollArea, QSizePolicy, QCheckBox
-from PyQt5.QtGui import QPalette
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QHBoxLayout, QPushButton, QLabel, QTextEdit, QMessageBox, QInputDialog, QScrollArea, QSizePolicy, QCheckBox, QFileDialog, QFrame
+from PyQt5.QtGui import QPalette, QPixmap, QPainter, QPen, QColor, QImage
 from PyQt5.QtCore import Qt, QTimer, QEvent
 import os
 import json
@@ -19,12 +19,22 @@ class ActorManagerWidget(QWidget):
         self._selected_actor_path = None
         self._selected_relation_row_widget = None
         self._selected_variable_row_widget = None
+        self._selected_schedule_row_widget = None
         self._details_save_timer = QTimer(self)
         self._details_save_timer.setSingleShot(True)
         self._details_save_timer.timeout.connect(self._save_actor_details)
         self._default_relation_row_style = ""
         self._generation_checkboxes = {}
         self._generation_thread = None
+        self._portrait_path = None
+        self._portrait_offset = [0, 0]
+        self._portrait_scale = 1.0
+        self._portrait_tint_color = QColor("#CCCCCC")
+        self._current_theme = None
+        self._original_portrait_pixmap = None
+        self._processed_portrait_pixmap = None
+        self._dragging = False
+        self._last_mouse_pos = None
         self.EQUIPMENT_SLOTS = {
             "head": "Head", "neck": "Neck",
             "left_shoulder": "Left Shoulder", "right_shoulder": "Right Shoulder",
@@ -48,6 +58,8 @@ class ActorManagerWidget(QWidget):
         self._inventory_widgets = {}
         self._init_ui()
         self._ensure_initial_player()
+        self._apply_initial_theme()
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def eventFilter(self, obj, event):
         if isinstance(obj, QLineEdit) and obj.property("is_relation_input"):
@@ -66,6 +78,18 @@ class ActorManagerWidget(QWidget):
                 row_widget.setProperty("class", "VariableRowSelected")
                 row_widget.setStyleSheet("")
                 self._selected_variable_row_widget = row_widget
+        elif isinstance(obj, QLineEdit) and obj.property("is_schedule_input"):
+            if event.type() == QEvent.FocusIn:
+                row_widget = obj.property("row_widget")
+                try:
+                    if self._selected_schedule_row_widget and self._selected_schedule_row_widget.isVisible():
+                        self._selected_schedule_row_widget.setProperty("class", "")
+                        self._selected_schedule_row_widget.setStyleSheet("")
+                except RuntimeError:
+                    self._selected_schedule_row_widget = None
+                row_widget.setProperty("class", "ScheduleRowSelected")
+                row_widget.setStyleSheet("")
+                self._selected_schedule_row_widget = row_widget
         return super().eventFilter(obj, event)
 
     def _handle_relation_row_focus(self, row_widget):
@@ -85,6 +109,7 @@ class ActorManagerWidget(QWidget):
 
     def _init_ui(self):
         main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         list_layout = QVBoxLayout()
         self.filter_input = QLineEdit()
         self.filter_input.setObjectName("FilterInput")
@@ -117,7 +142,19 @@ class ActorManagerWidget(QWidget):
         self.list_widget.setFocusPolicy(Qt.NoFocus)
         self.list_widget.currentItemChanged.connect(self._on_actor_selected)
         list_layout.addWidget(self.list_widget)
-        edit_layout = QVBoxLayout()
+        edit_scroll_area = QScrollArea()
+        edit_scroll_area.setWidgetResizable(True)
+        edit_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        edit_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        edit_scroll_area.setObjectName("ActorManagerEditScrollArea")
+        edit_scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        edit_scroll_area.setFrameShape(QFrame.NoFrame)
+        edit_content_widget = QWidget()
+        edit_content_widget.setObjectName("ActorManagerEditContent")
+        edit_layout = QVBoxLayout(edit_content_widget)
+        edit_layout.setContentsMargins(10, 10, 10, 10)
+        self.edit_scroll_area = edit_scroll_area
+        self.edit_content_widget = edit_content_widget
         name_row_layout = QHBoxLayout()
         self.player_checkbox = QCheckBox("PLAYER")
         self.player_checkbox.setObjectName("PlayerCheckbox")
@@ -165,7 +202,7 @@ class ActorManagerWidget(QWidget):
         self.actor_description_input = QTextEdit()
         self.actor_description_input.setObjectName("ActorManagerDescInput")
         self.actor_description_input.textChanged.connect(self._schedule_details_save)
-        self.actor_description_input.setMaximumHeight(120)
+        self.actor_description_input.setMaximumHeight(80)
         desc_layout.addWidget(label_desc_actor)
         desc_layout.addWidget(self.actor_description_input)
         desc_gen_checkbox = QCheckBox("Generate Description")
@@ -180,7 +217,7 @@ class ActorManagerWidget(QWidget):
         self.actor_personality_input = QTextEdit()
         self.actor_personality_input.setObjectName("ActorManagerDescInput")
         self.actor_personality_input.textChanged.connect(self._schedule_details_save)
-        self.actor_personality_input.setMaximumHeight(120)
+        self.actor_personality_input.setMaximumHeight(80)
         personality_layout.addWidget(label_personality_actor)
         personality_layout.addWidget(self.actor_personality_input)
         pers_gen_checkbox = QCheckBox("Generate Personality")
@@ -195,7 +232,7 @@ class ActorManagerWidget(QWidget):
         self.actor_appearance_input = QTextEdit()
         self.actor_appearance_input.setObjectName("ActorManagerDescInput")
         self.actor_appearance_input.textChanged.connect(self._schedule_details_save)
-        self.actor_appearance_input.setMaximumHeight(120)
+        self.actor_appearance_input.setMaximumHeight(80)
         appearance_layout.addWidget(label_appearance_actor)
         appearance_layout.addWidget(self.actor_appearance_input)
         app_gen_checkbox = QCheckBox("Generate Appearance")
@@ -228,7 +265,7 @@ class ActorManagerWidget(QWidget):
         self.variables_scroll_area = QScrollArea()
         self.variables_scroll_area.setWidgetResizable(True)
         self.variables_scroll_area.setObjectName("VariablesScrollArea")
-        self.variables_scroll_area.setMinimumHeight(80)
+        self.variables_scroll_area.setMinimumHeight(60)
         self.variables_scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         variables_content_widget = QWidget()
         self.variables_list_layout = QVBoxLayout(variables_content_widget)
@@ -259,6 +296,14 @@ class ActorManagerWidget(QWidget):
         label_inventory_actor.setObjectName("ActorManagerEditLabel")
         inventory_label_layout.addWidget(label_inventory_actor)
         inventory_label_layout.addStretch(1)
+        
+        self.edit_inventory_btn = QPushButton("Edit")
+        self.edit_inventory_btn.setObjectName("EditButton")
+        self.edit_inventory_btn.setToolTip("Edit Inventory in Inventory Manager")
+        self.edit_inventory_btn.setMaximumWidth(60)
+        self.edit_inventory_btn.clicked.connect(self._edit_inventory_in_manager)
+        inventory_label_layout.addWidget(self.edit_inventory_btn)
+        
         inventory_section_layout.addLayout(inventory_label_layout)
         inventory_content_widget = QWidget()
         inventory_content_widget.setObjectName("InventoryContentContainer")
@@ -471,7 +516,7 @@ class ActorManagerWidget(QWidget):
         inventory_scroll_area.setObjectName("InventoryScrollArea")
         inventory_scroll_area.setWidgetResizable(True)
         inventory_scroll_area.setWidget(inventory_content_widget)
-        inventory_scroll_area.setMaximumHeight(300)
+        inventory_scroll_area.setMaximumHeight(200)
         inventory_section_layout.addWidget(inventory_scroll_area)
         equip_gen_checkbox = QCheckBox("Generate Equipment")
         equip_gen_checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -506,7 +551,7 @@ class ActorManagerWidget(QWidget):
         self.relations_scroll_area = QScrollArea()
         self.relations_scroll_area.setWidgetResizable(True)
         self.relations_scroll_area.setObjectName("RelationsScrollArea")
-        self.relations_scroll_area.setMinimumHeight(100)
+        self.relations_scroll_area.setMinimumHeight(80)
         self.relations_scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         relations_content_widget = QWidget()
         self.relations_list_layout = QVBoxLayout(relations_content_widget)
@@ -517,28 +562,57 @@ class ActorManagerWidget(QWidget):
         bottom_row_layout.addLayout(inventory_section_layout, 1)
         bottom_row_layout.addWidget(relations_main_widget, 1)
         bottom_fields_layout = QHBoxLayout()
-        abilities_layout = QVBoxLayout()
-        label_abilities_actor = QLabel("Abilities:")
-        label_abilities_actor.setObjectName("ActorManagerEditLabel")
-        self.actor_abilities_input = QTextEdit()
-        self.actor_abilities_input.setObjectName("ActorManagerDescInput")
-        self.actor_abilities_input.textChanged.connect(self._schedule_details_save)
-        self.actor_abilities_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        abilities_layout.addWidget(label_abilities_actor)
-        abilities_layout.addWidget(self.actor_abilities_input)
-        abilities_gen_checkbox = QCheckBox("Generate Abilities")
-        abilities_gen_checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        abilities_gen_checkbox.stateChanged.connect(self._update_generate_button_text)
-        self._generation_checkboxes['abilities'] = abilities_gen_checkbox
-        abilities_layout.addWidget(abilities_gen_checkbox, alignment=Qt.AlignHCenter)
-        bottom_fields_layout.addLayout(abilities_layout, 1)
+        portrait_layout = QVBoxLayout()
+        portrait_layout.setContentsMargins(0, 0, 0, 0)
+        portrait_layout.setSpacing(5)
+        label_portrait_actor = QLabel("Portrait:")
+        label_portrait_actor.setObjectName("ActorManagerEditLabel")
+        portrait_controls_layout = QHBoxLayout()
+        portrait_controls_layout.addStretch()
+        self.select_portrait_button = QPushButton("Select")
+        self.select_portrait_button.setObjectName("SelectPortraitButton")
+        self.select_portrait_button.setToolTip("Select portrait image file")
+        self.select_portrait_button.clicked.connect(self._select_portrait_image)
+        self.clear_portrait_button = QPushButton("Clear")
+        self.clear_portrait_button.setObjectName("ClearPortraitButton")
+        self.clear_portrait_button.setToolTip("Clear portrait image")
+        self.clear_portrait_button.clicked.connect(self._clear_portrait_image)
+        portrait_controls_layout.addWidget(self.select_portrait_button)
+        portrait_controls_layout.addWidget(self.clear_portrait_button)
+        portrait_controls_layout.addStretch()
+        self.portrait_preview = QWidget()
+        self.portrait_preview.setObjectName("PortraitPreview")
+        self.portrait_preview.setMinimumSize(150, 200)
+        self.portrait_preview.setMaximumSize(150, 200)
+        self.portrait_preview.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self._update_portrait_preview_styling()
+        self._portrait_text = "No Image\nSelected"
+        self.portrait_preview.mousePressEvent = self._on_portrait_mouse_press
+        self.portrait_preview.mouseMoveEvent = self._on_portrait_mouse_move
+        self.portrait_preview.mouseReleaseEvent = self._on_portrait_mouse_release
+        self.portrait_preview.wheelEvent = self._on_portrait_wheel
+        self.portrait_preview.paintEvent = self._on_portrait_paint
+        self.portrait_preview.setMouseTracking(True)
+        portrait_layout.addWidget(label_portrait_actor)
+        portrait_wrapper = QWidget()
+        portrait_wrapper.setObjectName("PortraitWrapper")
+        wrapper_layout = QHBoxLayout(portrait_wrapper)
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.addStretch()
+        wrapper_layout.addWidget(self.portrait_preview)
+        wrapper_layout.addStretch()
+        self.portrait_wrapper = portrait_wrapper
+        portrait_layout.addWidget(portrait_wrapper)
+        portrait_layout.addLayout(portrait_controls_layout)
+        bottom_fields_layout.addLayout(portrait_layout, 1)
         story_layout = QVBoxLayout()
         label_story_actor = QLabel("Story:")
         label_story_actor.setObjectName("ActorManagerEditLabel")
         self.actor_story_input = QTextEdit()
         self.actor_story_input.setObjectName("ActorManagerDescInput")
         self.actor_story_input.textChanged.connect(self._schedule_details_save)
-        self.actor_story_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.actor_story_input.setMaximumHeight(100)
+        self.actor_story_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         story_layout.addWidget(label_story_actor)
         story_layout.addWidget(self.actor_story_input)
         story_gen_checkbox = QCheckBox("Generate Story")
@@ -547,16 +621,35 @@ class ActorManagerWidget(QWidget):
         self._generation_checkboxes['story'] = story_gen_checkbox
         story_layout.addWidget(story_gen_checkbox, alignment=Qt.AlignHCenter)
         bottom_fields_layout.addLayout(story_layout, 1)
-        
         schedule_layout = QVBoxLayout()
         label_schedule_actor = QLabel("Schedule:")
         label_schedule_actor.setObjectName("ActorManagerEditLabel")
-        self.actor_schedule_input = QTextEdit()
-        self.actor_schedule_input.setObjectName("ActorManagerDescInput")
-        self.actor_schedule_input.textChanged.connect(self._schedule_details_save)
-        self.actor_schedule_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        schedule_layout.addWidget(label_schedule_actor)
-        schedule_layout.addWidget(self.actor_schedule_input)
+        add_schedule_button = QPushButton("+")
+        add_schedule_button.setObjectName("AddButton")
+        add_schedule_button.setToolTip("Add Schedule Entry")
+        add_schedule_button.setMaximumWidth(30)
+        add_schedule_button.clicked.connect(lambda: self._add_schedule_row())
+        remove_schedule_button = QPushButton("-")
+        remove_schedule_button.setObjectName("RemoveButton")
+        remove_schedule_button.setToolTip("Remove Selected Schedule Entry")
+        remove_schedule_button.setMaximumWidth(30)
+        remove_schedule_button.clicked.connect(self._remove_selected_schedule_row)
+        schedule_header_layout = QHBoxLayout()
+        schedule_header_layout.addWidget(label_schedule_actor)
+        schedule_header_layout.addStretch()
+        schedule_header_layout.addWidget(add_schedule_button)
+        schedule_header_layout.addWidget(remove_schedule_button)
+        schedule_layout.addLayout(schedule_header_layout)
+        self.schedule_scroll_area = QScrollArea()
+        self.schedule_scroll_area.setWidgetResizable(True)
+        self.schedule_scroll_area.setObjectName("ScheduleScrollArea")
+        self.schedule_scroll_area.setMinimumHeight(80)
+        self.schedule_scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        schedule_content_widget = QWidget()
+        self.schedule_list_layout = QVBoxLayout(schedule_content_widget)
+        self.schedule_list_layout.setAlignment(Qt.AlignTop)
+        self.schedule_scroll_area.setWidget(schedule_content_widget)
+        schedule_layout.addWidget(self.schedule_scroll_area)
         schedule_gen_checkbox = QCheckBox("Generate Schedule")
         schedule_gen_checkbox.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         schedule_gen_checkbox.stateChanged.connect(self._update_generate_button_text)
@@ -593,9 +686,11 @@ class ActorManagerWidget(QWidget):
         generate_button_layout.addWidget(self.additional_instructions_input)
         generate_button_layout.addStretch(1)
         edit_layout.addLayout(generate_button_layout)
+        edit_scroll_area.setWidget(edit_content_widget)
         main_layout.addLayout(list_layout, 1)
-        main_layout.addLayout(edit_layout, 4)
+        main_layout.addWidget(edit_scroll_area, 4)
         self._load_actors_from_disk()
+        self._update_scroll_area_styling()
 
     def set_actors(self, actor_data):
         self.list_widget.clear()
@@ -678,7 +773,7 @@ class ActorManagerWidget(QWidget):
             goals_from_json = data.get('goals', '')
             story_from_json = data.get('story', '')
             equipment_from_json = data.get('equipment', {})
-            abilities_from_json = data.get('abilities', '')
+            portrait_from_json = data.get('portrait', {})
             schedule_from_json = data.get('schedule', '')
             location_from_json = data.get('location', '')
             left_hand_holding_from_json = data.get('left_hand_holding', '')
@@ -699,12 +794,50 @@ class ActorManagerWidget(QWidget):
             self.actor_story_input.blockSignals(True)
             self.actor_story_input.setPlainText(story_from_json)
             self.actor_story_input.blockSignals(False)
-            self.actor_abilities_input.blockSignals(True);
-            self.actor_abilities_input.setPlainText(abilities_from_json)
-            self.actor_abilities_input.blockSignals(False);
-            self.actor_schedule_input.blockSignals(True)
-            self.actor_schedule_input.setPlainText(schedule_from_json)
-            self.actor_schedule_input.blockSignals(False)
+            self._portrait_path = portrait_from_json.get('path', None)
+            self._portrait_offset = portrait_from_json.get('offset', [0, 0])
+            self._portrait_scale = portrait_from_json.get('scale', 1.0)
+            main_ui = self._get_main_ui()
+            if main_ui:
+                if hasattr(main_ui, 'current_applied_theme') and main_ui.current_applied_theme:
+                    current_theme_color = main_ui.current_applied_theme.get("base_color", "#CCCCCC")
+                    self._portrait_tint_color = QColor(current_theme_color)
+                    print(f"[PORTRAIT DEBUG] Loading actor - using current theme color: {current_theme_color}")
+                elif hasattr(main_ui, '_last_theme') and main_ui._last_theme:
+                    current_theme_color = main_ui._last_theme.get("base_color", "#CCCCCC")
+                    self._portrait_tint_color = QColor(current_theme_color)
+                    print(f"[PORTRAIT DEBUG] Loading actor - using last theme color: {current_theme_color}")
+                else:
+                    tint_color_str = portrait_from_json.get('tint_color', "#CCCCCC")
+                    self._portrait_tint_color = QColor(tint_color_str)
+                    print(f"[PORTRAIT DEBUG] Loading actor - no theme found, using saved color: {tint_color_str}")
+            else:
+                tint_color_str = portrait_from_json.get('tint_color', "#CCCCCC")
+                self._portrait_tint_color = QColor(tint_color_str)
+                print(f"[PORTRAIT DEBUG] Loading actor - no main UI, using saved color: {tint_color_str}")
+            
+            if self._portrait_path and os.path.exists(self._portrait_path):
+                pixmap = QPixmap(self._portrait_path)
+                if not pixmap.isNull():
+                    self._original_portrait_pixmap = pixmap
+                    self._processed_portrait_pixmap = self._apply_tint_to_portrait(pixmap, self._portrait_tint_color)
+                    self._update_portrait_preview()
+                else:
+                    self._portrait_path = None
+                    self._portrait_offset = [0, 0]
+                    self._portrait_scale = 1.0
+                    self._original_portrait_pixmap = None
+                    self._processed_portrait_pixmap = None
+                    self._portrait_pixmap = None
+                    self.portrait_preview.update()
+            else:
+                self._portrait_path = None
+                self._portrait_offset = [0, 0]
+                self._portrait_scale = 1.0
+                self._original_portrait_pixmap = None
+                self._processed_portrait_pixmap = None
+                self._portrait_pixmap = None
+                self.portrait_preview.update()
             self.actor_location_input.blockSignals(True);
             self.actor_location_input.setText(location_from_json)
             self.actor_location_input.blockSignals(False);
@@ -732,6 +865,16 @@ class ActorManagerWidget(QWidget):
             if isinstance(variables_from_json, dict):
                 for var_name, var_value in variables_from_json.items():
                     self._add_variable_row(str(var_name), str(var_value))
+            
+            self._clear_schedule_rows()
+            schedule_from_json = data.get('schedule', {})
+            if isinstance(schedule_from_json, dict):
+                for time, setting in schedule_from_json.items():
+                    self._add_schedule_row(str(time), str(setting))
+            elif isinstance(schedule_from_json, str) and schedule_from_json.strip():
+                self._add_schedule_row("", schedule_from_json.strip())
+            
+            inventory_from_json = data.get('inventory', [])
         else:
             self._selected_actor_path = None
             self.actor_name_input.clear()
@@ -746,8 +889,14 @@ class ActorManagerWidget(QWidget):
                  input_attr_name = f"actor_{slot_key}_input"
                  if hasattr(self, input_attr_name):
                     getattr(self, input_attr_name).clear()
-            self.actor_abilities_input.clear()
-            self.actor_schedule_input.clear()
+            self._portrait_path = None
+            self._portrait_offset = [0, 0]
+            self._portrait_scale = 1.0
+            self._original_portrait_pixmap = None
+            self._processed_portrait_pixmap = None
+            self._portrait_pixmap = None
+            self.portrait_preview.update()
+            self._clear_schedule_rows()
             self.actor_location_input.clear()
             self.player_checkbox.blockSignals(True)
             self.player_checkbox.setChecked(False)
@@ -772,8 +921,8 @@ class ActorManagerWidget(QWidget):
         new_relations = self._get_relations_data()
         new_goals = self.actor_goals_input.toPlainText().strip()
         new_story = self.actor_story_input.toPlainText().strip()
-        new_abilities = self.actor_abilities_input.toPlainText().strip()
-        new_schedule = self.actor_schedule_input.toPlainText().strip()
+        new_portrait = self._get_portrait_data()
+        new_schedule = self._get_schedule_data()
         new_location_name = self.actor_location_input.text().strip()
         new_left_hand_holding = self.actor_left_hand_holding_input.text().strip()
         new_right_hand_holding = self.actor_right_hand_holding_input.text().strip()
@@ -798,11 +947,12 @@ class ActorManagerWidget(QWidget):
         data['goals'] = new_goals
         data['story'] = new_story
         data['equipment'] = new_equipment
-        data['abilities'] = new_abilities
+        data['portrait'] = new_portrait
         data['schedule'] = new_schedule
         data['location'] = new_location_name
         data['left_hand_holding'] = new_left_hand_holding
         data['right_hand_holding'] = new_right_hand_holding
+        
         new_variables = self._get_variables_data()
         data['variables'] = new_variables
         save_successful = self._save_json(old_json_path, data)
@@ -875,8 +1025,8 @@ class ActorManagerWidget(QWidget):
                 "goals": "",
                 "story": "",
                 "equipment": {key: "" for key in self.EQUIPMENT_SLOT_ORDER},
-                "abilities": "",
-                "schedule": "",
+                "portrait": {},
+                "schedule": {},
                 "location": "",
                 "left_hand_holding": "",
                 "right_hand_holding": "",
@@ -1077,8 +1227,8 @@ class ActorManagerWidget(QWidget):
             'goals': self.actor_goals_input.toPlainText().strip(),
             'story': self.actor_story_input.toPlainText().strip(),
             'equipment': {key: getattr(self, f"actor_{key}_input").text().strip() for key in self.EQUIPMENT_SLOT_ORDER},
-            'abilities': self.actor_abilities_input.toPlainText().strip(),
-            'schedule': self.actor_schedule_input.toPlainText().strip(),
+            'portrait': self._get_portrait_data(),
+            'schedule': self._get_schedule_data(),
             'location': self.actor_location_input.text().strip(),
             'left_hand_holding': self.actor_left_hand_holding_input.text().strip(),
             'right_hand_holding': self.actor_right_hand_holding_input.text().strip(),
@@ -1182,14 +1332,42 @@ class ActorManagerWidget(QWidget):
                     self.actor_story_input.blockSignals(True)
                     self.actor_story_input.setPlainText(value)
                     self.actor_story_input.blockSignals(False)
-                elif field == 'abilities':
-                    self.actor_abilities_input.blockSignals(True)
-                    self.actor_abilities_input.setPlainText(value)
-                    self.actor_abilities_input.blockSignals(False)
-                elif field == 'schedule':
-                    self.actor_schedule_input.blockSignals(True)
-                    self.actor_schedule_input.setPlainText(value)
-                    self.actor_schedule_input.blockSignals(False)
+                elif field == 'portrait' and isinstance(value, dict):
+                    self._portrait_path = value.get('path', None)
+                    self._portrait_offset = value.get('offset', [0, 0])
+                    self._portrait_scale = value.get('scale', 1.0)
+                    tint_color_str = value.get('tint_color', "#CCCCCC")
+                    self._portrait_tint_color = QColor(tint_color_str)
+                    
+                    if self._portrait_path and os.path.exists(self._portrait_path):
+                        pixmap = QPixmap(self._portrait_path)
+                        if not pixmap.isNull():
+                            self._original_portrait_pixmap = pixmap
+                            self._processed_portrait_pixmap = self._apply_tint_to_portrait(pixmap, self._portrait_tint_color)
+                            self._update_portrait_preview()
+                        else:
+                            self._portrait_path = None
+                            self._portrait_offset = [0, 0]
+                            self._portrait_scale = 1.0
+                            self._original_portrait_pixmap = None
+                            self._processed_portrait_pixmap = None
+                            self.portrait_preview.clear()
+                            self.portrait_preview.setText("No Image\nSelected")
+                    else:
+                        self._portrait_path = None
+                        self._portrait_offset = [0, 0]
+                        self._portrait_scale = 1.0
+                        self._original_portrait_pixmap = None
+                        self._processed_portrait_pixmap = None
+                        self.portrait_preview.clear()
+                        self.portrait_preview.setText("No Image\nSelected")
+                elif field == 'schedule' and isinstance(value, dict):
+                    self._clear_schedule_rows()
+                    for time, setting in value.items():
+                        self._add_schedule_row(str(time), str(setting))
+                elif field == 'schedule' and isinstance(value, str) and value.strip():
+                    self._clear_schedule_rows()
+                    self._add_schedule_row("", value.strip())
                 elif field == 'location':
                     self.actor_location_input.blockSignals(True)
                     self.actor_location_input.setText(value)
@@ -1269,8 +1447,8 @@ class ActorManagerWidget(QWidget):
                 "goals": "",
                 "story": "",
                 "equipment": {key: "" for key in self.EQUIPMENT_SLOT_ORDER},
-                "abilities": "",
-                "schedule": "",
+                "portrait": {},
+                "schedule": {},
                 "location": "",
                 "left_hand_holding": "",
                 "right_hand_holding": ""
@@ -1413,6 +1591,16 @@ class ActorManagerWidget(QWidget):
                         character_list.append(actor_name)
                         new_data["characters"] = character_list
                         self._save_json(new_json_path, new_data)
+                else:
+                    QMessageBox.warning(
+                        self, 
+                        "Setting Not Found", 
+                        f"The specified setting '{new_setting_name}' could not be found.\n\n" +
+                        f"The actor's location field has been updated, but they have not been added to the setting file.\n\n" +
+                        f"Please ensure the setting exists in the Setting Manager and the name matches exactly."
+                    )
+            else:
+                print(f"[LOCATION DEBUG] No setting file found!")
                 QMessageBox.warning(
                     self, 
                     "Setting Not Found", 
@@ -1514,10 +1702,338 @@ class ActorManagerWidget(QWidget):
                         variables_data[name] = value
         return variables_data
 
+    def _add_schedule_row(self, time="", setting=""):
+        row_widget = QWidget()
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        time_input = QLineEdit(time)
+        time_input.setObjectName("ActorManagerScheduleTimeInput")
+        time_input.setPlaceholderText("Time")
+        time_input.editingFinished.connect(self._schedule_details_save)
+        time_input.setProperty("row_widget", row_widget)
+        time_input.setProperty("is_schedule_input", True)
+        time_input.installEventFilter(self)
+        colon_label = QLabel(":")
+        setting_input = QLineEdit(setting)
+        setting_input.setObjectName("ActorManagerScheduleSettingInput")
+        setting_input.setPlaceholderText("Setting")
+        setting_input.editingFinished.connect(self._schedule_details_save)
+        setting_input.setProperty("row_widget", row_widget)
+        setting_input.setProperty("is_schedule_input", True)
+        setting_input.installEventFilter(self)
+        row_layout.addWidget(time_input, 1)
+        row_layout.addWidget(colon_label)
+        row_layout.addWidget(setting_input, 3)
+        self.schedule_list_layout.addWidget(row_widget)
+
+    def _remove_selected_schedule_row(self):
+        if hasattr(self, '_selected_schedule_row_widget') and self._selected_schedule_row_widget:
+            item_to_remove = None
+            index_to_remove = -1
+            layout = self.schedule_list_layout
+            for i in range(layout.count()):
+                item = layout.itemAt(i)
+                if item and item.widget() == self._selected_schedule_row_widget:
+                    item_to_remove = item
+                    index_to_remove = i
+                    break
+            if item_to_remove is not None and index_to_remove != -1:
+                layout.takeAt(index_to_remove)
+                widget_to_delete = self._selected_schedule_row_widget
+                self._selected_schedule_row_widget = None
+                widget_to_delete.deleteLater()
+                self._schedule_details_save()
+        else:
+            QMessageBox.information(self, "Remove Schedule Entry", "Click on a schedule row to select it before removing.")
+
+    def _clear_schedule_rows(self):
+        while self.schedule_list_layout.count() > 0:
+            item = self.schedule_list_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+    def _get_schedule_data(self):
+        schedule_data = {}
+        count = self.schedule_list_layout.count()
+        for i in range(count):
+            row_widget = self.schedule_list_layout.itemAt(i).widget()
+            if row_widget:
+                time_input = row_widget.findChild(QLineEdit, "ActorManagerScheduleTimeInput")
+                setting_input = row_widget.findChild(QLineEdit, "ActorManagerScheduleSettingInput")
+                if time_input and setting_input:
+                    time = time_input.text().strip()
+                    setting = setting_input.text().strip()
+                    if time:
+                        schedule_data[time] = setting
+        return schedule_data
+
+    def _apply_tint_to_portrait(self, original_pixmap, tint_color):
+        if original_pixmap is None or original_pixmap.isNull():
+            return None
+        original_image = original_pixmap.toImage()
+        grayscale_image = original_image.convertToFormat(QImage.Format_Grayscale8)
+        effect_image = QImage(grayscale_image.size(), QImage.Format_ARGB32_Premultiplied)
+        p_effect = QPainter(effect_image)
+        p_effect.drawImage(0, 0, grayscale_image)
+        p_effect.setCompositionMode(QPainter.CompositionMode_Multiply)
+        p_effect.fillRect(effect_image.rect(), tint_color)
+        p_effect.end()
+        return QPixmap.fromImage(effect_image)
+
+    def _get_portrait_data(self):
+        portrait_data = {}
+        if self._portrait_path:
+            portrait_data['path'] = self._portrait_path
+            portrait_data['offset'] = self._portrait_offset.copy()
+            portrait_data['scale'] = self._portrait_scale
+            portrait_data['tint_color'] = self._portrait_tint_color.name()
+        return portrait_data
+
+    def _select_portrait_image(self):
+        file_dialog = QFileDialog()
+        file_path, _ = file_dialog.getOpenFileName(
+            self, 
+            "Select Portrait Image", 
+            "", 
+            "Image Files (*.png *.jpg *.jpeg *.bmp *.gif *.tiff)"
+        )
+        if file_path:
+            self._portrait_path = file_path
+            self._portrait_offset = [0, 0]
+            self._portrait_scale = 1.0
+            pixmap = QPixmap(file_path)
+            if not pixmap.isNull():
+                self._original_portrait_pixmap = pixmap
+                main_ui = self._get_main_ui()
+                if main_ui:
+                    if hasattr(main_ui, 'current_applied_theme') and main_ui.current_applied_theme:
+                        theme_color = main_ui.current_applied_theme.get("base_color", "#CCCCCC")
+                        self._portrait_tint_color = QColor(theme_color)
+                    elif hasattr(main_ui, '_last_theme') and main_ui._last_theme:
+                        theme_color = main_ui._last_theme.get("base_color", "#CCCCCC")
+                        self._portrait_tint_color = QColor(theme_color)
+                self._processed_portrait_pixmap = self._apply_tint_to_portrait(pixmap, self._portrait_tint_color)
+                self._update_portrait_preview()
+                self._schedule_details_save()
+            else:
+                QMessageBox.warning(self, "Invalid Image", "The selected file is not a valid image.")
+                
+    def _clear_portrait_image(self):
+        self._portrait_path = None
+        self._portrait_offset = [0, 0]
+        self._portrait_scale = 1.0
+        self._original_portrait_pixmap = None
+        self._processed_portrait_pixmap = None
+        self._portrait_pixmap = None
+        self.portrait_preview.update()
+        self._schedule_details_save()
+        
+    def _on_portrait_mouse_press(self, event):
+        if self._original_portrait_pixmap and not self._original_portrait_pixmap.isNull():
+            if event.button() == Qt.LeftButton:
+                self._dragging = True
+                self._last_mouse_pos = event.pos()
+                
+    def _on_portrait_mouse_move(self, event):
+        if self._dragging and self._last_mouse_pos and self._processed_portrait_pixmap:
+            delta = event.pos() - self._last_mouse_pos
+            new_offset_x = self._portrait_offset[0] + delta.x()
+            new_offset_y = self._portrait_offset[1] + delta.y()
+            preview_size = self.portrait_preview.size()
+            scaled_size = self._processed_portrait_pixmap.size() * self._portrait_scale
+            min_visible = 50
+            max_offset_x = preview_size.width() - min_visible
+            min_offset_x = -(scaled_size.width() - min_visible)
+            max_offset_y = preview_size.height() - min_visible
+            min_offset_y = -(scaled_size.height() - min_visible)
+            self._portrait_offset[0] = max(min_offset_x, min(max_offset_x, new_offset_x))
+            self._portrait_offset[1] = max(min_offset_y, min(max_offset_y, new_offset_y))
+            self._last_mouse_pos = event.pos()
+            self._update_portrait_preview()
+            
+    def _on_portrait_mouse_release(self, event):
+        if event.button() == Qt.LeftButton:
+            self._dragging = False
+            self._last_mouse_pos = None
+            if self._processed_portrait_pixmap:
+                self._schedule_details_save()
+                
+    def _on_portrait_wheel(self, event):
+        if self._processed_portrait_pixmap and not self._processed_portrait_pixmap.isNull():
+            delta = event.angleDelta().y() / 120.0
+            delta = max(-1.0, min(1.0, delta))
+            if delta > 0:
+                scale_factor = 1.05
+            else:
+                scale_factor = 0.95
+            new_scale = self._portrait_scale * scale_factor
+            preview_size = self.portrait_preview.size()
+            min_scale_x = preview_size.width() / self._processed_portrait_pixmap.width()
+            min_scale_y = preview_size.height() / self._processed_portrait_pixmap.height()
+            min_scale = max(min_scale_x, min_scale_y)
+            if new_scale >= min_scale:
+                self._portrait_scale = new_scale
+                self._update_portrait_preview()
+                self._schedule_details_save()
+        
+    def _update_portrait_preview(self):
+        if not self._processed_portrait_pixmap or self._processed_portrait_pixmap.isNull():
+            return
+        preview_size = self.portrait_preview.size()
+        scaled_size = self._processed_portrait_pixmap.size() * self._portrait_scale
+        scaled_pixmap = self._processed_portrait_pixmap.scaled(
+            scaled_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
+        result_pixmap = QPixmap(preview_size)
+        result_pixmap.fill(QColor(18, 18, 18))
+        painter = QPainter(result_pixmap)
+        painter.drawPixmap(self._portrait_offset[0], self._portrait_offset[1], scaled_pixmap)
+        painter.end()
+        self._portrait_pixmap = result_pixmap
+        self.portrait_preview.update()
+
+    def _update_portrait_preview_styling(self):
+        main_ui = self._get_main_ui()
+        border_color = "#cccccc"
+        if main_ui:
+            if hasattr(main_ui, 'current_applied_theme') and main_ui.current_applied_theme:
+                border_color = main_ui.current_applied_theme.get("base_color", "#cccccc")
+            elif hasattr(main_ui, '_last_theme') and main_ui._last_theme:
+                border_color = main_ui._last_theme.get("base_color", "#cccccc")
+        self._portrait_border_color = QColor(border_color)
+        if hasattr(self, 'portrait_wrapper'):
+            wrapper_style = f"background-color: #121212 !important;"
+            self.portrait_wrapper.setStyleSheet(wrapper_style)
+        self.portrait_preview.update()
+
+    def _update_scroll_area_styling(self):
+        if not hasattr(self, 'edit_scroll_area') or not hasattr(self, 'edit_content_widget'):
+            return
+        background_color = "#121212"
+        scroll_area_style = f"""
+        QScrollArea#ActorManagerEditScrollArea {{
+            background-color: {background_color};
+            border: none;
+        }}
+        QScrollArea#ActorManagerEditScrollArea > QWidget > QWidget {{
+            background-color: {background_color};
+        }}
+        QScrollArea#ActorManagerEditScrollArea QWidget {{
+            background-color: transparent;
+        }}
+        """
+        self.edit_scroll_area.setStyleSheet(scroll_area_style)
+        self.edit_content_widget.setStyleSheet(f"background-color: {background_color};")
+        palette = self.edit_content_widget.palette()
+        palette.setColor(QPalette.Window, QColor(background_color))
+        self.edit_content_widget.setPalette(palette)
+        self.edit_content_widget.setAutoFillBackground(True)
+
+    def _on_portrait_paint(self, event):
+        painter = QPainter(self.portrait_preview)
+        painter.fillRect(self.portrait_preview.rect(), QColor("#121212"))
+        if hasattr(self, '_portrait_pixmap') and self._portrait_pixmap:
+            if hasattr(self, '_portrait_border_color') and self._portrait_border_color.isValid():
+                painter.setPen(QPen(self._portrait_border_color, 2))
+                painter.drawRect(0, 0, self.portrait_preview.width() - 1, self.portrait_preview.height() - 1)
+            painter.drawPixmap(0, 0, self._portrait_pixmap)
+        painter.end()
+
+    def update_theme(self, theme_colors):
+        if not theme_colors:
+            return
+        self._current_theme = theme_colors
+        base_color = theme_colors.get("base_color", "#CCCCCC")
+        new_tint_color = QColor(base_color)
+        if new_tint_color.isValid() and self._portrait_tint_color != new_tint_color:
+            self._portrait_tint_color = new_tint_color
+            if self._original_portrait_pixmap and not self._original_portrait_pixmap.isNull():
+                self._processed_portrait_pixmap = self._apply_tint_to_portrait(
+                    self._original_portrait_pixmap, self._portrait_tint_color
+                )
+                self._update_portrait_preview()
+                self._schedule_details_save()
+        self._update_portrait_preview_styling()
+        self._update_scroll_area_styling()
+
+    def _apply_initial_theme(self):
+        try:
+            main_ui = self._get_main_ui()
+            if main_ui:
+                theme_to_use = None
+                if hasattr(main_ui, 'current_applied_theme') and main_ui.current_applied_theme:
+                    theme_to_use = main_ui.current_applied_theme
+                elif hasattr(main_ui, '_last_theme') and main_ui._last_theme:
+                    theme_to_use = main_ui._last_theme
+                if theme_to_use:
+                    self.update_theme(theme_to_use)
+                else:
+                    self._update_portrait_preview_styling()
+                    self._update_scroll_area_styling()
+        except Exception as e:
+            self._update_portrait_preview_styling()
+            self._update_scroll_area_styling()
+
     def _get_main_ui(self):
         parent = self.parentWidget()
+        level = 0
         while parent:
             if hasattr(parent, 'add_rule_sound'):
                 return parent
             parent = parent.parentWidget()
+            level += 1
         return None 
+
+    def _edit_inventory_in_manager(self):
+        current_actor_item = self.list_widget.currentItem()
+        if not current_actor_item:
+            QMessageBox.warning(self, "No Selection", "Please select an actor first.")
+            return
+        actor_name = current_actor_item.text().replace(" (Player)", "").replace(" *", "")
+        main_ui = self._get_main_ui()
+        if not main_ui:
+            return
+        try:
+            import pygame
+            if hasattr(main_ui, '_left_splitter_sound') and main_ui._left_splitter_sound:
+                main_ui._left_splitter_sound.play()
+            else:
+                if not pygame.mixer.get_init():
+                    pygame.mixer.init()
+                left_splitter_sound = pygame.mixer.Sound('sounds/LeftSplitterSelection.mp3')
+                left_splitter_sound.play()
+                main_ui._left_splitter_sound = left_splitter_sound
+        except Exception:
+            pass
+        main_window = self
+        while True:
+            if hasattr(main_window, 'parentWidget') and main_window.parentWidget() is not None:
+                main_window = main_window.parentWidget()
+            else:
+                break
+        from PyQt5.QtWidgets import QStackedWidget, QPushButton
+        inventory_manager_button = None
+        for button in main_window.findChildren(QPushButton):
+            if hasattr(button, 'objectName') and button.objectName() == "InventoryManagerButtonLeft":
+                inventory_manager_button = button
+                break
+        if not inventory_manager_button:
+            QMessageBox.warning(self, "Navigation Error", "Could not find Inventory Manager button.")
+            return
+        inventory_manager_button.setChecked(True)
+        center_stack = None
+        for stack in main_window.findChildren(QStackedWidget):
+            if stack.count() > 8:
+                center_stack = stack
+                break
+        if not center_stack:
+            QMessageBox.warning(self, "Navigation Error", "Could not find center stack widget.")
+            return
+        inventory_manager_widget = center_stack.widget(8)
+        if not inventory_manager_widget or not hasattr(inventory_manager_widget, 'instances_btn'):
+            QMessageBox.warning(self, "Navigation Error", "Could not find Inventory Manager widget.")
+            return
+        center_stack.setCurrentIndex(8)
+        inventory_manager_widget.instances_btn.setChecked(True)
+        inventory_manager_widget.select_actor_in_instances(actor_name) 

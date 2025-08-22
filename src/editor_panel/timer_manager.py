@@ -144,12 +144,10 @@ class TimerManager(QObject):
     def pause_timers(self):
         with self.lock:
             self._timers_paused = True
-            print("[TIMER PAUSE] Timers paused during NPC processing")
 
     def resume_timers(self):
         with self.lock:
             self._timers_paused = False
-            print("[TIMER RESUME] Timers resumed after NPC processing")
 
     def _evaluate_variable_condition(self, condition, tab_data, character_name=None):
         if not condition:
@@ -162,7 +160,6 @@ class TimerManager(QObject):
         scope = condition.get('scope', 'Global')
         if isinstance(value, str) and hasattr(self.parent(), '_substitute_variables_in_string'):
             value = self.parent()._substitute_variables_in_string(value, tab_data, character_name)
-        print(f"[TIMER DEBUG] Evaluating condition: {var_name} {operator} {value} (scope: {scope}, character: {character_name})")
         
         var_value = None
         if scope == 'Character':
@@ -225,7 +222,6 @@ class TimerManager(QObject):
                 if tab_index >= 0:
                     variables = main_ui._load_variables(tab_index)
                     var_value = variables.get(var_name)
-                    print(f"[TIMER DEBUG] Global variable '{var_name}' = {var_value}")
                 else:
                     return False
             except Exception:
@@ -356,31 +352,23 @@ class TimerManager(QObject):
                 return False
             final_result_log = None
             condition_operator_log = rule.get('condition_operator', 'AND')
-            print(f"[TIMER DEBUG] Evaluating {len(condition_details)} conditions with operator: {condition_operator_log}")
             for i, condition in enumerate(condition_details):
                 logic_op_to_previous_log = condition.get('logic_to_previous', 'AND')
                 if condition.get('type') == 'Game Time':
                     cond_result_log = self._evaluate_game_time_condition(condition, tab_data)
                 else:
                     cond_result_log = self._evaluate_variable_condition(condition, tab_data, character_name)
-                print(f"[TIMER DEBUG] Condition {i+1}: {condition.get('name', 'Unknown')} {condition.get('operator', '==')} {condition.get('value', 'Unknown')} (scope: {condition.get('scope', 'Global')}) = {cond_result_log}")
-                if i > 0:
-                    print(f"[TIMER DEBUG] Logic to previous: {logic_op_to_previous_log}")
-                
                 if final_result_log is None:
                     final_result_log = cond_result_log
                 elif logic_op_to_previous_log == 'AND':
                     final_result_log = final_result_log and cond_result_log
-                    print(f"[TIMER DEBUG] AND operation: {final_result_log}")
                 elif logic_op_to_previous_log == 'OR':
                     final_result_log = final_result_log or cond_result_log
-                    print(f"[TIMER DEBUG] OR operation: {final_result_log}")
                 else:
                     final_result_log = final_result_log and cond_result_log
                 if condition_operator_log == 'AND' and final_result_log is False:
                     return False
             final_eval_outcome = final_result_log if final_result_log is not None else False
-            print(f"[TIMER DEBUG] Final condition result: {final_eval_outcome}")
             return final_eval_outcome
         return False
 
@@ -1149,9 +1137,6 @@ class TimerManager(QObject):
 def execute_timer_action(main_ui, rule_data, action, character_name=None, tab_data=None):
     if not main_ui or not action or not tab_data:
         return
-    time_manager_widget = tab_data.get('time_manager_widget')
-    if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
-        time_manager_widget.update_time(main_ui, tab_data)
     action_type = action.get('type')
     allow_live_input = action.get('allow_live_input', False)
     main_ui._allow_live_input_for_current_action = allow_live_input
@@ -1229,6 +1214,7 @@ def _execute_set_var_action(main_ui, action, character_name, tab_data):
     
     if operation == 'Generate':
         gen_instructions = action.get('generate_instructions', '')
+        gen_instructions = main_ui._substitute_variables_in_string(gen_instructions, tab_data, character_name)
         gen_context = action.get('generate_context', 'Last Exchange')
         context_str = None
         if gen_context == 'Full Conversation':
@@ -1288,28 +1274,28 @@ def _execute_set_var_action(main_ui, action, character_name, tab_data):
         try:
             from core.utils import _get_player_character_name, _get_or_create_actor_data
             player_name = _get_player_character_name(workflow_dir)
-            print(f"[TIMER SET VAR DEBUG] Player scope: player_name='{player_name}'")
+
             if not player_name:
                 return
             actor_data, actor_file = _get_or_create_actor_data(main_ui, workflow_dir, player_name)
-            print(f"[TIMER SET VAR DEBUG] Actor file: {actor_file}")
+
             if not actor_data or not actor_file:
                 return
             if 'variables' not in actor_data or not isinstance(actor_data['variables'], dict):
                 actor_data['variables'] = {}
-            print(f"[TIMER SET VAR DEBUG] Before operation: {var_name} = {actor_data['variables'].get(var_name, 'NOT_FOUND')}")
+
             _apply_variable_operation(actor_data['variables'], var_name, var_value, operation)
-            print(f"[TIMER SET VAR DEBUG] After operation: {var_name} = {actor_data['variables'].get(var_name, 'NOT_FOUND')}")
+
             with open(actor_file, 'w', encoding='utf-8') as f:
                 json.dump(actor_data, f, indent=2, ensure_ascii=False)
                 f.flush()
                 os.fsync(f.fileno())
-            print(f"[TIMER SET VAR DEBUG] Successfully saved to {actor_file}")
+
         except ImportError:
-            print(f"[TIMER SET VAR DEBUG] ImportError in Player scope")
+
             pass
         except Exception as e:
-            print(f"[TIMER SET VAR DEBUG] Exception in Player scope: {e}")
+
             pass
     elif scope == 'Setting':
         workflow_dir = tab_data.get('workflow_data_dir')

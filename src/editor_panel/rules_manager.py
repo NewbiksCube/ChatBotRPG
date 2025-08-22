@@ -127,6 +127,36 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                             condition_data["value"] = value_spinner.value()
                         except RuntimeError:
                             pass
+                elif condition_type == "Post Dialogue":
+                    post_player_radio = condition_widget.findChild(QRadioButton, "PostDialoguePlayerPostRadio")
+                    post_current_radio = condition_widget.findChild(QRadioButton, "PostDialogueCurrentPostRadio")
+                    operator_is_radio = condition_widget.findChild(QRadioButton, "PostDialogueIsRadio")
+                    operator_not_radio = condition_widget.findChild(QRadioButton, "PostDialogueNotRadio")
+                    dialogue_all_radio = condition_widget.findChild(QRadioButton, "PostDialogueAllRadio")
+                    dialogue_some_radio = condition_widget.findChild(QRadioButton, "PostDialogueSomeRadio")
+                    dialogue_none_radio = condition_widget.findChild(QRadioButton, "PostDialogueNoneRadio")
+                    try:
+                        if post_current_radio and post_current_radio.isChecked():
+                            condition_data["post_type"] = "Current Post"
+                        else:
+                            condition_data["post_type"] = "Player Post"
+                        
+                        if operator_not_radio and operator_not_radio.isChecked():
+                            condition_data["operator"] = "Not"
+                        else:
+                            condition_data["operator"] = "Is"
+                        print(f"[DEBUG] Saving Post Dialogue operator: Is={operator_is_radio.isChecked() if operator_is_radio else 'None'}, Not={operator_not_radio.isChecked() if operator_not_radio else 'None'} -> '{condition_data['operator']}'")
+                        
+                        if dialogue_all_radio and dialogue_all_radio.isChecked():
+                            condition_data["dialogue_amount"] = "All Dialogue"
+                        elif dialogue_some_radio and dialogue_some_radio.isChecked():
+                            condition_data["dialogue_amount"] = "Some Dialogue"
+                        elif dialogue_none_radio and dialogue_none_radio.isChecked():
+                            condition_data["dialogue_amount"] = "No Dialogue"
+                        else:
+                            condition_data["dialogue_amount"] = "All Dialogue"
+                    except RuntimeError:
+                        pass
                 condition_rows_data.append(condition_data)
             except RuntimeError:
                 pass
@@ -179,6 +209,7 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                     if action_type == "Change Actor Location":
                                         actor_input = action_row_widget.findChild(QLineEdit, "ChangeLocationActorInput")
                                         mode_adjacent_radio = action_row_widget.findChild(QRadioButton, "ChangeLocationAdjacentRadio")
+                                        mode_fast_travel_radio = action_row_widget.findChild(QRadioButton, "ChangeLocationFastTravelRadio")
                                         mode_setting_radio = action_row_widget.findChild(QRadioButton, "ChangeLocationSettingRadio")
                                         target_setting_input = action_row_widget.findChild(QLineEdit, "ChangeLocationTargetSettingInput")
                                         advance_time_checkbox = action_row_widget.findChild(QCheckBox, "ChangeLocationAdvanceTimeCheckbox")
@@ -187,6 +218,8 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                             action_obj["actor_name"] = actor_input.text()
                                         if mode_adjacent_radio and mode_adjacent_radio.isChecked():
                                             action_obj["location_mode"] = "Adjacent"
+                                        elif mode_fast_travel_radio and mode_fast_travel_radio.isChecked():
+                                            action_obj["location_mode"] = "Fast Travel"
                                         elif mode_setting_radio and mode_setting_radio.isChecked():
                                             action_obj["location_mode"] = "Setting"
                                             if target_setting_input:
@@ -383,6 +416,14 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                             action_obj["tag_mode"] = "prepend"
                                         else:
                                             action_obj["tag_mode"] = "overwrite"
+                                    elif action_type == "Delete Character":
+                                        if value_editor:
+                                            try:
+                                                action_obj["target_character_name"] = value_editor.toPlainText().strip()
+                                            except RuntimeError:
+                                                action_obj["target_character_name"] = ""
+                                        else:
+                                            action_obj["target_character_name"] = ""
                                     elif action_type in ["Next Rule", "Switch Model", "Rewrite Post"]:
                                         if value_editor:
                                             try:
@@ -527,6 +568,34 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                         action_obj["var_name"] = var_name
                                         action_obj["var_scope"] = var_scope
                                         action_obj["generate_context"] = context
+                                        
+                                        var_mode_prepend_radio = action_row_widget.findChild(QRadioButton, "GenRandomListVarModePrependRadio")
+                                        var_mode_replace_radio = action_row_widget.findChild(QRadioButton, "GenRandomListVarModeReplaceRadio")
+                                        var_mode_append_radio = action_row_widget.findChild(QRadioButton, "GenRandomListVarModeAppendRadio")
+                                        var_mode_delimiter_input = action_row_widget.findChild(QLineEdit, "GenRandomListVarModeDelimiterInput")
+                                        
+                                        var_mode = "replace"
+                                        if var_mode_prepend_radio and var_mode_prepend_radio.isChecked():
+                                            var_mode = "prepend"
+                                        elif var_mode_append_radio and var_mode_append_radio.isChecked():
+                                            var_mode = "append"
+                                        
+                                        action_obj["var_mode"] = var_mode
+                                        action_obj["var_delimiter"] = var_mode_delimiter_input.text().strip() if var_mode_delimiter_input else "/"
+                                        
+                                        var_format_comma_radio = action_row_widget.findChild(QRadioButton, "GenRandomListVarFormatCommaRadio")
+                                        var_format_space_radio = action_row_widget.findChild(QRadioButton, "GenRandomListVarFormatSpaceRadio")
+                                        var_format_custom_radio = action_row_widget.findChild(QRadioButton, "GenRandomListVarFormatCustomRadio")
+                                        var_format_custom_input = action_row_widget.findChild(QLineEdit, "GenRandomListVarFormatCustomInput")
+                                        
+                                        var_format = "comma"
+                                        if var_format_space_radio and var_format_space_radio.isChecked():
+                                            var_format = "space"
+                                        elif var_format_custom_radio and var_format_custom_radio.isChecked():
+                                            var_format = "custom"
+                                        
+                                        action_obj["var_format"] = var_format
+                                        action_obj["var_format_separator"] = var_format_custom_input.text().strip() if var_format_custom_input else " "
                                     elif action_type == "Force Narrator":
                                         fn_order_first_radio = action_row_widget.findChild(QRadioButton, "ForceNarratorOrderFirstRadio")
                                         fn_order_last_radio = action_row_widget.findChild(QRadioButton, "ForceNarratorOrderLastRadio")
@@ -1104,6 +1173,20 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                             action_obj["system_message_position"] = "last"
                                         else:
                                             action_obj["system_message_position"] = "first"
+                                    elif action_type == "Rewrite Post":
+                                        if value_editor:
+                                            try:
+                                                action_obj["value"] = value_editor.toPlainText().strip()
+                                            except RuntimeError:
+                                                action_obj["value"] = ""
+                                        rewrite_model_editor = action_row_widget.findChild(QLineEdit, "RewriteModelEditor")
+                                        if rewrite_model_editor:
+                                            try:
+                                                action_obj["model_override"] = rewrite_model_editor.text().strip()
+                                            except RuntimeError:
+                                                action_obj["model_override"] = ""
+                                        else:
+                                            action_obj["model_override"] = ""
                                     elif action_type == "Advance Time":
                                         advance_time_input = action_row_widget.findChild(QLineEdit, "AdvanceTimeInput")
                                         if advance_time_input:
@@ -1281,7 +1364,6 @@ def _load_selected_rule(self, tab_index, rules_list):
                 break
     if main_window:
         main_window.setUpdatesEnabled(False)
-    
     try:
         if tab_index < 0 or tab_index >= len(self.tabs_data):
             print(f"Error: Invalid tab index {tab_index} for _load_selected_rule")
@@ -1307,7 +1389,6 @@ def _load_selected_rule(self, tab_index, rules_list):
             return
         tab_content_widget = tab_data['widget']
         tab_content_widget.setUpdatesEnabled(False)
-        
         try:
             widget_cache = {
                 'rule_id_editor': tab_content_widget.findChild(QLineEdit, "RuleIdEditor"),
@@ -1356,16 +1437,13 @@ def _load_selected_rule(self, tab_index, rules_list):
             for radio, scope_value in scope_radios:
                 if radio:
                     radio.setChecked(scope == scope_value)
-            
             _load_conditions_optimized(self, widget_cache, rule_data, tab_data)
             _load_tag_action_pairs_optimized(self, widget_cache, rule_data, tab_data)
             if widget_cache['add_update_button'] and is_valid_widget(widget_cache['add_update_button']):
                 widget_cache['add_update_button'].setText("Update ↑")
                 widget_cache['add_update_button'].setProperty("editing_rule_index", current_row_index)
-            
         finally:
             tab_content_widget.setUpdatesEnabled(True)
-            
     finally:
         if main_window:
             main_window.setUpdatesEnabled(True)
@@ -1434,7 +1512,6 @@ def _populate_condition_row(self, row_widget, cond_data):
                 none_index = selector.findText("None")
                 if none_index >= 0:
                     selector.setCurrentIndex(none_index)
-
         condition_type = selector.currentText() if selector else 'None'
         if condition_type in ['Setting', 'Location', 'Region', 'World']:
             geography_editor = row_widget.findChild(QLineEdit, "GeographyNameEditor")
@@ -1481,6 +1558,27 @@ def _populate_condition_row(self, row_widget, cond_data):
                 game_time_type_selector.setCurrentIndex(type_index if type_index >= 0 else 0)
             if game_time_value_spinner:
                 game_time_value_spinner.setValue(cond_data.get('value', 0))
+        elif condition_type == 'Post Dialogue':
+            post_player_radio = row_widget.findChild(QRadioButton, "PostDialoguePlayerPostRadio")
+            post_current_radio = row_widget.findChild(QRadioButton, "PostDialogueCurrentPostRadio")
+            operator_is_radio = row_widget.findChild(QRadioButton, "PostDialogueIsRadio")
+            operator_not_radio = row_widget.findChild(QRadioButton, "PostDialogueNotRadio")
+            dialogue_all_radio = row_widget.findChild(QRadioButton, "PostDialogueAllRadio")
+            dialogue_some_radio = row_widget.findChild(QRadioButton, "PostDialogueSomeRadio")
+            dialogue_none_radio = row_widget.findChild(QRadioButton, "PostDialogueNoneRadio")
+            post_type = cond_data.get('post_type', 'Player Post')
+            operator = cond_data.get('operator', 'Is')
+            dialogue_amount = cond_data.get('dialogue_amount', 'All Dialogue')
+            if post_player_radio and post_current_radio:
+                post_player_radio.setChecked(post_type == 'Player Post')
+                post_current_radio.setChecked(post_type == 'Current Post')
+            if operator_is_radio and operator_not_radio:
+                operator_is_radio.setChecked(operator == 'Is')
+                operator_not_radio.setChecked(operator == 'Not')
+            if dialogue_all_radio and dialogue_some_radio and dialogue_none_radio:
+                dialogue_all_radio.setChecked(dialogue_amount == 'All Dialogue')
+                dialogue_some_radio.setChecked(dialogue_amount == 'Some Dialogue')
+                dialogue_none_radio.setChecked(dialogue_amount == 'No Dialogue')
         if selector:
             selector.currentIndexChanged.emit(selector.currentIndex())
         if 'op_selector' in locals() and op_selector:

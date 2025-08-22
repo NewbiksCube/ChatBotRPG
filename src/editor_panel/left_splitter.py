@@ -81,7 +81,7 @@ class LeftSplitterWidget(QWidget):
         self.keyword_manager_button.setFocusPolicy(Qt.NoFocus)
         self.button_group.addButton(self.keyword_manager_button)
         layout.addWidget(self.keyword_manager_button)
-        self.inventory_manager_button = QPushButton("ITEMS")
+        self.inventory_manager_button = QPushButton("INVENTORY")
         self.inventory_manager_button.setObjectName("InventoryManagerButtonLeft")
         self.inventory_manager_button.setCheckable(True)
         self.inventory_manager_button.setFont(QFont('Consolas', 6, QFont.Bold))

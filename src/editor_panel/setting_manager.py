@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QAbstractItemView, QLineEdit, QTextEdit, QListWidgetItem, QPushButton, QMessageBox, QInputDialog, QSizePolicy, QTabWidget, QFileDialog, QGroupBox, QScrollArea, QCheckBox, QComboBox, QCompleter, QDialog, QStackedWidget, QTableWidget, QTableWidgetItem, QHeaderView
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QAbstractItemView, QLineEdit, QTextEdit, QListWidgetItem, QPushButton, QMessageBox, QInputDialog, QSizePolicy, QFileDialog, QGroupBox, QScrollArea, QCheckBox, QComboBox, QStackedWidget, QTableWidget, QTableWidgetItem, QHeaderView
 from PyQt5.QtCore import Qt, QTimer
 import os
 import json
@@ -2297,7 +2297,6 @@ class SettingManagerWidget(QWidget):
                         for child in widget.findChildren(QLabel):
                             if child.objectName() == "ConnectionLabel" or child.objectName() == "IndirectConnectionLabel":
                                 child.setStyleSheet(stylesheet)
-        # Update button styling
         if hasattr(self, 'setting_details_btn'):
             self.setting_details_btn.setStyleSheet(f"""
                 QPushButton {{
@@ -2318,7 +2317,6 @@ class SettingManagerWidget(QWidget):
                     border: 1px solid {base_color};
                 }}
             """)
-        
         if hasattr(self, 'world_editor_btn'):
             self.world_editor_btn.setStyleSheet(f"""
                 QPushButton {{
@@ -2339,7 +2337,6 @@ class SettingManagerWidget(QWidget):
                     border: 1px solid {base_color};
                 }}
             """)
-        
         if hasattr(self, 'world_editor_tab') and self.world_editor_tab:
             self.world_editor_tab.update_theme(theme_colors)
         else:
@@ -4819,7 +4816,6 @@ class SettingManagerWidget(QWidget):
                 if actual_location_path:
                     self.populate_settings(actual_location_path)
             except Exception as e:
-                print(f"[ERROR] Failed to populate settings list: {e}")
                 import traceback
                 traceback.print_exc()
                 return False
@@ -4836,7 +4832,6 @@ class SettingManagerWidget(QWidget):
 
     def _find_setting_by_name(self, world_dir, setting_name):
         if not os.path.isdir(world_dir):
-            print(f"[ERROR] World directory does not exist: {world_dir}")
             return None
         setting_name_lower = setting_name.lower()
         sanitized_setting_name = sanitize_path_name(setting_name)
