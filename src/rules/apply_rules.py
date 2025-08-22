@@ -463,14 +463,8 @@ INSTRUCTIONS:
         if not workflow_data_dir:
             print(f"ERROR: Cannot set screen effect - workflow_data_dir not found")
             return
+        effect_id = obj.get('effect_id', 'default')
         effect_type = obj.get('effect_type', 'Blur')
-        operation = obj.get('operation', 'set').lower()
-        param_name = obj.get('param_name', '')
-        param_value = obj.get('param_value', '')
-        enabled = obj.get('enabled', True)
-        if not param_name:
-            print(f"ERROR: Cannot set screen effect - param_name is empty")
-            return
         gamestate_path = os.path.join(workflow_data_dir, 'game', 'gamestate.json')
         gamestate = {}
         if os.path.exists(gamestate_path):
@@ -479,60 +473,76 @@ INSTRUCTIONS:
                     gamestate = json.load(f)
             except Exception as e:
                 print(f"Error loading gamestate.json for screen effects: {e}")
-        if 'effects' not in gamestate:
-            gamestate['effects'] = {}
-        effect_key = effect_type.lower()
-        if effect_type == "Darken/Brighten":
-            effect_key = "darken_brighten"
-        if effect_key not in gamestate['effects']:
-            gamestate['effects'][effect_key] = {}
-        effect_config = gamestate['effects'][effect_key]
-        effect_config['enabled'] = enabled
-        current_value = effect_config.get(param_name)
-        new_value = param_value
-        if param_name in ["animate", "enabled"]:
-            if param_value.lower() in ["true", "yes", "1"]:
-                new_value = True
-            elif param_value.lower() in ["false", "no", "0"]:
-                new_value = False
+        if 'effects_by_id' not in gamestate:
+            gamestate['effects_by_id'] = {}
+        if effect_type == "Clear":
+            if effect_id in gamestate['effects_by_id']:
+                del gamestate['effects_by_id'][effect_id]
+                print(f"Cleared all effects for effect_id: {effect_id}")
         else:
-            try:
-                if current_value is not None:
-                    current_num = float(current_value)
-                    try:
-                        param_num = float(param_value)
-                        if operation == "increment":
-                            new_value = current_num + param_num
-                        elif operation == "decrement":
-                            new_value = current_num - param_num
-                        elif operation == "set":
-                            new_value = param_num
-                        if isinstance(current_value, int) and new_value.is_integer():
-                            new_value = int(new_value)
-                    except ValueError:
-                        new_value = param_value
-                else:
-                    try:
-                        param_num = float(param_value)
-                        if operation == "increment":
-                            new_value = param_num
-                        elif operation == "decrement":
-                            new_value = -param_num
-                        elif operation == "set":
-                            new_value = param_num
-                        if new_value.is_integer():
-                            new_value = int(new_value)
-                    except ValueError:
-                        new_value = param_value
-            except (ValueError, TypeError):
-                new_value = param_value
-        effect_config[param_name] = new_value
+            operation = obj.get('operation', 'set').lower()
+            param_name = obj.get('param_name', '')
+            param_value = obj.get('param_value', '')
+            enabled = obj.get('enabled', True)
+            if not param_name:
+                print(f"ERROR: Cannot set screen effect - param_name is empty")
+                return
+            if effect_id not in gamestate['effects_by_id']:
+                gamestate['effects_by_id'][effect_id] = {}
+            effect_key = effect_type.lower()
+            if effect_type == "Darken/Brighten":
+                effect_key = "darken_brighten"
+            if effect_key not in gamestate['effects_by_id'][effect_id]:
+                gamestate['effects_by_id'][effect_id][effect_key] = {}
+            effect_config = gamestate['effects_by_id'][effect_id][effect_key]
+            effect_config['enabled'] = enabled
+            current_value = effect_config.get(param_name)
+            new_value = param_value
+        if effect_type != "Clear":
+            if param_name in ["animate", "enabled"]:
+                if param_value.lower() in ["true", "yes", "1"]:
+                    new_value = True
+                elif param_value.lower() in ["false", "no", "0"]:
+                    new_value = False
+            else:
+                try:
+                    if current_value is not None:
+                        current_num = float(current_value)
+                        try:
+                            param_num = float(param_value)
+                            if operation == "increment":
+                                new_value = current_num + param_num
+                            elif operation == "decrement":
+                                new_value = current_num - param_num
+                            elif operation == "set":
+                                new_value = param_num
+                            if isinstance(current_value, int) and new_value.is_integer():
+                                new_value = int(new_value)
+                        except ValueError:
+                            new_value = param_value
+                    else:
+                        try:
+                            param_num = float(param_value)
+                            if operation == "increment":
+                                new_value = param_num
+                            elif operation == "decrement":
+                                new_value = -param_num
+                            elif operation == "set":
+                                new_value = param_num
+                            if new_value.is_integer():
+                                new_value = int(new_value)
+                        except ValueError:
+                            new_value = param_value
+                except (ValueError, TypeError):
+                    new_value = param_value
+            effect_config[param_name] = new_value
         try:
             with open(gamestate_path, 'w', encoding='utf-8') as f:
                 json.dump(gamestate, f, indent=2)
             if tab_data:
-                tab_data['_pending_screen_effect_update'] = True
-                print(f"  Marked _pending_screen_effect_update = True in tab_data.")
+                if not tab_data.get('_pending_screen_effect_update'):
+                    tab_data['_pending_screen_effect_update'] = True
+                    print(f"  Marked _pending_screen_effect_update = True in tab_data.")
             else:
                 print(f"  WARNING: tab_data not available to mark _pending_screen_effect_update.")
         except Exception as e:
@@ -2479,3 +2489,4 @@ def _load_items_data(workflow_data_dir, scope='Setting', character_name=None):
                 except Exception as e:
                     print(f"ERROR: Failed to load setting inventory: {e}")
     return items
+
