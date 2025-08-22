@@ -178,8 +178,8 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
         if npc_file_path:
             npc_data = _load_json_safely(npc_file_path)
             if npc_data:
-                fields_to_exclude = ['isPlayer', 'npc_notes', 'memory_summary']
-                filtered_npc_data = {k: v for k, v in npc_data.items() if k not in fields_to_exclude}
+                relevant_fields = ['name', 'description', 'personality', 'appearance', 'goals', 'story', 'equipment', 'left_hand_holding', 'right_hand_holding']
+                filtered_npc_data = {k: v for k, v in npc_data.items() if k in relevant_fields and v}
                 char_sheet_content = json.dumps(filtered_npc_data, indent=2)
                 char_sheet_str = f"Your character sheet (JSON format):\n```json\n{char_sheet_content}\n```"
         npc_context_for_llm.append({"role": "user", "content": char_sheet_str})
@@ -384,11 +384,22 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
             "role": "user", 
             "content": f"(You are playing as: {character_name}. It is now {character_name}'s turn. What does {character_name} do or say next?)"
         })
+        print(f"\n[STANDALONE NPC CONTEXT DEBUG] ===== SENDING TO LLM FOR {character_name} =====")
         for i, msg in enumerate(npc_context_for_llm):
+            role = msg.get('role', 'unknown')
             content = msg.get('content', '')
+            print(f"[STANDALONE NPC CONTEXT DEBUG] [{i}] {role.upper()}: {content}")
+        print(f"[STANDALONE NPC CONTEXT DEBUG] ===== END CONTEXT FOR {character_name} =====\n")
+        
         try:
             max_tokens = self.max_tokens
             result_text = self.run_utility_inference_sync(npc_context_for_llm, model_to_use, max_tokens)
+            if result_text and isinstance(result_text, str) and any(result_text.strip().lower().startswith(failure_start) for failure_start in ['i\'m', 'sorry', 'ext']):
+                print(f"[STANDALONE FALLBACK] Detected failure response '{result_text}' for {character_name}, retrying with fallback models...")
+                result_text = self._retry_standalone_inference_with_fallback(character_name, npc_context_for_llm, max_tokens, tag_for_this_npc)
+                if not result_text:
+                    print(f"[STANDALONE FALLBACK] All fallback attempts failed for {character_name}")
+                    return None
             if result_text and isinstance(result_text, str):
                 prefix = f"{character_name}:"
                 if result_text.strip().startswith(prefix):
@@ -450,3 +461,32 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
         self.character_name = original_character
         if hasattr(self, '_re_enable_input_after_pipeline'):
             self._re_enable_input_after_pipeline()
+
+def _retry_standalone_inference_with_fallback(self, character_name, context, max_tokens, tag_for_this_npc):
+    try:
+        from chatBotRPG import FALLBACK_MODEL_1, FALLBACK_MODEL_2, FALLBACK_MODEL_3
+        fallback_models = [FALLBACK_MODEL_1, FALLBACK_MODEL_2, FALLBACK_MODEL_3]
+        for i, fallback_model in enumerate(fallback_models):
+            print(f"[STANDALONE FALLBACK] Attempting fallback model {i+1}: {fallback_model}")
+            try:
+                fallback_result = self.run_utility_inference_sync(context, fallback_model, max_tokens)
+                if fallback_result and isinstance(fallback_result, str) and any(fallback_result.strip().lower().startswith(failure_start) for failure_start in ['i\'m', 'sorry', 'ext']):
+                    print(f"[STANDALONE FALLBACK] Fallback model {fallback_model} also failed for {character_name}")
+                    if i < len(fallback_models) - 1:
+                        print(f"[STANDALONE FALLBACK] Will try next fallback model...")
+                        continue
+                    else:
+                        print(f"[STANDALONE FALLBACK] All fallback models failed for {character_name}")
+                        return None
+                print(f"[STANDALONE FALLBACK] Successfully got response from fallback model {fallback_model}")
+                return fallback_result
+            except Exception as e:
+                print(f"[STANDALONE FALLBACK] Error with fallback model {fallback_model}: {e}")
+                continue
+        print(f"[STANDALONE FALLBACK] All fallback attempts failed for {character_name}")
+        return None
+    except Exception as e:
+        print(f"[STANDALONE FALLBACK] Error in fallback retry for {character_name}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None

@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from core.make_inference import make_inference
 from config import get_default_utility_model
 
@@ -302,6 +303,114 @@ def move_characters(
             result['error'] = f'LLM did not return a valid setting name. Response: {llm_response}'
             return result
         target_setting_name = chosen_setting
+    elif mode == 'Fast Travel':
+        try:
+            print("[FAST TRAVEL] Collecting available settings...")
+            settings = []
+            base_settings_dir = os.path.join(workflow_data_dir, 'resources', 'data files', 'settings')
+            game_settings_dir = os.path.join(workflow_data_dir, 'game', 'settings')
+            def collect(dir_path):
+                if not os.path.exists(dir_path):
+                    return
+                for root, dirs, files in os.walk(dir_path):
+                    dirs[:] = [d for d in dirs if d.lower() != 'saves']
+                    for filename in files:
+                        if filename.lower().endswith('_setting.json'):
+                            file_path = os.path.join(root, filename)
+                            try:
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    data = json.load(f)
+                                name = data.get('name')
+                                if name and name not in settings:
+                                    if re.search(r"\(\d{3,},\d{3,}\)\s*$", name):
+                                        continue
+                                    settings.append(name)
+                            except Exception:
+                                pass
+            collect(game_settings_dir)
+            collect(base_settings_dir)
+            settings.sort(key=lambda s: s.lower())
+            print("[FAST TRAVEL] Available settings ({}):".format(len(settings)))
+            for s in settings:
+                print(f"  - {s}")
+            selected_target = None
+            if context_for_move and settings:
+                try:
+                    ctx_lower = str(context_for_move).lower()
+                    direct_matches = [n for n in settings if n.lower() in ctx_lower]
+                    if len(direct_matches) == 1:
+                        selected_target = direct_matches[0]
+                        print(f"[FAST TRAVEL] Matched destination (direct): {selected_target}")
+                    elif len(direct_matches) > 1:
+                        exact_matches = [n for n in settings if n.lower() == ctx_lower.strip('.')]
+                        if len(exact_matches) == 1:
+                            selected_target = exact_matches[0]
+                            print(f"[FAST TRAVEL] Matched destination (exact): {selected_target}")
+                except Exception:
+                    pass
+            if context_for_move and settings and not selected_target:
+                try:
+                    preview_list = "\n".join([f"- {n}" for n in settings[:50]])
+                    fast_prompt = (
+                        "You are a text adventure engine. Based on the player's latest action text, pick the most likely destination from the provided list of setting names.\n\n"
+                        "IMPORTANT: You must be VERY STRICT about matching. Only choose a destination if there is a CLEAR, SPECIFIC semantic match. Vague descriptions or directions do not count as a match.\n\n"
+                        "EXAMPLES OF WHAT TO MATCH:\n"
+                        "- Action: 'She goes to the Market Square' → Destination: 'Market Square' ✓\n"
+                        "- Action: 'He goes to the Golden Oak Inn' → Destination: 'The Golden Oak Inn' ✓\n\n"
+                        "EXAMPLES OF WHAT NOT TO MATCH (respond with [NEITHER]):\n"
+                        "- Action: 'Go north along the road' → Do not match with something like 'North Star' ✗ (mention of cardinal direction north does not equate to a SPECIFIC destination name)\n"
+                        "- Action: 'Head east toward the mountains' → Do not match with something like the 'East Gate' ✗ (mention of cardinal direction north does not equate to a SPECIFIC destination name)\n"
+                        "RULE: If the action describes MOVEMENT or DIRECTION rather than naming a SPECIFIC LOCATION, respond with [NEITHER].\n\n"
+                        f"Action text:\n{context_for_move}\n\n"
+                        f"Available settings ({len(settings)}):\n{preview_list}\n\n"
+                        "Respond ONLY with the exact matching setting name (including any commas if present in the setting name) if there is a clear, specific location match. If the action describes movement/direction or no specific location is named, respond with [NEITHER]."
+                    )
+                    llm_response = make_inference(
+                        context=[{"role": "user", "content": fast_prompt}],
+                        user_message=fast_prompt,
+                        character_name=actors_to_move[0] if actors_to_move else "Player",
+                        url_type=get_default_utility_model(),
+                        max_tokens=64,
+                        temperature=0.0,
+                        is_utility_call=True
+                    )
+                    response_line = str(llm_response).splitlines()[0].strip().strip('"').strip("'")
+                    resp_clean = re.sub(r"^[\[\(\s]*|[\]\)\s]*$", "", response_line)
+                    resp_lower = resp_clean.lower()
+                    if resp_lower.startswith('the '):
+                        resp_core = resp_lower[4:]
+                    elif resp_lower.startswith('an '):
+                        resp_core = resp_lower[3:]
+                    elif resp_lower.startswith('a '):
+                        resp_core = resp_lower[2:]
+                    else:
+                        resp_core = resp_lower
+                    for name in settings:
+                        name_lower = name.lower()
+                        name_core = name_lower[4:] if name_lower.startswith('the ') else name_lower
+                        if (
+                            name_lower in resp_lower or
+                            resp_lower in name_lower or
+                            name_core == resp_core
+                        ):
+                            selected_target = name
+                            break
+                    if not selected_target and '[NEITHER]' in str(llm_response).upper():
+                        print("[FAST TRAVEL] No clear destination match ([NEITHER])")
+                    elif selected_target:
+                        print(f"[FAST TRAVEL] Matched destination: {selected_target}")
+                    else:
+                        print(f"[FAST TRAVEL] LLM returned unrecognized response: {llm_response}")
+                except Exception as e:
+                    print(f"[FAST TRAVEL] Error during destination inference: {e}")
+            if not selected_target:
+                result['error'] = 'Fast Travel: no valid destination matched.'
+                return result
+            target_setting_name = selected_target
+        except Exception as e:
+            print(f"[FAST TRAVEL] Error enumerating settings: {e}")
+            result['error'] = f"Fast Travel error: {e}"
+            return result
     session_settings_dir = os.path.join(workflow_data_dir, 'game', 'settings')
     base_settings_dir = os.path.join(workflow_data_dir, 'resources', 'data files', 'settings')
     target_file_path = None
@@ -556,22 +665,62 @@ def move_characters(
                 final_player_setting_name = final_setting_data.get('name')
         if not final_player_setting_name:
             final_player_setting_name = target_setting_name
-        if advance_time and result['player_moved'] and current_setting_name and final_player_setting_name and current_setting_name != final_player_setting_name:
-            travel_time_minutes = _calculate_travel_time_between_settings(
-                workflow_data_dir_for_update, 
-                current_setting_name, 
-                final_player_setting_name
-            )
-            if travel_time_minutes > 0:
-                adjusted_travel_time = travel_time_minutes / speed_multiplier
-                print(f"[TRAVEL TIME] Base: {travel_time_minutes} minutes, Speed Multiplier: {speed_multiplier}x, Final: {adjusted_travel_time:.1f} minutes")
-                _advance_game_time_from_travel(workflow_data_dir_for_update, adjusted_travel_time, tab_data)
-        if right_splitter and workflow_data_dir_for_update and final_player_setting_name:
-            from PyQt5.QtCore import QTimer
+        def _do_update_ui():
             try:
-                QTimer.singleShot(0, lambda: right_splitter.update_setting_name(final_player_setting_name, workflow_data_dir_for_update))
-            except Exception as e_ui_update:
+                if right_splitter and workflow_data_dir_for_update and final_player_setting_name:
+                    from PyQt5.QtCore import QTimer
+                    right_splitter._player_just_moved = True
+                    QTimer.singleShot(0, lambda: right_splitter.update_setting_name(final_player_setting_name, workflow_data_dir_for_update))
+                    if hasattr(right_splitter, 'setting_minimap_widget') and right_splitter.setting_minimap_widget:
+                        from player_panel.world_map import update_player_position
+                        if hasattr(right_splitter.setting_minimap_widget, 'map_display'):
+                            QTimer.singleShot(100, lambda: update_player_position(right_splitter.setting_minimap_widget.map_display, workflow_data_dir_for_update, should_center=True))
+                        else:
+                            QTimer.singleShot(100, lambda: update_player_position(right_splitter.setting_minimap_widget, workflow_data_dir_for_update, should_center=True))
+            except Exception:
                 pass
+        scene_fade_overlay = tab_data.get('scene_fade_overlay')
+        if scene_fade_overlay:
+            try:
+                def on_black():
+                    if advance_time and result['player_moved'] and current_setting_name and final_player_setting_name and current_setting_name != final_player_setting_name:
+                        travel_time_minutes = _calculate_travel_time_between_settings(
+                            workflow_data_dir_for_update,
+                            current_setting_name,
+                            final_player_setting_name
+                        )
+                        if travel_time_minutes > 0:
+                            adjusted_travel_time = travel_time_minutes / speed_multiplier
+                            print(f"[TRAVEL TIME] Base: {travel_time_minutes} minutes, Speed Multiplier: {speed_multiplier}x, Final: {adjusted_travel_time:.1f} minutes")
+                            _advance_game_time_from_travel(workflow_data_dir_for_update, adjusted_travel_time, tab_data)
+                    _do_update_ui()
+                    tab_data['_fade_in_before_next_narrator'] = True
+                scene_fade_overlay.fade_out_blocking(duration_out=880, target_opacity=1.0)
+                on_black()
+            except Exception:
+                if advance_time and result['player_moved'] and current_setting_name and final_player_setting_name and current_setting_name != final_player_setting_name:
+                    travel_time_minutes = _calculate_travel_time_between_settings(
+                        workflow_data_dir_for_update,
+                        current_setting_name,
+                        final_player_setting_name
+                    )
+                    if travel_time_minutes > 0:
+                        adjusted_travel_time = travel_time_minutes / speed_multiplier
+                        print(f"[TRAVEL TIME] Base: {travel_time_minutes} minutes, Speed Multiplier: {speed_multiplier}x, Final: {adjusted_travel_time:.1f} minutes")
+                        _advance_game_time_from_travel(workflow_data_dir_for_update, adjusted_travel_time, tab_data)
+                _do_update_ui()
+        else:
+            if advance_time and result['player_moved'] and current_setting_name and final_player_setting_name and current_setting_name != final_player_setting_name:
+                travel_time_minutes = _calculate_travel_time_between_settings(
+                    workflow_data_dir_for_update,
+                    current_setting_name,
+                    final_player_setting_name
+                )
+                if travel_time_minutes > 0:
+                    adjusted_travel_time = travel_time_minutes / speed_multiplier
+                    print(f"[TRAVEL TIME] Base: {travel_time_minutes} minutes, Speed Multiplier: {speed_multiplier}x, Final: {adjusted_travel_time:.1f} minutes")
+                    _advance_game_time_from_travel(workflow_data_dir_for_update, adjusted_travel_time, tab_data)
+            _do_update_ui()
     return result
 
 def _build_adjacent_move_prompt(context, connections):

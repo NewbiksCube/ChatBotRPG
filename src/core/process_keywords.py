@@ -199,4 +199,4 @@ def get_location_info_for_keywords(workflow_data_dir: str, setting_file_path: st
                 location_info['location'] = parts[idx + 3]
     except Exception as e:
         print(f"Error extracting location info from path: {e}")
-    return location_info 
+    return location_info

@@ -4,8 +4,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QLabe
                              QTextEdit, QLineEdit, QListWidget, QPushButton,
                              QRadioButton, QButtonGroup, QScrollArea, QComboBox,
                              QSpinBox, QMessageBox, QApplication, QAbstractItemView,
-                             QStackedWidget, QSizePolicy, QInputDialog, QFrame)
-from PyQt5.QtCore import Qt, QTimer, QRectF
+                             QStackedWidget, QSizePolicy, QInputDialog, QFrame, QGraphicsOpacityEffect)
+from PyQt5.QtCore import Qt, QTimer, QRectF, QEasingCurve, QPropertyAnimation, QEventLoop
 from PyQt5.QtGui import QFont, QColor, QPainter, QPainterPath
 from core.memory import AgentMemory
 from core.ui_widgets import ChatMessageListWidget, ChatbotInputField, ChatMessageWidget
@@ -90,6 +90,172 @@ class CRTEffectOverlay(QWidget):
             if parent_size.width() > 0 and parent_size.height() > 0:
                 self.resize(parent_size)
         self.raise_()
+
+class SceneFadeOverlay(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_NoSystemBackground)
+        self.setFocusPolicy(Qt.NoFocus)
+        self._opacity_effect = QGraphicsOpacityEffect(self)
+        self._opacity_effect.setOpacity(0.0)
+        self.setGraphicsEffect(self._opacity_effect)
+        self._fade_out_anim = QPropertyAnimation(self._opacity_effect, b"opacity", self)
+        self._fade_in_anim = QPropertyAnimation(self._opacity_effect, b"opacity", self)
+        self.hide()
+
+    def paintEvent(self, event):
+        if self.width() <= 0 or self.height() <= 0:
+            return
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(0, 0, 0))
+        p.end()
+
+    def ensure_size(self):
+        if self.parent():
+            s = self.parent().size()
+            if s.width() > 0 and s.height() > 0:
+                self.resize(s)
+        self.raise_()
+
+    def play(self, duration_out=120, duration_in=120, mid_callback=None):
+        try:
+            self.ensure_size()
+            self.show()
+            self.raise_()
+            self._fade_out_anim.stop()
+            self._fade_in_anim.stop()
+            try:
+                self._fade_out_anim.finished.disconnect()
+            except Exception:
+                pass
+            try:
+                self._fade_in_anim.finished.disconnect()
+            except Exception:
+                pass
+            self._fade_out_anim.setDuration(max(1, int(duration_out)))
+            self._fade_out_anim.setStartValue(0.0)
+            self._fade_out_anim.setEndValue(1.0)
+            self._fade_out_anim.setEasingCurve(QEasingCurve.InOutQuad)
+            def after_out():
+                try:
+                    if callable(mid_callback):
+                        mid_callback()
+                except Exception:
+                    pass
+                self._fade_in_anim.setDuration(max(1, int(duration_in)))
+                self._fade_in_anim.setStartValue(1.0)
+                self._fade_in_anim.setEndValue(0.0)
+                self._fade_in_anim.setEasingCurve(QEasingCurve.InOutQuad)
+                def after_in():
+                    self.hide()
+                self._fade_in_anim.finished.connect(after_in)
+                self._fade_in_anim.start()
+            self._fade_out_anim.finished.connect(after_out)
+            self._fade_out_anim.start()
+        except Exception:
+            try:
+                if callable(mid_callback):
+                    mid_callback()
+            except Exception:
+                pass
+
+    def fade_out_and_hold(self, duration_out=220, target_opacity=0.85, on_black=None):
+        try:
+            self.ensure_size()
+            self.show()
+            self.raise_()
+            self._fade_out_anim.stop()
+            try:
+                self._fade_out_anim.finished.disconnect()
+            except Exception:
+                pass
+            self._fade_out_anim.setDuration(max(1, int(duration_out)))
+            self._fade_out_anim.setStartValue(0.0)
+            self._fade_out_anim.setEndValue(float(target_opacity))
+            self._fade_out_anim.setEasingCurve(QEasingCurve.InOutQuad)
+            def after_out():
+                try:
+                    if callable(on_black):
+                        on_black()
+                except Exception:
+                    pass
+            self._fade_out_anim.finished.connect(after_out)
+            self._fade_out_anim.start()
+        except Exception:
+            try:
+                if callable(on_black):
+                    on_black()
+            except Exception:
+                pass
+
+    def fade_out_blocking(self, duration_out=300, target_opacity=0.7):
+        try:
+            self.ensure_size()
+            self.show()
+            self.raise_()
+            self._fade_out_anim.stop()
+            try:
+                self._fade_out_anim.finished.disconnect()
+            except Exception:
+                pass
+            self._fade_out_anim.setDuration(max(1, int(duration_out)))
+            self._fade_out_anim.setStartValue(0.0)
+            self._fade_out_anim.setEndValue(float(target_opacity))
+            self._fade_out_anim.setEasingCurve(QEasingCurve.InOutQuad)
+            loop = QEventLoop()
+            def done():
+                loop.quit()
+            self._fade_out_anim.finished.connect(done)
+            self._fade_out_anim.start()
+            loop.exec_()
+        except Exception:
+            pass
+
+    def fade_in(self, duration_in=180, on_done=None):
+        try:
+            self.ensure_size()
+            self.show()
+            self.raise_()
+            self._fade_in_anim.stop()
+            try:
+                self._fade_in_anim.finished.disconnect()
+            except Exception:
+                pass
+            current_opacity = self._opacity_effect.opacity()
+            self._fade_in_anim.setDuration(max(1, int(duration_in)))
+            self._fade_in_anim.setStartValue(float(current_opacity))
+            self._fade_in_anim.setEndValue(0.0)
+            self._fade_in_anim.setEasingCurve(QEasingCurve.InOutQuad)
+            def after_in():
+                self.hide()
+                try:
+                    if callable(on_done):
+                        on_done()
+                except Exception:
+                    pass
+            self._fade_in_anim.finished.connect(after_in)
+            self._fade_in_anim.start()
+        except Exception:
+            try:
+                if callable(on_done):
+                    on_done()
+            except Exception:
+                pass
+
+    def fade_in_blocking(self, duration_in=180):
+        try:
+            loop = QEventLoop()
+            def done():
+                loop.quit()
+            self.fade_in(duration_in=duration_in, on_done=done)
+            loop.exec_()
+        except Exception:
+            try:
+                self.hide()
+            except Exception:
+                pass
 
     def setInterval(self, interval_ms):
         self._timer.setInterval(interval_ms)
@@ -485,7 +651,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         selector.setObjectName("StartConditionSelector")
         selector.setFont(QFont('Consolas', 10))
         selector.setMinimumWidth(90)
-        selector.addItems(["None", "Always", "Variable", "Scene Count", "Setting", "Location", "Region", "World", "Game Time"])
+        selector.addItems(["None", "Always", "Variable", "Scene Count", "Setting", "Location", "Region", "World", "Game Time", "Post Dialogue", "Is Exterior"]) 
         row_layout.addWidget(selector)
         geography_widget = QWidget()
         geography_layout = QHBoxLayout(geography_widget)
@@ -634,6 +800,99 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         game_time_layout.addStretch()
         game_time_widget.setVisible(False)
         row_layout.addWidget(game_time_widget)
+        
+        post_dialogue_widget = QWidget()
+        post_dialogue_layout = QHBoxLayout(post_dialogue_widget)
+        post_dialogue_layout.setContentsMargins(0, 0, 0, 0)
+        post_dialogue_layout.setSpacing(5)
+        
+        post_type_label = QLabel("Post:")
+        post_type_label.setObjectName("PostDialoguePostTypeLabel")
+        post_type_label.setFont(QFont('Consolas', 10))
+        
+        post_player_radio = QRadioButton("Player Post")
+        post_player_radio.setObjectName("PostDialoguePlayerPostRadio")
+        post_player_radio.setFont(QFont('Consolas', 9))
+        post_player_radio.setChecked(True)
+        
+        post_current_radio = QRadioButton("Current Post")
+        post_current_radio.setObjectName("PostDialogueCurrentPostRadio")
+        post_current_radio.setFont(QFont('Consolas', 9))
+        
+        post_type_group = QButtonGroup(post_dialogue_widget)
+        post_type_group.addButton(post_player_radio)
+        post_type_group.addButton(post_current_radio)
+        
+        operator_label = QLabel("Is:")
+        operator_label.setObjectName("PostDialogueOperatorLabel")
+        operator_label.setFont(QFont('Consolas', 10))
+        
+        operator_is_radio = QRadioButton("Is")
+        operator_is_radio.setObjectName("PostDialogueIsRadio")
+        operator_is_radio.setFont(QFont('Consolas', 9))
+        operator_is_radio.setChecked(True)
+        
+        operator_not_radio = QRadioButton("Not")
+        operator_not_radio.setObjectName("PostDialogueNotRadio")
+        operator_not_radio.setFont(QFont('Consolas', 9))
+        
+        operator_group = QButtonGroup(post_dialogue_widget)
+        operator_group.addButton(operator_is_radio)
+        operator_group.addButton(operator_not_radio)
+        
+        dialogue_amount_label = QLabel("Dialogue:")
+        dialogue_amount_label.setObjectName("PostDialogueAmountLabel")
+        dialogue_amount_label.setFont(QFont('Consolas', 10))
+        
+        dialogue_all_radio = QRadioButton("All Dialogue")
+        dialogue_all_radio.setObjectName("PostDialogueAllRadio")
+        dialogue_all_radio.setFont(QFont('Consolas', 9))
+        dialogue_all_radio.setChecked(True)
+        
+        dialogue_some_radio = QRadioButton("Some Dialogue")
+        dialogue_some_radio.setObjectName("PostDialogueSomeRadio")
+        dialogue_some_radio.setFont(QFont('Consolas', 9))
+        
+        dialogue_none_radio = QRadioButton("No Dialogue")
+        dialogue_none_radio.setObjectName("PostDialogueNoneRadio")
+        dialogue_none_radio.setFont(QFont('Consolas', 9))
+        
+        dialogue_amount_group = QButtonGroup(post_dialogue_widget)
+        dialogue_amount_group.addButton(dialogue_all_radio)
+        dialogue_amount_group.addButton(dialogue_some_radio)
+        dialogue_amount_group.addButton(dialogue_none_radio)
+        
+        post_dialogue_layout.addWidget(post_type_label)
+        post_dialogue_layout.addWidget(post_player_radio)
+        post_dialogue_layout.addWidget(post_current_radio)
+        post_dialogue_layout.addWidget(operator_label)
+        post_dialogue_layout.addWidget(operator_is_radio)
+        post_dialogue_layout.addWidget(operator_not_radio)
+        post_dialogue_layout.addWidget(dialogue_amount_label)
+        post_dialogue_layout.addWidget(dialogue_all_radio)
+        post_dialogue_layout.addWidget(dialogue_some_radio)
+        post_dialogue_layout.addWidget(dialogue_none_radio)
+        post_dialogue_layout.addStretch()
+        post_dialogue_widget.setVisible(False)
+        row_layout.addWidget(post_dialogue_widget)
+
+        is_exterior_widget = QWidget()
+        is_exterior_layout = QHBoxLayout(is_exterior_widget)
+        is_exterior_layout.setContentsMargins(0, 0, 0, 0)
+        is_exterior_layout.setSpacing(0)
+        is_exterior_label = QLabel("Is Exterior:")
+        is_exterior_label.setObjectName("IsExteriorLabel")
+        is_exterior_label.setFont(QFont('Consolas', 10))
+        is_exterior_toggle = QComboBox()
+        is_exterior_toggle.setObjectName("IsExteriorToggle")
+        is_exterior_toggle.setFont(QFont('Consolas', 9))
+        is_exterior_toggle.addItems(["True", "False"]) 
+        is_exterior_layout.addWidget(is_exterior_label)
+        is_exterior_layout.addWidget(is_exterior_toggle)
+        is_exterior_layout.addStretch()
+        is_exterior_widget.setVisible(False)
+        row_layout.addWidget(is_exterior_widget)
+        
         add_btn = QPushButton("+")
         add_btn.setObjectName("AddConditionButton")
         remove_btn = QPushButton("−")
@@ -646,6 +905,8 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
             is_scene_count = (selector.currentText() == "Scene Count")
             is_geography = selector.currentText() in ["Setting", "Location", "Region", "World"]
             is_game_time = (selector.currentText() == "Game Time")
+            is_post_dialogue = (selector.currentText() == "Post Dialogue")
+            is_is_exterior = (selector.currentText() == "Is Exterior")
             rule_applies_to_character = False
             parent = row_widget
             rules_manager_widget = None
@@ -666,6 +927,8 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
             scene_count_widget.setVisible(is_scene_count)
             geography_widget.setVisible(is_geography)
             game_time_widget.setVisible(is_game_time)
+            post_dialogue_widget.setVisible(is_post_dialogue)
+            is_exterior_widget.setVisible(is_is_exterior)
             if is_game_time:
                 game_time_operator_label.setVisible(True)
                 game_time_op_selector.setVisible(True)
@@ -676,6 +939,27 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
                 game_time_op_selector.setVisible(False)
                 game_time_type_selector.setVisible(False)
                 game_time_value_spinner.setVisible(False)
+            if is_post_dialogue:
+                rule_scope = "user_message"
+                if rules_manager_widget:
+                    scope_llm_reply_radio = rules_manager_widget.findChild(QRadioButton, "LLMReplyRadio")
+                    scope_conversation_plus_llm_reply_radio = rules_manager_widget.findChild(QRadioButton, "ConvoLLMReplyRadio")
+                    if scope_llm_reply_radio and scope_llm_reply_radio.isChecked():
+                        rule_scope = "llm_reply"
+                    elif scope_conversation_plus_llm_reply_radio and scope_conversation_plus_llm_reply_radio.isChecked():
+                        rule_scope = "conversation_plus_llm_reply"
+                    else:
+                        for scope_radio_name in ["LastExchangeRadio", "FullConversationRadio", "UserMessageRadio"]:
+                            scope_radio = rules_manager_widget.findChild(QRadioButton, scope_radio_name)
+                            if scope_radio and scope_radio.isChecked():
+                                rule_scope = "user_message"
+                                break
+                can_use_current_post = rule_scope in ["llm_reply", "conversation_plus_llm_reply"]
+                post_current_radio.setEnabled(can_use_current_post)
+                if not can_use_current_post and post_current_radio.isChecked():
+                    post_player_radio.setChecked(True)
+                print(f"[DEBUG] update_row_widgets: scope={rule_scope}, can_use_current_post={can_use_current_post}, enabled={post_current_radio.isEnabled()}")
+
             var_scope_widget.setVisible(is_var)
             if is_var:
                 op = op_selector.currentText()
@@ -720,6 +1004,8 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         remove_btn.clicked.connect(remove_row)
         if data:
             selector.setCurrentText(data.get('type', 'None'))
+            if data.get('type') == 'Is Exterior':
+                is_exterior_toggle.setCurrentText('True' if str(data.get('value', 'True')).lower() in ('true','1','yes') else 'False')
             if data.get('type') == 'Variable':
                 var_editor.setText(data.get('variable', ''))
                 op_selector.setCurrentText(data.get('operator', '=='))
@@ -735,6 +1021,33 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
                 game_time_op_selector.setCurrentText(data.get('operator', 'Before'))
                 game_time_type_selector.setCurrentText(data.get('time_type', 'Minute'))
                 game_time_value_spinner.setValue(data.get('value', 0))
+            if data.get('type') == 'Post Dialogue':
+                print(f"[DEBUG] Loading Post Dialogue condition with data: {data}")
+                post_type = data.get('post_type', 'Player Post')
+                operator = data.get('operator', 'Is')
+                dialogue_amount = data.get('dialogue_amount', 'All Dialogue')
+                
+                post_player_radio = row_widget.findChild(QRadioButton, "PostDialoguePlayerPostRadio")
+                post_current_radio = row_widget.findChild(QRadioButton, "PostDialogueCurrentPostRadio")
+                operator_is_radio = row_widget.findChild(QRadioButton, "PostDialogueIsRadio")
+                operator_not_radio = row_widget.findChild(QRadioButton, "PostDialogueNotRadio")
+                dialogue_all_radio = row_widget.findChild(QRadioButton, "PostDialogueAllRadio")
+                dialogue_some_radio = row_widget.findChild(QRadioButton, "PostDialogueSomeRadio")
+                dialogue_none_radio = row_widget.findChild(QRadioButton, "PostDialogueNoneRadio")
+                
+                if post_player_radio and post_current_radio:
+                    post_player_radio.setChecked(post_type == 'Player Post')
+                    post_current_radio.setChecked(post_type == 'Current Post')
+                
+                if operator_is_radio and operator_not_radio:
+                    operator_is_radio.setChecked(operator == 'Is')
+                    operator_not_radio.setChecked(operator == 'Not')
+                    print(f"[DEBUG] Loading Post Dialogue operator: '{operator}' -> Is={operator_is_radio.isChecked()}, Not={operator_not_radio.isChecked()}")
+                
+                if dialogue_all_radio and dialogue_some_radio and dialogue_none_radio:
+                    dialogue_all_radio.setChecked(dialogue_amount == 'All Dialogue')
+                    dialogue_some_radio.setChecked(dialogue_amount == 'Some Dialogue')
+                    dialogue_none_radio.setChecked(dialogue_amount == 'No Dialogue')
         row = {
             'widget': row_widget,
             'label': label,
@@ -757,6 +1070,16 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
             'scope_setting_radio': scope_setting_radio,
             'geography_widget': geography_widget,
             'geography_editor': geography_editor,
+            'post_dialogue_widget': post_dialogue_widget,
+            'is_exterior_widget': is_exterior_widget,
+            'is_exterior_toggle': is_exterior_toggle,
+            'post_player_radio': post_player_radio,
+            'post_current_radio': post_current_radio,
+            'operator_is_radio': operator_is_radio,
+            'operator_not_radio': operator_not_radio,
+            'dialogue_all_radio': dialogue_all_radio,
+            'dialogue_some_radio': dialogue_some_radio,
+            'dialogue_none_radio': dialogue_none_radio,
             'update_row_widgets_func': update_row_widgets
         }
         condition_rows.append(row)
@@ -819,6 +1142,45 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
     scope_layout.addWidget(llm_reply_radio)
     scope_layout.addWidget(convo_llm_reply_radio)
     rule_details_layout.addLayout(scope_layout)
+    
+    def update_post_dialogue_conditions():
+        """Update all Post Dialogue condition widgets when scope changes"""
+        conditions_widget = tab_content_widget.findChild(QWidget, "ConditionsWidget")
+        if conditions_widget:
+            for i in range(conditions_widget.layout().count()):
+                condition_row = conditions_widget.layout().itemAt(i).widget()
+                if condition_row:
+                    selector = condition_row.findChild(QComboBox, "TriggerConditionSelector")
+                    if selector and selector.currentText() == "Post Dialogue":
+                        post_dialogue_widget = condition_row.findChild(QWidget, "PostDialogueWidget")
+                        if post_dialogue_widget:
+                            post_current_radio = post_dialogue_widget.findChild(QRadioButton, "PostDialogueCurrentPostRadio")
+                            post_player_radio = post_dialogue_widget.findChild(QRadioButton, "PostDialoguePlayerPostRadio")
+                            if post_current_radio and post_player_radio:
+                                rule_scope = "user_message"
+                                llm_reply_scope_radio = tab_content_widget.findChild(QRadioButton, "LLMReplyRadio")
+                                convo_llm_reply_scope_radio = tab_content_widget.findChild(QRadioButton, "ConvoLLMReplyRadio")
+                                if llm_reply_scope_radio and llm_reply_scope_radio.isChecked():
+                                    rule_scope = "llm_reply"
+                                elif convo_llm_reply_scope_radio and convo_llm_reply_scope_radio.isChecked():
+                                    rule_scope = "conversation_plus_llm_reply"
+                                can_use_current_post = rule_scope in ["llm_reply", "conversation_plus_llm_reply"]
+                                post_current_radio.setEnabled(can_use_current_post)
+                                if not can_use_current_post and post_current_radio.isChecked():
+                                    post_player_radio.setChecked(True)
+                                print(f"[DEBUG] Post Dialogue: scope={rule_scope}, can_use_current_post={can_use_current_post}, enabled={post_current_radio.isEnabled()}")
+    
+    last_exchange_radio.toggled.connect(update_post_dialogue_conditions)
+    full_convo_radio.toggled.connect(update_post_dialogue_conditions)
+    user_message_radio.toggled.connect(update_post_dialogue_conditions)
+    llm_reply_radio.toggled.connect(update_post_dialogue_conditions)
+    convo_llm_reply_radio.toggled.connect(update_post_dialogue_conditions)
+    
+    def initial_update_post_dialogue():
+        QTimer.singleShot(100, update_post_dialogue_conditions)
+    
+    QTimer.singleShot(500, initial_update_post_dialogue)
+    
     condition_editor = QTextEdit()
     condition_editor.setObjectName("ConditionEditor")
     condition_editor.setFont(QFont('Consolas', 10))
@@ -1124,12 +1486,19 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
     rules_list.setProperty("tab_index", actual_index)
     rules = []
     crt_overlay = CRTEffectOverlay(tab_content_widget, border_color=tab_settings["base_color"])
+    scene_fade_overlay = SceneFadeOverlay(tab_content_widget)
+    scene_fade_overlay.resize(tab_content_widget.size())
+    scene_fade_overlay.hide()
     crt_overlay.resize(tab_content_widget.size())
     crt_overlay.raise_()
     initial_crt_enabled = tab_settings.get("crt_enabled", True)
     initial_crt_speed = tab_settings.get("crt_speed", 160)
     crt_overlay.setVisible(initial_crt_enabled)
-    crt_overlay.setInterval(initial_crt_speed)
+    try:
+        if hasattr(crt_overlay, 'setInterval'):
+            crt_overlay.setInterval(initial_crt_speed)
+    except Exception:
+        pass
     original_resizeEvent = tab_content_widget.resizeEvent
     
     def patched_resizeEvent(event):
@@ -1137,6 +1506,11 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         try:
             if crt_overlay and tab_content_widget and crt_overlay.isVisible():
                 _update_crt_overlay_size()
+            if scene_fade_overlay and tab_content_widget and scene_fade_overlay.isVisible():
+                try:
+                    scene_fade_overlay.ensure_size()
+                except Exception:
+                    pass
         except Exception as e:
             print(f"Error in CRT overlay resize: {e}")
     
@@ -1147,6 +1521,11 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
                 if current_size.width() > 0 and current_size.height() > 0:
                     crt_overlay.resize(current_size)
                     crt_overlay.raise_()
+            if scene_fade_overlay and tab_content_widget and scene_fade_overlay.isVisible():
+                try:
+                    scene_fade_overlay.ensure_size()
+                except Exception:
+                    pass
         except Exception as e:
             print(f"Error updating CRT overlay size: {e}")
     tab_content_widget.resizeEvent = patched_resizeEvent
@@ -1157,12 +1536,18 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         try:
             if crt_overlay and tab_content_widget and crt_overlay.isVisible():
                 _update_crt_overlay_size()
+            if scene_fade_overlay and tab_content_widget and scene_fade_overlay.isVisible():
+                try:
+                    scene_fade_overlay.ensure_size()
+                except Exception:
+                    pass
         except Exception as e:
             print(f"Error in main splitter CRT overlay resize: {e}")
     main_splitter.resizeEvent = main_splitter_patched_resizeEvent
     tab_data = {
         'widget': tab_content_widget,
         'crt_overlay': crt_overlay,
+            'scene_fade_overlay': scene_fade_overlay,
         'content_widget': tab_content_widget,
         'splitter': main_splitter,
         'vertical_splitter': center_vertical_splitter,
@@ -1182,6 +1567,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         'rules_list': rules_list,
         'rules_toggle_manager': rules_toggle_manager,
         'timer_rules_widget': rules_toggle_manager.get_timer_rules_widget(),
+        'debug_rules_widget': rules_toggle_manager.get_debug_rules_widget(),
         'name': tab_name,
         'purpose': purpose or "",
         'meta_strategies': [],
@@ -1317,12 +1703,24 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
              tab_data['thought_rules'] = loaded_rules
              if hasattr(self, '_update_rules_display') and 'rules_list' in locals():
                  self._update_rules_display(loaded_rules, rules_list)
+             try:
+                 dbg_widget = tab_data.get('debug_rules_widget')
+                 if dbg_widget and hasattr(dbg_widget, 'set_rules'):
+                     dbg_widget.set_rules(loaded_rules)
+             except Exception:
+                 pass
     else:
          if 'tab_data' in locals() and isinstance(tab_data, dict):
               tab_data['thought_rules'] = []
     timer_rules = _load_timer_rules(self, actual_index)
     if timer_rules and tab_data['timer_rules_widget']:
         tab_data['timer_rules_widget'].load_timer_rules(timer_rules)
+    try:
+        dbg_widget = tab_data.get('debug_rules_widget')
+        if dbg_widget and hasattr(dbg_widget, 'set_rules'):
+            dbg_widget.set_rules(tab_data.get('thought_rules', []))
+    except Exception:
+        pass
     add_pair_button.clicked.connect(lambda checked=False, t_data=tab_data: add_new_pair(t_data, t_data['pairs_layout'], True))
     add_new_pair(tab_data, tab_data['pairs_layout'], True)
     add_rule_button.clicked.connect(lambda checked=False, idx=actual_index: _add_rule(

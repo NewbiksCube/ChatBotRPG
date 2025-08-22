@@ -260,7 +260,6 @@ def _start_npc_inference_threads(self):
             return
         final_npcs_to_infer_after_rules = []
         npcs_in_scene_filtered = [char for char in npcs_in_scene if isinstance(char, str)]
-        print(f"[DEBUG] npcs_in_scene_filtered: {npcs_in_scene_filtered}")
         for char_index, char in enumerate(sorted(npcs_in_scene_filtered)):
             character_system_context = self.get_character_system_context()
             if character_system_context:
@@ -300,8 +299,8 @@ def _start_npc_inference_threads(self):
             if npc_file_path:
                 npc_data = _load_json_safely(npc_file_path)
                 if npc_data:
-                    fields_to_exclude = ['isPlayer', 'npc_notes', 'memory_summary']
-                    filtered_npc_data = {k: v for k, v in npc_data.items() if k not in fields_to_exclude}
+                    relevant_fields = ['name', 'description', 'personality', 'appearance', 'goals', 'story', 'equipment', 'left_hand_holding', 'right_hand_holding']
+                    filtered_npc_data = {k: v for k, v in npc_data.items() if k in relevant_fields and v}
                     char_sheet_content = json.dumps(filtered_npc_data, indent=2)
                     char_sheet_str = f"Your character sheet (JSON format):\n```json\n{char_sheet_content}\n```"
             setting_desc = setting_data.get('description', '').strip() if setting_data else ''
@@ -311,7 +310,7 @@ def _start_npc_inference_threads(self):
                 conn_lines = [f"- {name}: {desc}" if desc else f"- {name}" for name, desc in connections_dict.items()]
                 if conn_lines:
                     setting_connections = "\nWays into and out of this scene and into other scenes are:\n" + "\n".join(conn_lines)
-            model_to_use = self.tabs_data[current_tab_index]['settings'].get('cot_model', get_default_cot_model())
+            model_to_use = self.tabs_data[current_tab_index]['settings'].get('model', get_default_model())
             context_modifications = []
             tag_for_this_npc = None
             if character_rules_all:
@@ -330,7 +329,6 @@ def _start_npc_inference_threads(self):
                     else:
                         structured_conditions_met = True
                     if not structured_conditions_met:
-                        print(f"    Rule '{rule_id}' structured conditions FAILED for '{char}'. Skipping.")
                         continue
                     llm_condition_met = True
                     tag_action_pairs = char_rule.get('tag_action_pairs', [])
@@ -362,6 +360,10 @@ def _start_npc_inference_threads(self):
                                 target_msg_for_llm = f"Assistant: {last_asst_msg}\nUser: {last_user_msg}"
                             else:
                                 target_msg_for_llm = last_user_msg
+                            try:
+                                print(f"    [RULE DEBUG] Text evaluated for '{rule_id}' (scope={rule_scope}):\n{target_msg_for_llm}")
+                            except Exception:
+                                pass
                             if not is_scope_valid:
                                 llm_condition_met = False
                             else:
@@ -379,6 +381,10 @@ def _start_npc_inference_threads(self):
                                 model_for_check = rule_model if rule_model else self.get_current_cot_model()
                                 llm_result_text = self.run_utility_inference_sync(cot_context, model_for_check, 50)
                                 llm_result_text_stripped = llm_result_text.strip() if llm_result_text else ""
+                                try:
+                                    print(f"    [RULE DEBUG] LLM reply for '{rule_id}': '{llm_result_text_stripped}'")
+                                except Exception:
+                                    pass
                                 if llm_result_text is None:
                                     llm_condition_met = False
                                 else:
@@ -400,22 +406,30 @@ def _start_npc_inference_threads(self):
                                                 matched_pair_data = pair_data
                                                 print(f"    ✓ Rule '{rule_id}' TEXT condition met (Starts With: '{tag}') for '{char}'.")
                                                 break
-                                        elif tag.lower() in llm_result_text_stripped.lower():
+                                        elif llm_result_text_stripped.lower().startswith(f"[{tag.lower()}]"):
                                                 llm_condition_met = True
                                                 matched_pair_data = pair_data
-                                                print(f"    ✓ Rule '{rule_id}' TEXT condition met (Contains: '{tag}') for '{char}'.")
+                                                print(f"    ✓ Rule '{rule_id}' TEXT condition met (Starts with tag: '{tag}') for '{char}'.")
                                                 break
                                     if not llm_condition_met:
-                                        print(f"    ✗ Rule '{rule_id}' TEXT condition FAILED for '{char}' (LLM Result: '{llm_result_text_stripped}').")
+                                        available_tags = [p.get('tag', '').strip() for p in tag_action_pairs if p.get('tag', '').strip()]
+                                        print(f"    ✗ Rule '{rule_id}' TEXT condition FAILED for '{char}'.")
+                                        print(f"      LLM Result: '{llm_result_text_stripped[:200]}{'...' if len(llm_result_text_stripped) > 200 else ''}'")
+                                        print(f"      Available tags: {available_tags}")
                     elif not text_condition:
                             for pair_data in tag_action_pairs:
                                 if not pair_data.get('tag', '').strip():
                                     matched_pair_data = pair_data
-                                    print(f"    ✓ Rule '{rule_id}' activated via empty tag for '{char}'.")
                                     break
                             if not matched_pair_data:
                                 llm_condition_met = False
                     if llm_condition_met and matched_pair_data:
+                        try:
+                            dbg_widget = tab_data.get('debug_rules_widget')
+                            if dbg_widget and hasattr(dbg_widget, 'on_rule_answer'):
+                                dbg_widget.on_rule_answer(char_rule, llm_result_text_stripped if 'llm_result_text_stripped' in locals() else '', matched_pair_data.get('tag'))
+                        except Exception:
+                            pass
                         actions = matched_pair_data.get('actions', [])
                         for action_obj in actions:
                             action_type = action_obj.get('type')
@@ -639,7 +653,7 @@ def _start_next_npc_inference(self):
     if timer_final_instruction:
         context.append({"role": "user", "content": f"({timer_final_instruction})"})
     if character:
-        print(f"[INFO] Starting inference for '{character}' with tag '{tag}'")
+        pass
     else:
         print("[ERROR] Missing character in _start_next_npc_inference.")
         return
@@ -647,6 +661,11 @@ def _start_next_npc_inference(self):
         print("[ERROR] Missing context in _start_next_npc_inference.")
         return
     self._npc_inference_in_progress = True
+
+    self._current_npc_context = context.copy()
+    self._current_npc_model = model
+
+    
     from chatBotRPG import InferenceThread
     thread = InferenceThread(
         context,
@@ -658,6 +677,12 @@ def _start_next_npc_inference(self):
 
     def create_npc_result_handler(character_name, tag_to_use):
         def handler(msg):
+
+            if isinstance(msg, str) and any(msg.strip().lower().startswith(failure_start) for failure_start in ['i\'m', 'sorry', 'ext']):
+                print(f"[FALLBACK] Detected failure response '{msg}' for {character_name}, retrying with fallback models...")
+                _retry_npc_inference_with_fallback(self, character_name, tag_to_use)
+                return
+            
             actual_character_name = get_actual_character_name(self, character_name)
             if actual_character_name and isinstance(msg, str):
                 prefix = f"{actual_character_name}:"
@@ -667,15 +692,52 @@ def _start_next_npc_inference(self):
                 msg = re.sub(r'<think>[\s\S]*?</think>', '', msg, flags=re.IGNORECASE).strip()
             tab_data = self.get_current_tab_data()
             has_llm_reply_rules = False
+            print(f"[NPC INFERENCE] Checking for LLM reply rules for character: '{actual_character_name}'")
             if tab_data and 'thought_rules' in tab_data:
                 for rule in tab_data.get('thought_rules', []):
-                    if (rule.get('applies_to') == 'Character' and 
-                        rule.get('scope') in ['llm_reply', 'convo_llm_reply'] and
-                        (rule.get('character_name', '').lower() == actual_character_name.lower() or 
-                         rule.get('character_name') in ['unknown', '', None])):
+                    rule_applies_to = rule.get('applies_to')
+                    rule_scope = rule.get('scope')
+                    rule_character_name = rule.get('character_name', '')
+                    print(f"[NPC INFERENCE] Rule check: applies_to='{rule_applies_to}', scope='{rule_scope}', character_name='{rule_character_name}'")
+                    if (rule_applies_to == 'Character' and 
+                        rule_scope in ['llm_reply', 'convo_llm_reply'] and
+                        (rule_character_name is None or 
+                         rule_character_name == '' or 
+                         rule_character_name == 'unknown' or 
+                         rule_character_name == 'None' or
+                         (rule_character_name and actual_character_name and rule_character_name.lower() == actual_character_name.lower()))):
                         has_llm_reply_rules = True
+                        print(f"[NPC INFERENCE] Found matching rule for character '{actual_character_name}'")
                         break
+            try:
+                is_duplicate = False
+                if tab_data and isinstance(msg, str):
+                    ctx = tab_data.get('context', []) or []
+                    candidate = msg.strip()
+                    for m in ctx:
+                        try:
+                            if m.get('role') == 'assistant':
+                                prev = str(m.get('content', '')).strip()
+                                if prev == candidate:
+                                    is_duplicate = True
+                                    break
+                        except Exception:
+                            continue
+                if is_duplicate:
+                    if not hasattr(self, '_npc_dedupe_retry_done'):
+                        self._npc_dedupe_retry_done = set()
+                    if actual_character_name not in self._npc_dedupe_retry_done:
+                        self._npc_dedupe_retry_done.add(actual_character_name)
+                        print(f"[DEDUPE] NPC post for '{actual_character_name}' duplicates a previous post. Retrying with fallback models...")
+                        _retry_npc_inference_with_fallback(self, actual_character_name, tag_to_use)
+                        return
+                    else:
+                        print(f"[DEDUPE] Duplicate detected for '{actual_character_name}', but fallback already attempted. Proceeding.")
+            except Exception:
+                pass
+
             if has_llm_reply_rules:
+                print(f"[NPC INFERENCE] Processing LLM reply rules for character '{actual_character_name}'")
                 _process_character_llm_reply_rules(self, actual_character_name, msg, tag_to_use)
             else:
                 character_text_tag = None
@@ -695,6 +757,109 @@ def _start_next_npc_inference(self):
     thread.finished.connect(on_npc_thread_finished)
     self.npc_inference_threads.append(thread)
     QTimer.singleShot(0, lambda t=thread: t.start())
+
+def _retry_npc_inference_with_fallback(self, character_name, tag_to_use):
+    """Retry NPC inference with fallback models when primary model fails"""
+    try:
+        tab_data = self.get_current_tab_data()
+        if not tab_data:
+            print(f"[FALLBACK] No tab data available for {character_name}")
+            return
+        if not hasattr(self, '_current_npc_context') or not self._current_npc_context:
+            print(f"[FALLBACK] No current NPC context stored for {character_name}")
+            return
+        original_context = self._current_npc_context
+        original_model = getattr(self, '_current_npc_model', 'Unknown')
+        from chatBotRPG import FALLBACK_MODEL_1, FALLBACK_MODEL_2, FALLBACK_MODEL_3
+        fallback_models = [FALLBACK_MODEL_1, FALLBACK_MODEL_2, FALLBACK_MODEL_3]
+        for i, fallback_model in enumerate(fallback_models):
+            print(f"[FALLBACK] Attempting fallback model {i+1}: {fallback_model}")
+            
+            try:
+                from chatBotRPG import InferenceThread
+                fallback_thread = InferenceThread(
+                    original_context,
+                    character_name,
+                    fallback_model,
+                    self.max_tokens,
+                    self.get_current_temperature()
+                )
+                
+                def create_fallback_result_handler(fallback_char_name, fallback_tag, fallback_model_name):
+                    def fallback_handler(msg):
+                        if isinstance(msg, str) and any(msg.strip().lower().startswith(failure_start) for failure_start in ['i\'m', 'sorry', 'ext']):
+                            print(f"[FALLBACK] Fallback model {fallback_model_name} also failed for {fallback_char_name}")
+                            if i < len(fallback_models) - 1:
+                                print(f"[FALLBACK] Will try next fallback model...")
+                                return
+                            else:
+                                print(f"[FALLBACK] All fallback models failed for {fallback_char_name}")
+                                error_msg = f"{fallback_char_name} seems to be having trouble responding right now."
+                                _queue_npc_message(self, error_msg, fallback_char_name, fallback_tag, {})
+                                return
+                        actual_character_name = fallback_char_name
+                        if actual_character_name and isinstance(msg, str):
+                            prefix = f"{actual_character_name}:"
+                            if msg.strip().startswith(prefix):
+                                msg = msg.strip()[len(prefix):].lstrip()
+                        if isinstance(msg, str):
+                            msg = re.sub(r'<think>[\s\S]*?</think>', '', msg, flags=re.IGNORECASE).strip()
+                        
+                        tab_data = self.get_current_tab_data()
+                        has_llm_reply_rules = False
+                        print(f"[FALLBACK] Checking for LLM reply rules for character: '{actual_character_name}'")
+                        if tab_data and 'thought_rules' in tab_data:
+                            for rule in tab_data.get('thought_rules', []):
+                                rule_applies_to = rule.get('applies_to')
+                                rule_scope = rule.get('scope')
+                                rule_character_name = rule.get('character_name', '')
+                                print(f"[FALLBACK] Rule check: applies_to='{rule_applies_to}', scope='{rule_scope}', character_name='{rule_character_name}'")
+                                if (rule_applies_to == 'Character' and 
+                                    rule_scope in ['llm_reply', 'convo_llm_reply'] and
+                                    (rule_character_name is None or 
+                                     rule_character_name == '' or 
+                                     rule_character_name == 'unknown' or 
+                                     rule_character_name == 'None' or
+                                     (rule_character_name and actual_character_name and rule_character_name.lower() == actual_character_name.lower()))):
+                                    has_llm_reply_rules = True
+                                    print(f"[FALLBACK] Found matching rule for character '{actual_character_name}'")
+                                    break
+                        
+                        if has_llm_reply_rules:
+                            print(f"[FALLBACK] Processing LLM reply rules for character '{actual_character_name}'")
+                            _process_character_llm_reply_rules(self, actual_character_name, msg, fallback_tag)
+                        else:
+                            character_text_tag = None
+                            if hasattr(self, '_character_tags') and actual_character_name in self._character_tags:
+                                character_text_tag = self._character_tags[actual_character_name]
+                                print(f"[FALLBACK] Found character text tag for {actual_character_name}: '{character_text_tag}'")
+                            _generate_and_save_npc_note(self, actual_character_name, msg)
+                            character_post_effects = _get_character_post_effects(self, actual_character_name)
+                            _queue_npc_message(self, msg, actual_character_name, character_text_tag or fallback_tag, character_post_effects)
+                    
+                    return fallback_handler
+                
+                fallback_result_handler = create_fallback_result_handler(character_name, tag_to_use, fallback_model)
+                fallback_thread.result_signal.connect(fallback_result_handler)
+                fallback_thread.error_signal.connect(lambda err, c=character_name: print(f"[FALLBACK ERROR] for character {c}: {err}"))
+                
+                def on_fallback_thread_finished():
+                    _on_npc_inference_finished(self)
+                    self._npc_inference_in_progress = False
+                
+                fallback_thread.finished.connect(on_fallback_thread_finished)
+                self.npc_inference_threads.append(fallback_thread)
+                QTimer.singleShot(0, lambda t=fallback_thread: t.start())
+                print(f"[FALLBACK] Started fallback inference for {character_name} using {fallback_model}")
+                return
+            except Exception as e:
+                print(f"[FALLBACK] Error starting fallback model {fallback_model}: {e}")
+                continue
+        print(f"[FALLBACK] All fallback attempts failed for {character_name}")
+    except Exception as e:
+        print(f"[FALLBACK] Error in fallback retry for {character_name}: {e}")
+        import traceback
+        traceback.print_exc()
 
 def get_actual_character_name(self, name_or_filename):
     if not hasattr(self, '_actor_name_to_actual_name'):
@@ -1046,16 +1211,12 @@ def _should_suppress_narrator(self, tab_data=None):
         if tab_data.get('_fn_last_npc_turn_done', False):
             return False
     characters_in_scene = self.get_character_names_in_scene_for_timers(tab_data)
-    print(f"[SUPPRESS DEBUG] Characters in scene: {characters_in_scene}")
-    print(f"[SUPPRESS DEBUG] Has narrator posted this scene: {tab_data.get('_has_narrator_posted_this_scene', False)}")
     if characters_in_scene:
         has_narrator_posted_this_scene = tab_data.get('_has_narrator_posted_this_scene', False)
         if not has_narrator_posted_this_scene:
             tab_data['_temp_is_first_npc_scene_post'] = True 
-            print(f"[SUPPRESS DEBUG] Returning False (narrator should post)")
             return False
         else:
-            print(f"[SUPPRESS DEBUG] Returning True (narrator suppressed - already posted)")
             return True
     if hasattr(self, '_npc_message_queue') and self._npc_message_queue:
         return True
@@ -1184,11 +1345,16 @@ def _process_character_llm_reply_rules(self, character_name, character_message, 
         for rule in all_rules:
             applies_to_match = rule.get('applies_to') == 'Character'
             scope_match = rule.get('scope') in ['llm_reply', 'convo_llm_reply']
-            rule_character_name = rule.get('character_name', '')
-            character_match = (rule_character_name.lower() == character_name.lower() or 
-                             rule_character_name == 'unknown' or 
-                             rule_character_name == '' or 
-                             rule_character_name is None)
+            rule_character_name_value = rule.get('character_name')
+            rule_character_name_lower = None
+            if isinstance(rule_character_name_value, str):
+                rule_character_name_lower = rule_character_name_value.strip().lower()
+            character_name_lower = character_name.strip().lower() if isinstance(character_name, str) else None
+            character_match = (
+                rule_character_name_value is None or
+                (rule_character_name_lower in ['', 'unknown', 'none']) or
+                (rule_character_name_lower is not None and character_name_lower is not None and rule_character_name_lower == character_name_lower)
+            )
             if applies_to_match and scope_match and character_match:
                 character_llm_reply_rules.append(rule)
         if not character_llm_reply_rules:
@@ -1280,6 +1446,7 @@ def _finalize_character_message(self, character_name, final_message, tag_to_use)
                 self._character_tags.pop(character_name, None)
             return
         final_tag = self._character_tags.get(character_name, tag_to_use)
+        self._current_llm_reply = final_message
         _generate_and_save_npc_note(self, character_name, final_message)
         character_post_effects = _get_character_post_effects(self, character_name)
         _queue_npc_message(self, final_message, character_name, final_tag, character_post_effects)

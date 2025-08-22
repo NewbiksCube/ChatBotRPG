@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QScrollArea, QFrame, QSizePolicy, QPushButton
 from PyQt5.QtCore import Qt, QTimer, QEvent, pyqtSignal
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QFont, QColor, QPixmap, QPainter, QImage, QPainterPath
 import pygame
 import re
 import os
@@ -470,7 +470,7 @@ class ChatMessageListWidget(QScrollArea):
                     pass
         except Exception as e:
             pass
-    def add_message(self, role, content, immediate=False, text_tag=None, scene_number=1, latest_scene_in_context=1, prompt_finished_callback=None, character_name=None, post_effects=None):
+    def add_message(self, role, content, immediate=False, text_tag=None, scene_number=1, latest_scene_in_context=1, prompt_finished_callback=None, character_name=None, post_effects=None, portrait_data=None):
         if not self._event_filter_installed:
             self.viewport().installEventFilter(self)
             self.container.installEventFilter(self)
@@ -482,7 +482,8 @@ class ChatMessageListWidget(QScrollArea):
             message_scene=scene_number, latest_scene_in_context=latest_scene_in_context,
             parent=self.container,
             prompt_finished_callback=prompt_finished_callback,
-            post_effects=post_effects
+            post_effects=post_effects,
+            portrait_data=portrait_data
         )
         self.layout.addWidget(msg_widget)
         msg_widget.set_message_content(immediate=immediate)
@@ -571,7 +572,7 @@ class ChatMessageListWidget(QScrollArea):
 class ChatMessageWidget(QFrame):
     _selected_widget = None
 
-    def __init__(self, role, content, theme_colors, character_name="Assistant", text_tag=None, message_scene=1, latest_scene_in_context=1, parent=None, prompt_finished_callback=None, post_effects=None):
+    def __init__(self, role, content, theme_colors, character_name="Assistant", text_tag=None, message_scene=1, latest_scene_in_context=1, parent=None, prompt_finished_callback=None, post_effects=None, portrait_data=None):
         super().__init__(parent)
         self.role = role
         self.content = content
@@ -585,6 +586,7 @@ class ChatMessageWidget(QFrame):
         self._prompt_finished_callback = prompt_finished_callback
         self.post_effects = post_effects or {}
         self.theme_colors = self._get_colors_with_effects()
+        self.portrait_data = portrait_data
         self.setFrameShape(QFrame.StyledPanel)
         self.setFrameShadow(QFrame.Raised)
         self.setObjectName("ChatMessageWidget")
@@ -709,18 +711,88 @@ class ChatMessageWidget(QFrame):
         return colors
 
     def _init_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(1)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(1)
+        content_layout = QHBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(15)
+        self.portrait_label = QLabel()
+        self.portrait_label.setObjectName("ChatPortraitLabel")
+        self.portrait_label.setScaledContents(False)
+        self.portrait_label.setAlignment(Qt.AlignCenter)
+        self.portrait_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.portrait_label.setStyleSheet("background: transparent; padding: 2px; border-radius: 10px;")
+        self.portrait_label.setVisible(False)
+        content_layout.addWidget(self.portrait_label)
         self.label = ClickableLabel()
         self.label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.label.setWordWrap(True)
         self.label.setOpenExternalLinks(True)
         self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.label.setStyleSheet("background: transparent; padding: 5px;")
-        layout.addWidget(self.label)
-        self.setLayout(layout)
+        content_layout.addWidget(self.label)
+        main_layout.addLayout(content_layout)
+        self.setLayout(main_layout)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        self._init_portrait()
+    
+    def _init_portrait(self):
+        if not self.portrait_data or self.role != 'assistant':
+            return
+        portrait_path = self.portrait_data.get('path')
+        if not portrait_path or not os.path.exists(portrait_path):
+            return
+        pixmap = QPixmap(portrait_path)
+        if pixmap.isNull():
+            return
+        base_color = self.theme_colors.get("base_color", "#00ff66")
+        tint_color = QColor(base_color)
+        tinted_pixmap = self._apply_tint_to_portrait(pixmap, tint_color)
+        portrait_offset = self.portrait_data.get('offset', [0, 0])
+        portrait_scale = self.portrait_data.get('scale', 1.0)
+        portrait_width = 96
+        portrait_height = 128
+        scale_factor = portrait_width / 150.0
+        scaled_size = tinted_pixmap.size() * portrait_scale * scale_factor
+        scaled_pixmap = tinted_pixmap.scaled(
+            scaled_size.width(), scaled_size.height(),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
+        canvas = QPixmap(portrait_width, portrait_height)
+        canvas.fill(Qt.transparent)
+        rounded_canvas = QPixmap(portrait_width, portrait_height)
+        rounded_canvas.fill(Qt.transparent)
+        painter = QPainter(rounded_canvas)
+        painter.setRenderHint(QPainter.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, portrait_width, portrait_height, 10, 10)
+        painter.setClipPath(path)
+        painter.fillRect(0, 0, portrait_width, portrait_height, QColor(18, 18, 18))
+        x_offset = int(portrait_offset[0] * scale_factor)
+        y_offset = int(portrait_offset[1] * scale_factor)
+        painter.drawPixmap(x_offset, y_offset, scaled_pixmap)
+        painter.end()
+        canvas = rounded_canvas
+        self.portrait_label.setPixmap(canvas)
+        self.portrait_label.setFixedSize(portrait_width, portrait_height)
+        self.portrait_label.setMinimumSize(portrait_width, portrait_height)
+        self.portrait_label.setMaximumSize(portrait_width, portrait_height)
+        self.portrait_label.setVisible(True)
+    
+    def _apply_tint_to_portrait(self, original_pixmap, tint_color):
+        if original_pixmap is None or original_pixmap.isNull():
+            return original_pixmap
+        original_image = original_pixmap.toImage()
+        grayscale_image = original_image.convertToFormat(QImage.Format_Grayscale8)
+        effect_image = QImage(grayscale_image.size(), QImage.Format_ARGB32_Premultiplied)
+        painter = QPainter(effect_image)
+        painter.drawImage(0, 0, grayscale_image)
+        painter.setCompositionMode(QPainter.CompositionMode_Multiply)
+        painter.fillRect(effect_image.rect(), tint_color)
+        painter.end()
+        return QPixmap.fromImage(effect_image)
 
     def _render_content(self):
         if self.role == 'intro':
@@ -1091,6 +1163,8 @@ class ChatMessageWidget(QFrame):
         if self._selected:
             self.setStyleSheet(self._selected_style())
         self._render_content()
+        # Re-initialize portrait with new theme colors
+        self._init_portrait()
 
     def _tokenize_html(self, html_string):
         if not html_string:

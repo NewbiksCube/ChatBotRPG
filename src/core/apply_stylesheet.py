@@ -458,6 +458,72 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
         background: none;
     }}
     
+    /* Debug Panel Divider */
+    QFrame#DebugDivider {{
+        background-color: {base_color};
+        border: none;
+        min-height: 1px;
+        max-height: 1px;
+    }}
+    
+    /* Debug Lists */
+    QListWidget#DebugRulesList, QListWidget#DebugPostsList {{
+        background-color: {darker_bg};
+        color: {base_color};
+        border: 1px solid {base_color};
+        font: 8pt "Consolas";
+        padding: 3px;
+        alternate-background-color: {bg_color};
+        border-radius: 3px;
+        outline: 0;
+    }}
+    QListWidget#DebugRulesList::item:selected, QListWidget#DebugPostsList::item:selected {{
+        background-color: {highlight};
+        color: white;
+    }}
+    QListWidget#DebugRulesList::item:hover, QListWidget#DebugPostsList::item:hover {{
+        background-color: {highlight};
+        color: white;
+    }}
+    
+    /* Debug right side small text */
+    QLabel#DebugDescriptionLabel {{
+        color: {base_color};
+        font: 9pt "Consolas";
+    }}
+    QLabel#DebugPostLabel {{
+        color: {base_color};
+        font: 9pt "Consolas";
+    }}
+    QLabel#DebugSectionTitle {{
+        color: {base_color};
+        font: bold 10pt "Consolas";
+    }}
+    QLabel#DebugFieldLabel {{
+        color: {base_color};
+        font: italic 9pt "Consolas";
+    }}
+    QLabel#DebugFieldValue {{
+        color: {base_color};
+        font: 9pt "Consolas";
+    }}
+    QTextEdit#DebugAnswerBox {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        font: 9pt "Consolas";
+        padding: 6px;
+    }}
+    QLabel#DebugTagBadge {{
+        color: {darker_bg};
+        background-color: {base_color};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 2px 6px;
+        font: bold 9pt "Consolas";
+    }}
+    
     hr {{
         border: none;
         border-top: 1px solid {highlight}; /* Use highlight for hr */
@@ -1335,6 +1401,19 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
         border: none;
     }}
 
+    /* Actor Manager: Schedule Scroll Area */
+    QScrollArea#ScheduleScrollArea {{
+        background-color: {darker_bg}; /* Match list backgrounds */
+        border: 1px solid {base_color}; /* Use theme border */
+        border-radius: 3px;
+    }}
+
+    /* Actor Manager: Schedule Scroll Area Content Widget */
+    QScrollArea#ScheduleScrollArea > QWidget > QWidget {{
+        background-color: {darker_bg}; /* Ensure content widget matches scroll area bg */
+        border: none;
+    }}
+
     /* Time Manager: Main Scroll Area */
     QScrollArea#TimeManagerScrollArea {{
         background-color: {darker_bg}; /* Match list backgrounds */
@@ -1435,6 +1514,18 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
         border-radius: 3px;
         padding: 3px;
         font: 10pt "Consolas"; /* Match ActorManagerDescInput */
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+
+    /* Actor Manager: Schedule Input Fields */
+    QLineEdit#ActorManagerScheduleTimeInput, QLineEdit#ActorManagerScheduleSettingInput {{
+        color: {base_color};
+        background-color: {darker_bg}; /* Match list background */
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt "Consolas";
         selection-background-color: {highlight};
         selection-color: white;
     }}
@@ -2550,1210 +2641,15 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
         border: none;
     }}
 
-    /* Time Manager: Main Scroll Area */
-    QScrollArea#TimeManagerScrollArea {{
+    /* Actor Manager: Schedule Scroll Area */
+    QScrollArea#ScheduleScrollArea {{
         background-color: {darker_bg}; /* Match list backgrounds */
         border: 1px solid {base_color}; /* Use theme border */
         border-radius: 3px;
     }}
 
-    /* Time Manager: Main Scroll Area Content Widget */
-    QScrollArea#TimeManagerScrollArea > QWidget > QWidget {{
-        background-color: {darker_bg}; /* Ensure content widget matches scroll area bg */
-        border: none;
-    }}
-
-    /* Actor Manager: Inventory Container Border and Background */
-    QWidget#InventoryContainer {{
-        background-color: {darker_bg}; /* Use darker background like lists */
-        border: 1px solid {base_color}; /* Use theme base color for border */
-        border-radius: 3px;
-    }}
-
-    /* NEW: Actor Manager Name/Description Inputs */
-    QLineEdit#ActorManagerNameInput, QTextEdit#ActorManagerDescInput {{
-        color: {base_color};
-        background-color: {darker_bg}; /* Match list background */
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        font: 10pt "Consolas";
-        selection-background-color: {highlight};
-        selection-color: white;
-    }}
-    QLabel#ActorManagerEditLabel {{ /* Label for actor edits */
-        color: {base_color};
-        font: 9pt "Consolas";
-        margin-right: 5px; /* Add some space */
-    }}
-    
-    /* Character Name Input Styling for Rules Manager */
-    QLineEdit#CharacterNameInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        font: 10pt "Consolas";
-        selection-background-color: {highlight};
-        selection-color: white;
-    }}
-    QLabel#CharacterNameLabel {{
-        color: {base_color};
-        font: 12pt "Consolas";
-        background-color: transparent;
-    }}
-    /* END NEW */
-
-    QCheckBox {{
-        color: {base_color};
-        font: 9pt 'Consolas';
-        spacing: 6px;
-    }}
-    QCheckBox::indicator {{
-        width: 16px;
-        height: 16px;
-        border-radius: 3px;
-        background: transparent;
-        border: 1px solid {base_color};
-    }}
-    QCheckBox::indicator:checked {{
-        background-color: {base_color};
-        border: 1px solid {base_color};
-    }}
-    QCheckBox::indicator:unchecked {{
-        background: transparent;
-        border: 1px solid {base_color};
-    }}
-    QCheckBox::indicator:disabled {{
-        background: #333;
-        border: 1.5px solid #444;
-    }}
-
-    /* Style for Optional Model Override Input */
-    QLineEdit#ModelOverrideInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        font: 10pt "Consolas"; /* Match ActorManagerNameInput */
-        selection-background-color: {highlight};
-        selection-color: white;
-    }}
-
-    /* Style for Additional Instructions Input */
-    QTextEdit#AdditionalInstructionsInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        font: 10pt "Consolas"; /* Match ActorManagerDescInput */
-        selection-background-color: {highlight};
-        selection-color: white;
-    }}
-
-    /* Container for Holding/Wearing content with border */
-    QWidget#InventoryContentContainer {{
-        border: 1px solid {base_color}; /* Use theme base color for consistent border */
-        border-radius: 3px;
-        margin-top: 4px; /* Add some space below the Inventory: label */
-    }}
-
-    /* --- NEW: Change Actor Location Action Widgets --- */
-    QWidget#ChangeLocationWidget {{ /* Container for the whole action */
-        background-color: rgba({r}, {g}, {b}, 0.05); /* Subtle tint like PairWidget */
-        border-radius: 3px;
-        padding: 4px;
-        margin-top: 2px;
-        border: 1px solid rgba({r}, {g}, {b}, 0.1); /* Very subtle border */
-    }}
-
-    QComboBox#ChangeLocationActorSelector, QComboBox#ChangeLocationTargetSettingCombo {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        padding: 3px;
-        font: 9pt "Consolas";
-        border-radius: 3px;
-        min-width: 120px;
-    }}
-    QComboBox#ChangeLocationActorSelector::drop-down, QComboBox#ChangeLocationTargetSettingCombo::drop-down {{
-        border: none;
-    }}
-    QComboBox#ChangeLocationActorSelector::down-arrow, QComboBox#ChangeLocationTargetSettingCombo::down-arrow {{
-        image: none;
-    }}
-    QComboBox#ChangeLocationActorSelector QAbstractItemView, QComboBox#ChangeLocationTargetSettingCombo QAbstractItemView {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        selection-background-color: {highlight};
-        selection-color: white;
-    }}
-
-    /* Style the completer popup for Target Setting */
-    QComboBox QAbstractItemView#qt_scrollarea_viewport {{
-        border: 1px solid {base_color};
-        background-color: {darker_bg};
-        color: {base_color};
-        selection-background-color: {highlight};
-        selection-color: white;
-    }}
-
-    QRadioButton#ChangeLocationAdjacentRadio, QRadioButton#ChangeLocationFastTravelRadio, QRadioButton#ChangeLocationSettingRadio {{
-        color: {base_color};
-        font: 9pt "Consolas";
-        spacing: 3px;
-        background-color: transparent;
-    }}
-    QRadioButton#ChangeLocationAdjacentRadio::indicator, QRadioButton#ChangeLocationFastTravelRadio::indicator, QRadioButton#ChangeLocationSettingRadio::indicator {{
-        width: 12px;
-        height: 12px;
-        border-radius: 6px;
-        border: 1px solid {base_color};
-        background-color: {bg_color};
-    }}
-    QRadioButton#ChangeLocationAdjacentRadio::indicator:checked, QRadioButton#ChangeLocationFastTravelRadio::indicator:checked, QRadioButton#ChangeLocationSettingRadio::indicator:checked {{
-        background-color: {highlight};
-        border: 1px solid {brighter};
-    }}
-    QRadioButton#ChangeLocationAdjacentRadio::indicator:hover, QRadioButton#ChangeLocationFastTravelRadio::indicator:hover, QRadioButton#ChangeLocationSettingRadio::indicator:hover {{
-        border: 1px solid {brighter};
-    }}
-    /* --- END NEW --- */
-
-    /* --- NEW: Style for Condition and Action Scope Radio Buttons --- */
-    QRadioButton#ConditionVarScopeGlobalRadio, QRadioButton#ConditionVarScopeCharacterRadio,
-    QRadioButton#ConditionVarScopePlayerRadio,
-    QRadioButton#ConditionVarScopeSettingRadio,
-    QRadioButton#ActionVarScopeGlobalRadio, QRadioButton#ActionVarScopeCharacterRadio, QRadioButton#ActionVarScopePlayerRadio, QRadioButton#ActionVarScopeSceneCharsRadio, QRadioButton#ActionVarScopeSettingRadio {{
-        color: {base_color};
-        font: 9pt "Consolas";
-        spacing: 5px;
-        background-color: transparent;
-    }}
-    QRadioButton#ConditionVarScopeGlobalRadio::indicator, QRadioButton#ConditionVarScopeCharacterRadio::indicator,
-    QRadioButton#ConditionVarScopePlayerRadio::indicator,
-    QRadioButton#ConditionVarScopeSettingRadio::indicator,
-    QRadioButton#ActionVarScopeGlobalRadio::indicator, QRadioButton#ActionVarScopeCharacterRadio::indicator, QRadioButton#ActionVarScopePlayerRadio::indicator, QRadioButton#ActionVarScopeSceneCharsRadio::indicator, QRadioButton#ActionVarScopeSettingRadio::indicator {{
-        width: 13px;
-        height: 13px;
-        border-radius: 6px;
-        border: 1px solid {base_color};
-        background: {bg_color};
-    }}
-    QRadioButton#ConditionVarScopeGlobalRadio::indicator:checked, QRadioButton#ConditionVarScopeCharacterRadio::indicator:checked,
-    QRadioButton#ConditionVarScopePlayerRadio::indicator:checked,
-    QRadioButton#ConditionVarScopeSettingRadio::indicator:checked,
-    QRadioButton#ActionVarScopeGlobalRadio::indicator:checked, QRadioButton#ActionVarScopeCharacterRadio::indicator:checked, QRadioButton#ActionVarScopePlayerRadio::indicator:checked, QRadioButton#ActionVarScopeSceneCharsRadio::indicator:checked, QRadioButton#ActionVarScopeSettingRadio::indicator:checked {{
-        background: {highlight};
-        border: 1px solid {brighter};
-    }}
-    QRadioButton#ConditionVarScopeGlobalRadio::indicator:hover, QRadioButton#ConditionVarScopeCharacterRadio::indicator:hover,
-    QRadioButton#ConditionVarScopePlayerRadio::indicator:hover,
-    QRadioButton#ConditionVarScopeSettingRadio::indicator:hover,
-    QRadioButton#ActionVarScopeGlobalRadio::indicator:hover, QRadioButton#ActionVarScopeCharacterRadio::indicator:hover, QRadioButton#ActionVarScopePlayerRadio::indicator:hover, QRadioButton#ActionVarScopeSceneCharsRadio::indicator:hover, QRadioButton#ActionVarScopeSettingRadio::indicator:hover {{
-        border: 1px solid {brighter};
-        background: transparent;
-    }}
-    /* --- END NEW --- */
-
-    /* --- NEW: Style for Text Tag Mode Radio Buttons --- */
-    QRadioButton#TagOverwriteRadio, QRadioButton#TagAppendRadio, QRadioButton#TagPrependRadio {{
-        color: {base_color};
-        font: 9pt "Consolas";
-        spacing: 5px;
-        background-color: transparent;
-    }}
-    QRadioButton#TagOverwriteRadio::indicator, QRadioButton#TagAppendRadio::indicator, QRadioButton#TagPrependRadio::indicator {{
-        width: 13px;
-        height: 13px;
-        border-radius: 6px;
-        border: 1px solid {base_color};
-        background: {bg_color};
-    }}
-    QRadioButton#TagOverwriteRadio::indicator:checked, QRadioButton#TagAppendRadio::indicator:checked, QRadioButton#TagPrependRadio::indicator:checked {{
-        background: {highlight};
-        border: 1px solid {brighter};
-    }}
-    QRadioButton#TagOverwriteRadio::indicator:hover, QRadioButton#TagAppendRadio::indicator:hover, QRadioButton#TagPrependRadio::indicator:hover {{
-        border: 1px solid {brighter};
-        background: transparent;
-    }}
-    /* --- END NEW --- */
-
-    /* Additional radio buttons that need styling (Keep for others like Prepend/Append/Replace/First/Last) */
-    QRadioButton#PrependRadio, QRadioButton#AppendRadio, QRadioButton#ReplaceRadio, 
-    QRadioButton#FirstSysMsgRadio, QRadioButton#LastSysMsgRadio
-    {{
-        color: {base_color}; /* Ensure color is set */
-        font: 9pt "Consolas"; /* Smaller */
-        spacing: 5px; /* Less spacing */
-        background-color: transparent; /* Ensure no background override */
-    }}
-    QRadioButton#PrependRadio::indicator, QRadioButton#AppendRadio::indicator, QRadioButton#ReplaceRadio::indicator,
-    QRadioButton#FirstSysMsgRadio::indicator, QRadioButton#LastSysMsgRadio::indicator {{
-        width: 13px;
-        height: 13px;
-        border-radius: 6px;
-        border: 1px solid {base_color};
-        background: {bg_color};
-    }}
-    QRadioButton#PrependRadio::indicator:checked, QRadioButton#AppendRadio::indicator:checked, QRadioButton#ReplaceRadio::indicator:checked,
-    QRadioButton#FirstSysMsgRadio::indicator:checked, QRadioButton#LastSysMsgRadio::indicator:checked {{
-        background: {highlight};
-        border: 1px solid {brighter};
-    }}
-    QRadioButton#PrependRadio::indicator:hover, QRadioButton#AppendRadio::indicator:hover, QRadioButton#ReplaceRadio::indicator:hover,
-    QRadioButton#FirstSysMsgRadio::indicator:hover, QRadioButton#LastSysMsgRadio::indicator:hover {{
-        border: 1px solid {brighter};
-    }}
-
-    /* NEW: Actor Manager Variable Name/Value Inputs */
-    QLineEdit#ActorManagerVarNameInput, QLineEdit#ActorManagerVarValueInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        font: 10pt "Consolas";
-        selection-background-color: {highlight};
-        selection-color: white;
-    }}
-    /* Highlight for selected variable row */
-    QWidget.VariableRowSelected {{
-        background-color: {highlight};
-        border-radius: 3px;
-    }}
-
-    /* --- Timer Rules Styling --- */
-    QWidget#TimerRulesContainer {{
-        background-color: {bg_color}; /* Ensure base container has background */
-        color: {base_color};
-    }}
-    
-    QLabel#TimerRulesTitle {{ /* Assuming this exists or might be added later */
-        color: {base_color};
-        font: bold 12pt "Consolas";
-    }}
-    
-    QLabel#TimerRulesDescription {{ /* Assuming this exists or might be added later */
-        color: {base_color};
-        font: 10pt "Consolas";
-    }}
-    
-    QWidget#TimerRulesListControls {{ /* Parent of Rule ID/Desc and filter/list */
-        background-color: {bg_color};
-    }}
-    
-    QLineEdit#TimerRulesFilterInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        selection-background-color: {highlight};
-        selection-color: white;
-        font: 9pt "Consolas";
-    }}
-    
-    QListWidget#TimerRulesList {{
-        background-color: {darker_bg};
-        color: {base_color};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        alternate-background-color: {bg_color};
-        font: 9pt "Consolas";
-    }}
-    QListWidget#TimerRulesList::item:selected {{
-        background-color: {highlight};
-        color: white;
-    }}
-    QListWidget#TimerRulesList::item:hover {{
-        background-color: {highlight};
-        color: white; 
-    }}
-    
-    QPushButton#TimerRuleAddButton, QPushButton#TimerRuleRemoveButton,
-    QPushButton#TimerRuleMoveUpButton, QPushButton#TimerRuleMoveDownButton {{
-        color: {base_color};
-        background-color: {bg_color};
-        border: 1px solid {base_color};
-        border-radius: 2px;
-    }}
-    QPushButton#TimerRuleAddButton:hover, QPushButton#TimerRuleRemoveButton:hover,
-    QPushButton#TimerRuleMoveUpButton:hover, QPushButton#TimerRuleMoveDownButton:hover {{
-        background-color: {highlight};
-        color: white;
-    }}
-    
-    /* Left and Right Panel Base Styling */
-    QWidget#TimerRightPanelWidget,
-    QWidget#TimerLeftPanelWidget {{
-        background-color: {bg_color};
-    }}
-    QScrollArea#TimerRightPanelScroll,
-    QScrollArea#TimerLeftPanelScroll {{
-        background-color: transparent; 
-        border: none;
-    }}
-    QScrollArea#TimerLeftPanelScroll > QWidget > QWidget {{ /* Viewport content of left scroll */
-        background-color: {bg_color}; 
-    }}
-     QScrollArea#TimerRightPanelScroll > QWidget > QWidget {{ /* Viewport content of right scroll */
-        background-color: {bg_color}; 
-    }}
-
-    /* Titles within Panels */
-    QLabel#TimerConditionsTitleLabel {{
-        color: {base_color};
-        font: bold 11pt "Consolas"; 
-        margin-bottom: 5px; 
-    }}
-    QLabel#TimerRuleActionsLabel {{
-        color: {base_color};
-        font: 10pt "Consolas";
-        font-weight: bold; 
-    }}
-
-    /* Labels for specific inputs (Rule ID, Desc, Intervals, Var Conditions) */
-    QLabel#TimerRuleIdLabel, QLabel#TimerRuleDescLabel, 
-    QLabel#TimerRuleIntervalLabel,
-    QLabel#TimerRuleGameTimeIntervalLabel,
-    QLabel#TimerRuleGameMinutesLabel,
-    QLabel#TimerRuleGameHoursLabel,
-    QLabel#TimerRuleGameDaysLabel,
-    QLabel#TimerRuleConditionVarNameLabel, 
-    QLabel#TimerRuleConditionVarValueLabel {{
-        color: {base_color};
-        font: 10pt "Consolas";
-        font-weight: normal; /* Explicitly normal */
-    }}
-    
-    /* LineEdits for Rule ID, Description, and Variable Conditions */
-    QLineEdit#TimerRuleIdInput, QLineEdit#TimerRuleDescInput,
-    QLineEdit#TimerRuleConditionVarNameInput, QLineEdit#TimerRuleConditionVarValueInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        selection-background-color: {highlight};
-        selection-color: white;
-        font: 10pt "Consolas"; /* Changed from 9pt for consistency */
-    }}
-    
-    /* General SpinBox styling for fixed value inputs in Conditions Panel */
-    QSpinBox#TimerRuleIntervalInput,
-    QSpinBox#TimerRuleGameMinutesInput,
-    QSpinBox#TimerRuleGameHoursInput,
-    QSpinBox#TimerRuleGameDaysInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 1px 3px;
-        selection-background-color: {highlight};
-        selection-color: white;
-        font: 10pt "Consolas";
-    }}
-    /* Buttons for these general spinboxes */
-    QSpinBox#TimerRuleIntervalInput::up-button, QSpinBox#TimerRuleIntervalInput::down-button,
-    QSpinBox#TimerRuleGameMinutesInput::up-button, QSpinBox#TimerRuleGameMinutesInput::down-button,
-    QSpinBox#TimerRuleGameHoursInput::up-button, QSpinBox#TimerRuleGameHoursInput::down-button,
-    QSpinBox#TimerRuleGameDaysInput::up-button, QSpinBox#TimerRuleGameDaysInput::down-button {{
-        background-color: {base_color}; 
-        border: 1px solid {bg_color};
-        width: 12px;
-        min-height: 10px;
-        subcontrol-origin: border;
-        margin: 1px;
-    }}
-    /* Arrows for these general spinboxes */
-    QSpinBox#TimerRuleIntervalInput::up-arrow, QSpinBox#TimerRuleIntervalInput::down-arrow,
-    QSpinBox#TimerRuleGameMinutesInput::up-arrow, QSpinBox#TimerRuleGameMinutesInput::down-arrow,
-    QSpinBox#TimerRuleGameHoursInput::up-arrow, QSpinBox#TimerRuleGameHoursInput::down-arrow,
-    QSpinBox#TimerRuleGameDaysInput::up-arrow, QSpinBox#TimerRuleGameDaysInput::down-arrow {{
-        width: 0px; 
-        height: 0px;
-    }}
-
-    /* Styling for Timer Rule Condition Radio Buttons */
-    QRadioButton#TimerRuleConditionAlwaysRadio, QRadioButton#TimerRuleConditionVariableRadio {{
-        color: {base_color};
-        font: 10pt "Consolas";
-        spacing: 5px;
-        background-color: transparent;
-    }}
-    QRadioButton#TimerRuleConditionAlwaysRadio::indicator, QRadioButton#TimerRuleConditionVariableRadio::indicator {{
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        border: 1px solid {base_color};
-        background: transparent;
-    }}
-    QRadioButton#TimerRuleConditionAlwaysRadio::indicator:checked, QRadioButton#TimerRuleConditionVariableRadio::indicator:checked {{
-        background-color: {base_color};
-        border: 1px solid {base_color};
-    }}
-    QRadioButton#TimerRuleConditionAlwaysRadio::indicator:hover, QRadioButton#TimerRuleConditionVariableRadio::indicator:hover {{
-        border: 1px solid {brighter};
-    }}
-
-    /* Styling for Timer Rule Random Interval Checkboxes */
-    QCheckBox#TimerRuleIntervalRandomCheckbox,
-    QCheckBox#TimerRuleGameMinutesRandomCheckbox,
-    QCheckBox#TimerRuleGameHoursRandomCheckbox,
-    QCheckBox#TimerRuleGameDaysRandomCheckbox {{
-        color: {base_color};
-        font: 10pt "Consolas"; 
-        spacing: 5px;
-        background-color: transparent;
-    }}
-    QCheckBox#TimerRuleIntervalRandomCheckbox::indicator,
-    QCheckBox#TimerRuleGameMinutesRandomCheckbox::indicator,
-    QCheckBox#TimerRuleGameHoursRandomCheckbox::indicator,
-    QCheckBox#TimerRuleGameDaysRandomCheckbox::indicator {{
-        width: 13px;
-        height: 13px;
-        border-radius: 3px;
-        border: 1px solid {base_color};
-        background: transparent;
-    }}
-    QCheckBox#TimerRuleIntervalRandomCheckbox::indicator:checked,
-    QCheckBox#TimerRuleGameMinutesRandomCheckbox::indicator:checked,
-    QCheckBox#TimerRuleGameHoursRandomCheckbox::indicator:checked,
-    QCheckBox#TimerRuleGameDaysRandomCheckbox::indicator:checked {{
-        background-color: {base_color};
-    }}
-    QCheckBox#TimerRuleIntervalRandomCheckbox::indicator:hover,
-    QCheckBox#TimerRuleGameMinutesRandomCheckbox::indicator:hover,
-    QCheckBox#TimerRuleGameHoursRandomCheckbox::indicator:hover,
-    QCheckBox#TimerRuleGameDaysRandomCheckbox::indicator:hover {{
-        border: 1px solid {brighter};
-    }}
-
-    /* Styling for Timer Rule Random Interval Min/Max SpinBoxes */
-    QSpinBox#TimerRuleIntervalMinInput, QSpinBox#TimerRuleIntervalMaxInput,
-    QSpinBox#TimerRuleGameMinutesMinInput, QSpinBox#TimerRuleGameMinutesMaxInput,
-    QSpinBox#TimerRuleGameHoursMinInput, QSpinBox#TimerRuleGameHoursMaxInput,
-    QSpinBox#TimerRuleGameDaysMinInput, QSpinBox#TimerRuleGameDaysMaxInput {{
-        color: {base_color};
-        background-color: {darker_bg}; 
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 1px 3px; 
-        selection-background-color: {highlight};
-        selection-color: white;
-        font: 10pt "Consolas";
-        min-width: 60px; 
-    }}
-    /* Buttons for these Min/Max spinboxes */
-    QSpinBox#TimerRuleIntervalMinInput::up-button, QSpinBox#TimerRuleIntervalMaxInput::up-button,
-    QSpinBox#TimerRuleGameMinutesMinInput::up-button, QSpinBox#TimerRuleGameMinutesMaxInput::up-button,
-    QSpinBox#TimerRuleGameHoursMinInput::up-button, QSpinBox#TimerRuleGameHoursMaxInput::up-button,
-    QSpinBox#TimerRuleGameDaysMinInput::up-button, QSpinBox#TimerRuleGameDaysMaxInput::up-button,
-    QSpinBox#TimerRuleIntervalMinInput::down-button, QSpinBox#TimerRuleIntervalMaxInput::down-button,
-    QSpinBox#TimerRuleGameMinutesMinInput::down-button, QSpinBox#TimerRuleGameMinutesMaxInput::down-button,
-    QSpinBox#TimerRuleGameHoursMinInput::down-button, QSpinBox#TimerRuleGameHoursMaxInput::down-button,
-    QSpinBox#TimerRuleGameDaysMinInput::down-button, QSpinBox#TimerRuleGameDaysMaxInput::down-button {{
-        background-color: {base_color};
-        border: 1px solid {bg_color};
-        width: 12px;
-        min-height: 10px; 
-        subcontrol-origin: border;
-        margin: 1px;
-    }}
-    /* Arrows for these Min/Max spinboxes */
-    QSpinBox#TimerRuleIntervalMinInput::up-arrow, QSpinBox#TimerRuleIntervalMaxInput::up-arrow,
-    QSpinBox#TimerRuleGameMinutesMinInput::up-arrow, QSpinBox#TimerRuleGameMinutesMaxInput::up-arrow,
-    QSpinBox#TimerRuleGameHoursMinInput::up-arrow, QSpinBox#TimerRuleGameHoursMaxInput::up-arrow,
-    QSpinBox#TimerRuleGameDaysMinInput::up-arrow, QSpinBox#TimerRuleGameDaysMaxInput::up-arrow,
-    QSpinBox#TimerRuleIntervalMinInput::down-arrow, QSpinBox#TimerRuleIntervalMaxInput::down-arrow,
-    QSpinBox#TimerRuleGameMinutesMinInput::down-arrow, QSpinBox#TimerRuleGameMinutesMaxInput::down-arrow,
-    QSpinBox#TimerRuleGameHoursMinInput::down-arrow, QSpinBox#TimerRuleGameHoursMaxInput::down-arrow,
-    QSpinBox#TimerRuleGameDaysMinInput::down-arrow, QSpinBox#TimerRuleGameDaysMaxInput::down-arrow {{
-        width: 0px; 
-        height: 0px;
-    }}
-    
-    /* Enable/Disable Checkbox */
-    QCheckBox#TimerRuleEnableCheckbox {{
-        color: {base_color};
-        font: 10pt "Consolas";
-        /* Standard checkbox indicator styling will be inherited if not overridden here */
-    }}
-    
-    /* Actions Area */
-    QWidget#TimerRuleActionsContainer {{
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-    }}
-    QWidget#TimerRuleActionRow {{
-        background-color: {darker_bg}; /* Ensure rows also have this if they are separate widgets */
-    }}
-    QComboBox#TimerRuleActionTypeCombo {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 2px;
-        font: 9pt "Consolas";
-    }}
-    QComboBox#TimerRuleActionTypeCombo::drop-down {{
-        border: none;
-    }}
-    QComboBox#TimerRuleActionTypeCombo::down-arrow {{
-        image: none;
-    }}
-    QLineEdit#TimerRuleActionValueInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        selection-background-color: {highlight};
-        selection-color: white;
-        font: 9pt "Consolas";
-    }}
-    QPushButton#TimerRuleActionRemoveButton {{
-        color: {base_color};
-        background-color: {darker_bg}; /* Changed from bg_color to match other small buttons */
-        border: 1px solid {base_color};
-        border-radius: 2px; /* Consistent with other small buttons */
-    }}
-    QPushButton#TimerRuleActionRemoveButton:hover {{
-        background-color: {highlight};
-        color: white;
-    }}
-    
-    /* Main Action Buttons (Add Action, Save Rule) */
-    QPushButton#TimerRuleAddActionButton, QPushButton#TimerRuleSaveButton {{
-        color: {base_color};
-        background-color: {bg_color};
-        border: 1px solid {base_color}; /* Ensure consistent border */
-        border-radius: 3px;
-        padding: 5px; /* Default padding from general QPushButton */
-        font: 10pt "Consolas"; /* Slightly smaller than general QPushButton if needed */
-    }}
-    QPushButton#TimerRuleAddActionButton:hover, QPushButton#TimerRuleSaveButton:hover {{
-        background-color: {highlight};
-        color: white;
-    }}
-    /* --- End Timer Rules Styling --- */
-
-    /* --- Styling for Start After Label --- */
-    QLabel#TimerRuleStartAfterLabel {{
-        color: {base_color};
-        font: 10pt "Consolas";
-        /* margin-right: 5px; */ /* Add if more space needed before radios */
-    }}
-
-    /* --- Styling for Timer Rule Start After Radio Buttons --- */
-    QRadioButton#TimerRuleStartAfterPlayerRadio, QRadioButton#TimerRuleStartAfterCharacterRadio, QRadioButton#TimerRuleStartAfterSceneChangeRadio {{
-        color: {base_color};
-        font: 10pt "Consolas";
-        spacing: 5px;
-        background-color: transparent;
-    }}
-    QRadioButton#TimerRuleStartAfterPlayerRadio::indicator, QRadioButton#TimerRuleStartAfterCharacterRadio::indicator, QRadioButton#TimerRuleStartAfterSceneChangeRadio::indicator {{
-        width: 16px;
-        height: 16px;
-        border-radius: 8px; /* For round radio buttons */
-        border: 1px solid {base_color};
-        background: transparent;
-    }}
-    QRadioButton#TimerRuleStartAfterPlayerRadio::indicator:checked, QRadioButton#TimerRuleStartAfterCharacterRadio::indicator:checked, QRadioButton#TimerRuleStartAfterSceneChangeRadio::indicator:checked {{
-        background-color: {base_color};
-        border: 1px solid {base_color};
-    }}
-    QRadioButton#TimerRuleStartAfterPlayerRadio::indicator:hover, QRadioButton#TimerRuleStartAfterCharacterRadio::indicator:hover, QRadioButton#TimerRuleStartAfterSceneChangeRadio::indicator:hover {{
-        border: 1px solid {brighter};
-    }}
-
-    /* --- Styling for Timer Rule Variable Scope Radio Buttons (Global/Character) --- */
-    QRadioButton#TimerRuleVarScopeGlobalRadio, QRadioButton#TimerRuleVarScopeCharacterRadio {{
-        color: {base_color}; /* CORRECTED: Single braces */
-        font: 10pt "Consolas";
-        spacing: 5px;
-        background-color: transparent;
-    }}
-    QRadioButton#TimerRuleVarScopeGlobalRadio::indicator, QRadioButton#TimerRuleVarScopeCharacterRadio::indicator {{
-        width: 16px;
-        height: 16px;
-        border-radius: 8px; /* For round radio buttons */
-        border: 1px solid {base_color}; /* CORRECTED: Single braces */
-        background: transparent; /* CORRECTED: Single braces */
-    }}
-    QRadioButton#TimerRuleVarScopeGlobalRadio::indicator:checked, QRadioButton#TimerRuleVarScopeCharacterRadio::indicator:checked {{
-        background-color: {base_color}; /* CORRECTED: Single braces */
-        border: 1px solid {base_color}; /* CORRECTED: Single braces */
-    }}
-    QRadioButton#TimerRuleVarScopeGlobalRadio::indicator:hover, QRadioButton#TimerRuleVarScopeCharacterRadio::indicator:hover {{
-        border: 1px solid {brighter}; /* CORRECTED: Single braces */
-    }}
-
-    /* --- Styling for Timer Rule Condition Variable Input Labels & LineEdits --- */
-    QLabel#TimerRuleConditionVarNameLabel, QLabel#TimerRuleConditionVarValueLabel {{
-        color: {base_color};
-        font: 10pt "Consolas";
-        font-weight: normal; /* Explicitly normal */
-    }}
-    QLineEdit#TimerRuleConditionVarNameInput, QLineEdit#TimerRuleConditionVarValueInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        selection-background-color: {highlight};
-        selection-color: white;
-        font: 10pt "Consolas"; /* Changed from 9pt for consistency */
-    }}
-
-    /* --- Styling for MULTIPLE Variable Conditions Area --- */
-    QWidget#VariableConditionsArea {{
-        /* Optional: Add border/background to visually group */
-        /* background-color: rgba(0,0,0, 0.1); */
-        /* border: 1px dotted {base_color}; */
-        /* border-radius: 3px; */
-        margin-top: 5px; /* Add some space above this section */
-    }}
-
-    QLabel#TimerConditionsOperatorLabel {{
-        color: {base_color};
-        font: 10pt "Consolas";
-        margin-right: 5px;
-    }}
-    
-    QComboBox#TimerConditionsOperatorCombo {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 2px;
-        font: 10pt "Consolas";
-        min-width: 60px;
-    }}
-    QComboBox#TimerConditionsOperatorCombo::drop-down {{
-        border: none;
-    }}
-    QComboBox#TimerConditionsOperatorCombo::down-arrow {{
-        image: none;
-    }}
-
-    /* Styling for widgets WITHIN each VariableConditionRow */
-    QWidget#VariableConditionRow QLineEdit#ConditionVarNameInput,
-    QWidget#VariableConditionRow QLineEdit#ConditionValueInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 2px; /* Slightly smaller padding */
-        selection-background-color: {highlight};
-        selection-color: white;
-        font: 9pt "Consolas"; /* Smaller font for rows */
-    }}
-    QWidget#VariableConditionRow QComboBox#ConditionOperatorCombo {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 1px;
-        font: 9pt "Consolas";
-        min-width: 80px; /* Adjust width */
-    }}
-    QWidget#VariableConditionRow QComboBox#ConditionOperatorCombo::drop-down {{
-        border: none;
-    }}
-    QWidget#VariableConditionRow QComboBox#ConditionOperatorCombo::down-arrow {{
-        image: none;
-    }}
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeGlobalRadio,
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeCharacterRadio,
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeSettingRadio {{
-        color: {base_color};
-        font: 9pt "Consolas";
-        spacing: 3px; /* Less spacing */
-        background-color: transparent;
-    }}
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeGlobalRadio::indicator,
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeCharacterRadio::indicator,
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeSettingRadio::indicator {{
-        width: 12px;
-        height: 12px;
-        border-radius: 6px;
-        border: 1px solid {base_color};
-        background: transparent;
-    }}
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeGlobalRadio::indicator:checked,
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeCharacterRadio::indicator:checked,
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeSettingRadio::indicator:checked {{
-        background-color: {base_color};
-        border: 1px solid {base_color};
-    }}
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeGlobalRadio::indicator:hover,
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeCharacterRadio::indicator:hover,
-    QWidget#VariableConditionRow QRadioButton#ConditionScopeSettingRadio::indicator:hover {{
-        border: 1px solid {brighter};
-    }}
-    QWidget#VariableConditionRow QPushButton#RemoveVariableConditionButton {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 2px;
-        min-width: 20px; /* Match size? */
-        max-width: 20px;
-        min-height: 20px;
-        max-height: 20px;
-        padding: 0px;
-        font-size: 12pt; /* Adjust for '-' sign */
-    }}
-    QWidget#VariableConditionRow QPushButton#RemoveVariableConditionButton:hover {{
-        background-color: {highlight};
-        color: white;
-    }}
-
-    /* Button to add new rows */
-    QPushButton#AddVariableConditionButton {{
-        color: {base_color};
-        background-color: {bg_color};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        font: 10pt "Consolas";
-        margin-top: 5px; /* Add space above button */
-    }}
-    QPushButton#AddVariableConditionButton:hover {{
-        background-color: {highlight};
-        color: white;
-    }}
-
-    /* --- Styling for Inter-Row Operator Combo --- */
-    QComboBox#ConditionRowOperatorCombo {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 1px;
-        font: 9pt "Consolas";
-        min-width: 55px; /* Keep narrow */
-        max-width: 55px;
-    }}
-    QComboBox#ConditionRowOperatorCombo::drop-down {{
-        border: none;
-    }}
-    QComboBox#ConditionRowOperatorCombo::down-arrow {{
-        image: none;
-    }}
-
-    /* --- Styling for Set Var Action Specific Inputs --- */
-    QLineEdit#TimerRuleActionVarNameInput,
-    QLineEdit#TimerRuleActionVarValueInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 2px; /* Smaller padding for dense row */
-        selection-background-color: {highlight};
-        selection-color: white;
-        font: 9pt "Consolas";
-    }}
-
-    QComboBox#TimerRuleSetVarOperationSelector {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 1px;
-        font: 9pt "Consolas";
-        min-width: 65px; /* Adjust as needed */
-    }}
-    QComboBox#TimerRuleSetVarOperationSelector::drop-down {{
-        border: none;
-    }}
-    QComboBox#TimerRuleSetVarOperationSelector::down-arrow {{
-        image: none;
-    }}
-
-    QRadioButton#TimerRuleActionScopeGlobalRadio,
-    QRadioButton#TimerRuleActionScopeCharacterRadio,
-    QRadioButton#TimerRuleActionScopeSettingRadio {{
-        color: {base_color};
-        font: 9pt "Consolas";
-        spacing: 3px;
-        background-color: transparent;
-    }}
-    QRadioButton#TimerRuleActionScopeGlobalRadio::indicator,
-    QRadioButton#TimerRuleActionScopeCharacterRadio::indicator,
-    QRadioButton#TimerRuleActionScopeSettingRadio::indicator {{
-        width: 12px;
-        height: 12px;
-        border-radius: 6px;
-        border: 1px solid {base_color};
-        background: transparent;
-    }}
-    QRadioButton#TimerRuleActionScopeGlobalRadio::indicator:checked,
-    QRadioButton#TimerRuleActionScopeCharacterRadio::indicator:checked,
-    QRadioButton#TimerRuleActionScopeSettingRadio::indicator:checked {{
-        background-color: {base_color};
-        border: 1px solid {base_color};
-    }}
-    QRadioButton#TimerRuleActionScopeGlobalRadio::indicator:hover,
-    QRadioButton#TimerRuleActionScopeCharacterRadio::indicator:hover,
-    QRadioButton#TimerRuleActionScopeSettingRadio::indicator:hover {{
-        border: 1px solid {brighter};
-    }}
-
-    /* NEW: Setting Manager Variable Name/Value Inputs - with more specific selector */
-    QWidget#VariableRow QLineEdit#SettingManagerVarNameInput,
-    QWidget#VariableRow QLineEdit#SettingManagerVarValueInput,
-    QLineEdit#SettingManagerVarNameInput,
-    QLineEdit#SettingManagerVarValueInput {{
-        color: {base_color} !important;
-        background-color: {darker_bg} !important;
-        border: 1px solid {base_color} !important;
-        border-radius: 3px !important;
-        padding: 3px !important;
-        font: 10pt "Consolas" !important;
-        selection-background-color: {highlight} !important;
-        selection-color: white !important;
-    }}
-    /* END NEW */
-
-    QLineEdit#PathDetailsNameInput, QTextEdit#PathDetailsDescInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        font: 10pt 'Consolas';
-        selection-background-color: {highlight};
-        selection-color: white;
-    }}
-
-    QWidget[styleClass="PathDetailsNameInput"], QWidget[styleClass="PathDetailsDescInput"] {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        font: 10pt 'Consolas';
-        selection-background-color: {highlight};
-        selection-color: white;
-    }}
-    
-    /* World Editor Scale Inputs */
-    QLineEdit#WORLDToolbar_ScaleNumberInput, QLineEdit#WORLDToolbar_ScaleTimeInput,
-    QLineEdit#LOCATIONToolbar_ScaleNumberInput, QLineEdit#LOCATIONToolbar_ScaleTimeInput {{
-        color: {base_color}; 
-        background-color: {darker_bg}; 
-        border: 1px solid {base_color}; 
-        selection-background-color: {highlight}; 
-        selection-color: white;
-        font: 9pt "Consolas";
-        border-radius: 3px;
-        padding: 3px;
-        max-width: 40px;
-        min-width: 35px;
-    }}
-    
-    QComboBox#WORLDToolbar_ScaleUnitDropdown, QComboBox#LOCATIONToolbar_ScaleUnitDropdown {{
-        color: {base_color}; 
-        background-color: {darker_bg}; 
-        border: 1px solid {base_color}; 
-        font: 9pt "Consolas";
-        border-radius: 3px;
-        padding: 3px;
-        max-width: 70px;
-        min-width: 65px;
-    }}
-    
-    QComboBox#WORLDToolbar_ScaleUnitDropdown::drop-down, QComboBox#LOCATIONToolbar_ScaleUnitDropdown::drop-down {{
-        border: none;
-    }}
-    
-    QComboBox#WORLDToolbar_ScaleUnitDropdown::down-arrow, QComboBox#LOCATIONToolbar_ScaleUnitDropdown::down-arrow {{
-        image: none;
-    }}
-    
-    QComboBox#WORLDToolbar_ScaleUnitDropdown QAbstractItemView, QComboBox#LOCATIONToolbar_ScaleUnitDropdown QAbstractItemView {{
-        color: {base_color}; 
-        background-color: {darker_bg}; 
-        selection-background-color: {highlight}; 
-        selection-color: white;
-        font: 9pt "Consolas";
-    }}
-    /* --- Inventory Scroll Area Fix --- */
-    QScrollArea#InventoryScrollArea {{
-        background-color: {darker_bg};
-    }}
-    QScrollArea#InventoryScrollArea QWidget {{
-        background-color: {darker_bg};
-    }}
-    
-    QRadioButton#TimerGenerateLastExchangeRadio, QRadioButton#TimerGenerateUserMsgRadio, QRadioButton#TimerGenerateFullConvoRadio,
-    QRadioButton#GenerateLastExchangeRadio, QRadioButton#GenerateUserMsgRadio, QRadioButton#GenerateFullConvoRadio {{
-        color: {base_color};
-        font: 9pt "Consolas";
-        spacing: 3px;
-        background-color: transparent;
-    }}
-    
-    QRadioButton#TimerGenerateLastExchangeRadio::indicator, QRadioButton#TimerGenerateUserMsgRadio::indicator, QRadioButton#TimerGenerateFullConvoRadio::indicator,
-    QRadioButton#GenerateLastExchangeRadio::indicator, QRadioButton#GenerateUserMsgRadio::indicator, QRadioButton#GenerateFullConvoRadio::indicator {{
-        width: 12px;
-        height: 12px;
-        border-radius: 6px;
-        border: 1px solid {base_color};
-        background-color: {bg_color};
-    }}
-    
-    QRadioButton#TimerGenerateLastExchangeRadio::indicator:checked, QRadioButton#TimerGenerateUserMsgRadio::indicator:checked, QRadioButton#TimerGenerateFullConvoRadio::indicator:checked,
-    QRadioButton#GenerateLastExchangeRadio::indicator:checked, QRadioButton#GenerateUserMsgRadio::indicator:checked, QRadioButton#GenerateFullConvoRadio::indicator:checked {{
-        background: {highlight};
-        border: 1px solid {brighter};
-    }}
-    
-    QRadioButton#TimerGenerateLastExchangeRadio::indicator:hover, QRadioButton#TimerGenerateUserMsgRadio::indicator:hover, QRadioButton#TimerGenerateFullConvoRadio::indicator:hover,
-    QRadioButton#GenerateLastExchangeRadio::indicator:hover, QRadioButton#GenerateUserMsgRadio::indicator:hover, QRadioButton#GenerateFullConvoRadio::indicator:hover {{
-        border: 1px solid {brighter};
-        background: transparent;
-    }}
-    
-    QLabel#TimerGenerateContextLabel, QLabel#TimerGenerateInstructionsLabel,
-    QLabel#GenerateContextLabel, QLabel#GenerateInstructionsLabel {{
-        color: {base_color};
-        font: 9pt "Consolas";
-        background-color: transparent;
-    }}
-    
-    QTextEdit#TimerGenerateInstructionsInput, QTextEdit#GenerateInstructionsInput {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        selection-background-color: {highlight};
-        selection-color: white;
-        font: 9pt "Consolas";
-        padding: 3px;
-    }}
-    
-    QWidget#TimerGenerateContextWidget, QWidget#GenerateContextWidget {{
-        background-color: {darker_bg};
-        border-radius: 3px;
-    }}
-
-    /* --- NEW: Generate Mode Radio Buttons Styling --- */
-    QRadioButton#GenerateModeLLMRadio, QRadioButton#GenerateModeRandomRadio {{
-        color: {base_color};
-        font: 9pt "Consolas";
-        spacing: 5px;
-        background-color: transparent;
-    }}
-    QRadioButton#GenerateModeLLMRadio::indicator, QRadioButton#GenerateModeRandomRadio::indicator {{
-        width: 13px;
-        height: 13px;
-        border-radius: 6px;
-        border: 1px solid {base_color};
-        background: {bg_color};
-    }}
-    QRadioButton#GenerateModeLLMRadio::indicator:checked, QRadioButton#GenerateModeRandomRadio::indicator:checked {{
-        background: {highlight};
-        border: 1px solid {brighter};
-    }}
-    QRadioButton#GenerateModeLLMRadio::indicator:hover, QRadioButton#GenerateModeRandomRadio::indicator:hover {{
-        border: 1px solid {brighter};
-        background: transparent;
-    }}
-    /* --- END NEW --- */
-
-    /* --- NEW: Random Generate Panel Filter Styling --- */
-    QLineEdit#SettingFilterInput, QLineEdit#CharacterFilterInput,
-    QLineEdit#RandomNumberMin, QLineEdit#RandomNumberMax {{
-        color: {base_color};
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-        padding: 3px;
-        font: 9pt "Consolas";
-        selection-background-color: {highlight};
-        selection-color: white;
-    }}
-
-    /* Remove old QListWidget styling that's no longer needed */
-    
-    /* Keep button styling for other buttons */
-    QPushButton#AddSettingFilterBtn, QPushButton#RemoveSettingFilterBtn,
-    QPushButton#AddCharacterFilterBtn, QPushButton#RemoveCharacterFilterBtn {{
-        /* These will inherit from QWidget#ThoughtToolContainer QPushButton for general CoT button style */
-        /* Add specific overrides if general CoT button style isn't quite right */
-        font: 9pt "Consolas";
-        padding: 4px 8px; /* Slightly more padding for clarity */
-    }}
-    /* --- END NEW --- */
-
-    /* --- NEW: Setting Manager Extra Area Styling --- */
-    QWidget#SettingExtraAreaContainer {{
-        background-color: {bg_color}; /* Use general background color */
-        /* border: 1px solid {base_color}; REMOVED BORDER */
-        border-radius: 3px;
-        padding: 5px; /* Add some padding */
-    }}
-
-    QScrollArea#SettingExtraAreaScroll {{
-        background-color: transparent; /* Scroll area itself is transparent */
-        border: none; /* No border on the scroll area */
-    }}
-
-    /* Viewport of the scroll area, if needed for specific styling */
-    QScrollArea#SettingExtraAreaScroll > QWidget > QWidget {{
-        background-color: {bg_color}; /* Match container background */
-    }}
-
-    QCheckBox#SettingExteriorCheckbox {{
-        /* Inherits general QCheckBox styling for color, font, indicator */
-        /* Add specific overrides here if needed, e.g., margin */
-        margin-bottom: 5px; /* Add some space below the checkbox */
-    }}
-    /* --- END NEW --- */
-
-    /* --- NEW: Generation Options Panel Styling --- */
-    QWidget#GenerationOptionsContainer {{
-        background-color: {bg_color}; /* Use general background color */
-        /* border: 1px solid {base_color}; no border for seamless look */
-        border-radius: 3px;
-        padding: 5px; /* Internal padding */
-    }}
-
-    QCheckBox#DescGenCheckbox, QCheckBox#ConnGenCheckbox, QCheckBox#InvGenCheckbox {{
-        /* Inherit general QCheckBox styling */
-        /* Add specific margins if needed, e.g., margin-bottom: 3px; */
-    }}
-
-    QPushButton#GenerateButton {{
-        /* Inherit general QPushButton styling */
-        /* Add specific margins if needed, e.g., margin-top: 5px; */
-    }}
-    /* --- END NEW --- */
-
-    /* --- NEW: Setting Manager Connections Scroll Area Styling --- */
-    QScrollArea#ConnectionsScrollArea {{
-        background-color: {darker_bg};
-        border: 1px solid {base_color};
-        border-radius: 3px;
-    }}
-    QScrollArea#ConnectionsScrollArea > QWidget > QWidget {{
-        background-color: {darker_bg};
-        border: none;
-    }}
-    /* --- END NEW --- */
-
-    /* --- Setting Manager Path Styling --- */
-    /* Path widgets use existing styling classes and are handled automatically */
-
-    /* Inventory Manager List Style (within tabs) */
-    QListWidget#InventoryListWidget_Tab {{
-        background-color: {darker_bg};
-        color: {base_color};
-        border: 1px solid {base_color};
-        selection-background-color: {highlight};
-        selection-color: white;
-        alternate-background-color: {bg_color}; /* Keep or remove based on preference */
-        border-radius: 3px;
-        padding: 3px;
-        font: 10pt "Consolas"; /* Match ActorManagerList or adjust as needed */
-    }}
-
-    QListWidget#InventoryListWidget_Tab::item:selected {{
-        background-color: {highlight};
-        color: white;
-    }}
-
-    QListWidget#InventoryListWidget_Tab::item:hover {{
-        background-color: {highlight};
-        color: white; /* Match ActorManagerList hover or adjust */
-    }}
-
-    /* Inventory Manager Table Style (within tabs) */
-    QTableWidget#InventoryTableWidget_Tab {{
-        background-color: {darker_bg};
-        color: {base_color};
-        border: 1px solid {base_color};
-        gridline-color: {even_darker_bg}; /* Color for the grid lines */
-        /* alternate-background-color: {bg_color}; */ /* For alternating row colors, enable if desired */
-        selection-background-color: {highlight};
-        selection-color: white;
-        font: 10pt "Consolas";
-        border-radius: 3px;
-        padding: 1px; /* Minimal padding for the table itself */
-    }}
-
-    QTableWidget#InventoryTableWidget_Tab::item {{
-        border-bottom: 1px solid {even_darker_bg}; /* Separator for items */
-        padding: 4px; /* Padding within each cell */
-        color: {base_color};
-    }}
-
-    QTableWidget#InventoryTableWidget_Tab::item:selected {{
-        background-color: {highlight};
-        color: white; /* Text color for selected items */
-    }}
-
-    /* Style for the horizontal header of the inventory table */
-    QHeaderView#InventoryTableWidget_Tab_HorizontalHeader::section {{
-        background-color: {even_darker_bg};
-        color: {base_color};
-        padding: 4px;
-        border-top: 1px solid {darker_bg};
-        border-left: 1px solid {darker_bg};
-        border-right: 1px solid {darker_bg};
-        border-bottom: 1px solid {base_color}; /* Stronger bottom border for header */
-        font-weight: bold;
-    }}
-
-    /* Style for the vertical header (if made visible) */
-    QHeaderView#InventoryTableWidget_Tab_VerticalHeader::section {{
-        background-color: {even_darker_bg};
-        color: {base_color};
-        padding: 4px;
-        border-top: 1px solid {darker_bg};
-        border-left: 1px solid {base_color}; /* Stronger left border for header */
-        border-right: 1px solid {darker_bg};
-        border-bottom: 1px solid {darker_bg};
-    }}
-    /* End of Inventory Manager Table Style */
-
-    /* Actor Manager: Relations Container (Main widget, might not be visible bg) */
-    QWidget#RelationsContainer {{
-        background-color: transparent; /* Make outer container transparent */
-        border: none; /* No border on outer container */
-    }}
-
-    /* Actor Manager: Relations Scroll Area */
-    QScrollArea#RelationsScrollArea {{
-        background-color: {darker_bg}; /* Match list backgrounds */
-        border: 1px solid {base_color}; /* Use theme border */
-        border-radius: 3px;
-    }}
-
-    /* Actor Manager: Relations Scroll Area Content Widget */
-    QScrollArea#RelationsScrollArea > QWidget > QWidget {{
-        background-color: {darker_bg}; /* Ensure content widget matches scroll area bg */
-        border: none;
-    }}
-
-    /* Actor Manager: Variables Scroll Area */
-    QScrollArea#VariablesScrollArea {{
-        background-color: {darker_bg}; /* Match list backgrounds */
-        border: 1px solid {base_color}; /* Use theme border */
-        border-radius: 3px;
-    }}
-
-    /* Actor Manager: Variables Scroll Area Content Widget */
-    QScrollArea#VariablesScrollArea > QWidget > QWidget {{
+    /* Actor Manager: Schedule Scroll Area Content Widget */
+    QScrollArea#ScheduleScrollArea > QWidget > QWidget {{
         background-color: {darker_bg}; /* Ensure content widget matches scroll area bg */
         border: none;
     }}
@@ -4962,6 +3858,1240 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
 
     /* Actor Manager: Variables Scroll Area Content Widget */
     QScrollArea#VariablesScrollArea > QWidget > QWidget {{
+        background-color: {darker_bg}; /* Ensure content widget matches scroll area bg */
+        border: none;
+    }}
+
+    /* Actor Manager: Schedule Scroll Area */
+    QScrollArea#ScheduleScrollArea {{
+        background-color: {darker_bg}; /* Match list backgrounds */
+        border: 1px solid {base_color}; /* Use theme border */
+        border-radius: 3px;
+    }}
+
+    /* Actor Manager: Schedule Scroll Area Content Widget */
+    QScrollArea#ScheduleScrollArea > QWidget > QWidget {{
+        background-color: {darker_bg}; /* Ensure content widget matches scroll area bg */
+        border: none;
+    }}
+
+    /* Time Manager: Main Scroll Area */
+    QScrollArea#TimeManagerScrollArea {{
+        background-color: {darker_bg}; /* Match list backgrounds */
+        border: 1px solid {base_color}; /* Use theme border */
+        border-radius: 3px;
+    }}
+
+    /* Time Manager: Main Scroll Area Content Widget */
+    QScrollArea#TimeManagerScrollArea > QWidget > QWidget {{
+        background-color: {darker_bg}; /* Ensure content widget matches scroll area bg */
+        border: none;
+    }}
+
+    /* Actor Manager: Inventory Container Border and Background */
+    QWidget#InventoryContainer {{
+        background-color: {darker_bg}; /* Use darker background like lists */
+        border: 1px solid {base_color}; /* Use theme base color for border */
+        border-radius: 3px;
+    }}
+
+    /* NEW: Actor Manager Name/Description Inputs */
+    QLineEdit#ActorManagerNameInput, QTextEdit#ActorManagerDescInput {{
+        color: {base_color};
+        background-color: {darker_bg}; /* Match list background */
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt "Consolas";
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+    QLabel#ActorManagerEditLabel {{ /* Label for actor edits */
+        color: {base_color};
+        font: 9pt "Consolas";
+        margin-right: 5px; /* Add some space */
+    }}
+    
+    /* Character Name Input Styling for Rules Manager */
+    QLineEdit#CharacterNameInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt "Consolas";
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+    QLabel#CharacterNameLabel {{
+        color: {base_color};
+        font: 12pt "Consolas";
+        background-color: transparent;
+    }}
+    /* END NEW */
+
+    QCheckBox {{
+        color: {base_color};
+        font: 9pt 'Consolas';
+        spacing: 6px;
+    }}
+    QCheckBox::indicator {{
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+        background: transparent;
+        border: 1px solid {base_color};
+    }}
+    QCheckBox::indicator:checked {{
+        background-color: {base_color};
+        border: 1px solid {base_color};
+    }}
+    QCheckBox::indicator:unchecked {{
+        background: transparent;
+        border: 1px solid {base_color};
+    }}
+    QCheckBox::indicator:disabled {{
+        background: #333;
+        border: 1.5px solid #444;
+    }}
+
+    /* Style for Optional Model Override Input */
+    QLineEdit#ModelOverrideInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt "Consolas"; /* Match ActorManagerNameInput */
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+
+    /* Style for Additional Instructions Input */
+    QTextEdit#AdditionalInstructionsInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt "Consolas"; /* Match ActorManagerDescInput */
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+
+    /* Container for Holding/Wearing content with border */
+    QWidget#InventoryContentContainer {{
+        border: 1px solid {base_color}; /* Use theme base color for consistent border */
+        border-radius: 3px;
+        margin-top: 4px; /* Add some space below the Inventory: label */
+    }}
+
+    /* --- NEW: Change Actor Location Action Widgets --- */
+    QWidget#ChangeLocationWidget {{ /* Container for the whole action */
+        background-color: rgba({r}, {g}, {b}, 0.05); /* Subtle tint like PairWidget */
+        border-radius: 3px;
+        padding: 4px;
+        margin-top: 2px;
+        border: 1px solid rgba({r}, {g}, {b}, 0.1); /* Very subtle border */
+    }}
+
+    QComboBox#ChangeLocationActorSelector, QComboBox#ChangeLocationTargetSettingCombo {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        padding: 3px;
+        font: 9pt "Consolas";
+        border-radius: 3px;
+        min-width: 120px;
+    }}
+    QComboBox#ChangeLocationActorSelector::drop-down, QComboBox#ChangeLocationTargetSettingCombo::drop-down {{
+        border: none;
+    }}
+    QComboBox#ChangeLocationActorSelector::down-arrow, QComboBox#ChangeLocationTargetSettingCombo::down-arrow {{
+        image: none;
+    }}
+    QComboBox#ChangeLocationActorSelector QAbstractItemView, QComboBox#ChangeLocationTargetSettingCombo QAbstractItemView {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+
+    /* Style the completer popup for Target Setting */
+    QComboBox QAbstractItemView#qt_scrollarea_viewport {{
+        border: 1px solid {base_color};
+        background-color: {darker_bg};
+        color: {base_color};
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+
+    QRadioButton#ChangeLocationAdjacentRadio, QRadioButton#ChangeLocationFastTravelRadio, QRadioButton#ChangeLocationSettingRadio {{
+        color: {base_color};
+        font: 9pt "Consolas";
+        spacing: 3px;
+        background-color: transparent;
+    }}
+    QRadioButton#ChangeLocationAdjacentRadio::indicator, QRadioButton#ChangeLocationFastTravelRadio::indicator, QRadioButton#ChangeLocationSettingRadio::indicator {{
+        width: 12px;
+        height: 12px;
+        border-radius: 6px;
+        border: 1px solid {base_color};
+        background-color: {bg_color};
+    }}
+    QRadioButton#ChangeLocationAdjacentRadio::indicator:checked, QRadioButton#ChangeLocationFastTravelRadio::indicator:checked, QRadioButton#ChangeLocationSettingRadio::indicator:checked {{
+        background-color: {highlight};
+        border: 1px solid {brighter};
+    }}
+    QRadioButton#ChangeLocationAdjacentRadio::indicator:hover, QRadioButton#ChangeLocationFastTravelRadio::indicator:hover, QRadioButton#ChangeLocationSettingRadio::indicator:hover {{
+        border: 1px solid {brighter};
+    }}
+    /* --- END NEW --- */
+
+    /* --- NEW: Style for Condition and Action Scope Radio Buttons --- */
+    QRadioButton#ConditionVarScopeGlobalRadio, QRadioButton#ConditionVarScopeCharacterRadio,
+    QRadioButton#ConditionVarScopePlayerRadio,
+    QRadioButton#ConditionVarScopeSettingRadio,
+    QRadioButton#ActionVarScopeGlobalRadio, QRadioButton#ActionVarScopeCharacterRadio, QRadioButton#ActionVarScopePlayerRadio, QRadioButton#ActionVarScopeSceneCharsRadio, QRadioButton#ActionVarScopeSettingRadio {{
+        color: {base_color};
+        font: 9pt "Consolas";
+        spacing: 5px;
+        background-color: transparent;
+    }}
+    QRadioButton#ConditionVarScopeGlobalRadio::indicator, QRadioButton#ConditionVarScopeCharacterRadio::indicator,
+    QRadioButton#ConditionVarScopePlayerRadio::indicator,
+    QRadioButton#ConditionVarScopeSettingRadio::indicator,
+    QRadioButton#ActionVarScopeGlobalRadio::indicator, QRadioButton#ActionVarScopeCharacterRadio::indicator, QRadioButton#ActionVarScopePlayerRadio::indicator, QRadioButton#ActionVarScopeSceneCharsRadio::indicator, QRadioButton#ActionVarScopeSettingRadio::indicator {{
+        width: 13px;
+        height: 13px;
+        border-radius: 6px;
+        border: 1px solid {base_color};
+        background: {bg_color};
+    }}
+    QRadioButton#ConditionVarScopeGlobalRadio::indicator:checked, QRadioButton#ConditionVarScopeCharacterRadio::indicator:checked,
+    QRadioButton#ConditionVarScopePlayerRadio::indicator:checked,
+    QRadioButton#ConditionVarScopeSettingRadio::indicator:checked,
+    QRadioButton#ActionVarScopeGlobalRadio::indicator:checked, QRadioButton#ActionVarScopeCharacterRadio::indicator:checked, QRadioButton#ActionVarScopePlayerRadio::indicator:checked, QRadioButton#ActionVarScopeSceneCharsRadio::indicator:checked, QRadioButton#ActionVarScopeSettingRadio::indicator:checked {{
+        background: {highlight};
+        border: 1px solid {brighter};
+    }}
+    QRadioButton#ConditionVarScopeGlobalRadio::indicator:hover, QRadioButton#ConditionVarScopeCharacterRadio::indicator:hover,
+    QRadioButton#ConditionVarScopePlayerRadio::indicator:hover,
+    QRadioButton#ConditionVarScopeSettingRadio::indicator:hover,
+    QRadioButton#ActionVarScopeGlobalRadio::indicator:hover, QRadioButton#ActionVarScopeCharacterRadio::indicator:hover, QRadioButton#ActionVarScopePlayerRadio::indicator:hover, QRadioButton#ActionVarScopeSceneCharsRadio::indicator:hover, QRadioButton#ActionVarScopeSettingRadio::indicator:hover {{
+        border: 1px solid {brighter};
+        background: transparent;
+    }}
+    /* --- END NEW --- */
+
+    /* --- NEW: Style for Text Tag Mode Radio Buttons --- */
+    QRadioButton#TagOverwriteRadio, QRadioButton#TagAppendRadio, QRadioButton#TagPrependRadio {{
+        color: {base_color};
+        font: 9pt "Consolas";
+        spacing: 5px;
+        background-color: transparent;
+    }}
+    QRadioButton#TagOverwriteRadio::indicator, QRadioButton#TagAppendRadio::indicator, QRadioButton#TagPrependRadio::indicator {{
+        width: 13px;
+        height: 13px;
+        border-radius: 6px;
+        border: 1px solid {base_color};
+        background: {bg_color};
+    }}
+    QRadioButton#TagOverwriteRadio::indicator:checked, QRadioButton#TagAppendRadio::indicator:checked, QRadioButton#TagPrependRadio::indicator:checked {{
+        background: {highlight};
+        border: 1px solid {brighter};
+    }}
+    QRadioButton#TagOverwriteRadio::indicator:hover, QRadioButton#TagAppendRadio::indicator:hover, QRadioButton#TagPrependRadio::indicator:hover {{
+        border: 1px solid {brighter};
+        background: transparent;
+    }}
+    /* --- END NEW --- */
+
+    /* Additional radio buttons that need styling (Keep for others like Prepend/Append/Replace/First/Last) */
+    QRadioButton#PrependRadio, QRadioButton#AppendRadio, QRadioButton#ReplaceRadio, 
+    QRadioButton#FirstSysMsgRadio, QRadioButton#LastSysMsgRadio
+    {{
+        color: {base_color}; /* Ensure color is set */
+        font: 9pt "Consolas"; /* Smaller */
+        spacing: 5px; /* Less spacing */
+        background-color: transparent; /* Ensure no background override */
+    }}
+    QRadioButton#PrependRadio::indicator, QRadioButton#AppendRadio::indicator, QRadioButton#ReplaceRadio::indicator,
+    QRadioButton#FirstSysMsgRadio::indicator, QRadioButton#LastSysMsgRadio::indicator {{
+        width: 13px;
+        height: 13px;
+        border-radius: 6px;
+        border: 1px solid {base_color};
+        background: {bg_color};
+    }}
+    QRadioButton#PrependRadio::indicator:checked, QRadioButton#AppendRadio::indicator:checked, QRadioButton#ReplaceRadio::indicator:checked,
+    QRadioButton#FirstSysMsgRadio::indicator:checked, QRadioButton#LastSysMsgRadio::indicator:checked {{
+        background: {highlight};
+        border: 1px solid {brighter};
+    }}
+    QRadioButton#PrependRadio::indicator:hover, QRadioButton#AppendRadio::indicator:hover, QRadioButton#ReplaceRadio::indicator:hover,
+    QRadioButton#FirstSysMsgRadio::indicator:hover, QRadioButton#LastSysMsgRadio::indicator:hover {{
+        border: 1px solid {brighter};
+    }}
+
+    /* NEW: Actor Manager Variable Name/Value Inputs */
+    QLineEdit#ActorManagerVarNameInput, QLineEdit#ActorManagerVarValueInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt "Consolas";
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+    /* Highlight for selected variable row */
+    QWidget.VariableRowSelected {{
+        background-color: {highlight};
+        border-radius: 3px;
+    }}
+
+    /* --- Timer Rules Styling --- */
+    QWidget#TimerRulesContainer {{
+        background-color: {bg_color}; /* Ensure base container has background */
+        color: {base_color};
+    }}
+    
+    QLabel#TimerRulesTitle {{ /* Assuming this exists or might be added later */
+        color: {base_color};
+        font: bold 12pt "Consolas";
+    }}
+    
+    QLabel#TimerRulesDescription {{ /* Assuming this exists or might be added later */
+        color: {base_color};
+        font: 10pt "Consolas";
+    }}
+    
+    QWidget#TimerRulesListControls {{ /* Parent of Rule ID/Desc and filter/list */
+        background-color: {bg_color};
+    }}
+    
+    QLineEdit#TimerRulesFilterInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 9pt "Consolas";
+    }}
+    
+    QListWidget#TimerRulesList {{
+        background-color: {darker_bg};
+        color: {base_color};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        alternate-background-color: {bg_color};
+        font: 9pt "Consolas";
+    }}
+    QListWidget#TimerRulesList::item:selected {{
+        background-color: {highlight};
+        color: white;
+    }}
+    QListWidget#TimerRulesList::item:hover {{
+        background-color: {highlight};
+        color: white; 
+    }}
+    
+    QPushButton#TimerRuleAddButton, QPushButton#TimerRuleRemoveButton,
+    QPushButton#TimerRuleMoveUpButton, QPushButton#TimerRuleMoveDownButton {{
+        color: {base_color};
+        background-color: {bg_color};
+        border: 1px solid {base_color};
+        border-radius: 2px;
+    }}
+    QPushButton#TimerRuleAddButton:hover, QPushButton#TimerRuleRemoveButton:hover,
+    QPushButton#TimerRuleMoveUpButton:hover, QPushButton#TimerRuleMoveDownButton:hover {{
+        background-color: {highlight};
+        color: white;
+    }}
+    
+    /* Left and Right Panel Base Styling */
+    QWidget#TimerRightPanelWidget,
+    QWidget#TimerLeftPanelWidget {{
+        background-color: {bg_color};
+    }}
+    QScrollArea#TimerRightPanelScroll,
+    QScrollArea#TimerLeftPanelScroll {{
+        background-color: transparent; 
+        border: none;
+    }}
+    QScrollArea#TimerLeftPanelScroll > QWidget > QWidget {{ /* Viewport content of left scroll */
+        background-color: {bg_color}; 
+    }}
+     QScrollArea#TimerRightPanelScroll > QWidget > QWidget {{ /* Viewport content of right scroll */
+        background-color: {bg_color}; 
+    }}
+
+    /* Titles within Panels */
+    QLabel#TimerConditionsTitleLabel {{
+        color: {base_color};
+        font: bold 11pt "Consolas"; 
+        margin-bottom: 5px; 
+    }}
+    QLabel#TimerRuleActionsLabel {{
+        color: {base_color};
+        font: 10pt "Consolas";
+        font-weight: bold; 
+    }}
+
+    /* Labels for specific inputs (Rule ID, Desc, Intervals, Var Conditions) */
+    QLabel#TimerRuleIdLabel, QLabel#TimerRuleDescLabel, 
+    QLabel#TimerRuleIntervalLabel,
+    QLabel#TimerRuleGameTimeIntervalLabel,
+    QLabel#TimerRuleGameMinutesLabel,
+    QLabel#TimerRuleGameHoursLabel,
+    QLabel#TimerRuleGameDaysLabel,
+    QLabel#TimerRuleConditionVarNameLabel, 
+    QLabel#TimerRuleConditionVarValueLabel {{
+        color: {base_color};
+        font: 10pt "Consolas";
+        font-weight: normal; /* Explicitly normal */
+    }}
+    
+    /* LineEdits for Rule ID, Description, and Variable Conditions */
+    QLineEdit#TimerRuleIdInput, QLineEdit#TimerRuleDescInput,
+    QLineEdit#TimerRuleConditionVarNameInput, QLineEdit#TimerRuleConditionVarValueInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 10pt "Consolas"; /* Changed from 9pt for consistency */
+    }}
+    
+    /* General SpinBox styling for fixed value inputs in Conditions Panel */
+    QSpinBox#TimerRuleIntervalInput,
+    QSpinBox#TimerRuleGameMinutesInput,
+    QSpinBox#TimerRuleGameHoursInput,
+    QSpinBox#TimerRuleGameDaysInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 1px 3px;
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 10pt "Consolas";
+    }}
+    /* Buttons for these general spinboxes */
+    QSpinBox#TimerRuleIntervalInput::up-button, QSpinBox#TimerRuleIntervalInput::down-button,
+    QSpinBox#TimerRuleGameMinutesInput::up-button, QSpinBox#TimerRuleGameMinutesInput::down-button,
+    QSpinBox#TimerRuleGameHoursInput::up-button, QSpinBox#TimerRuleGameHoursInput::down-button,
+    QSpinBox#TimerRuleGameDaysInput::up-button, QSpinBox#TimerRuleGameDaysInput::down-button {{
+        background-color: {base_color}; 
+        border: 1px solid {bg_color};
+        width: 12px;
+        min-height: 10px;
+        subcontrol-origin: border;
+        margin: 1px;
+    }}
+    /* Arrows for these general spinboxes */
+    QSpinBox#TimerRuleIntervalInput::up-arrow, QSpinBox#TimerRuleIntervalInput::down-arrow,
+    QSpinBox#TimerRuleGameMinutesInput::up-arrow, QSpinBox#TimerRuleGameMinutesInput::down-arrow,
+    QSpinBox#TimerRuleGameHoursInput::up-arrow, QSpinBox#TimerRuleGameHoursInput::down-arrow,
+    QSpinBox#TimerRuleGameDaysInput::up-arrow, QSpinBox#TimerRuleGameDaysInput::down-arrow {{
+        width: 0px; 
+        height: 0px;
+    }}
+
+    /* Styling for Timer Rule Condition Radio Buttons */
+    QRadioButton#TimerRuleConditionAlwaysRadio, QRadioButton#TimerRuleConditionVariableRadio {{
+        color: {base_color};
+        font: 10pt "Consolas";
+        spacing: 5px;
+        background-color: transparent;
+    }}
+    QRadioButton#TimerRuleConditionAlwaysRadio::indicator, QRadioButton#TimerRuleConditionVariableRadio::indicator {{
+        width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        border: 1px solid {base_color};
+        background: transparent;
+    }}
+    QRadioButton#TimerRuleConditionAlwaysRadio::indicator:checked, QRadioButton#TimerRuleConditionVariableRadio::indicator:checked {{
+        background-color: {base_color};
+        border: 1px solid {base_color};
+    }}
+    QRadioButton#TimerRuleConditionAlwaysRadio::indicator:hover, QRadioButton#TimerRuleConditionVariableRadio::indicator:hover {{
+        border: 1px solid {brighter};
+    }}
+
+    /* Styling for Timer Rule Random Interval Checkboxes */
+    QCheckBox#TimerRuleIntervalRandomCheckbox,
+    QCheckBox#TimerRuleGameMinutesRandomCheckbox,
+    QCheckBox#TimerRuleGameHoursRandomCheckbox,
+    QCheckBox#TimerRuleGameDaysRandomCheckbox {{
+        color: {base_color};
+        font: 10pt "Consolas"; 
+        spacing: 5px;
+        background-color: transparent;
+    }}
+    QCheckBox#TimerRuleIntervalRandomCheckbox::indicator,
+    QCheckBox#TimerRuleGameMinutesRandomCheckbox::indicator,
+    QCheckBox#TimerRuleGameHoursRandomCheckbox::indicator,
+    QCheckBox#TimerRuleGameDaysRandomCheckbox::indicator {{
+        width: 13px;
+        height: 13px;
+        border-radius: 3px;
+        border: 1px solid {base_color};
+        background: transparent;
+    }}
+    QCheckBox#TimerRuleIntervalRandomCheckbox::indicator:checked,
+    QCheckBox#TimerRuleGameMinutesRandomCheckbox::indicator:checked,
+    QCheckBox#TimerRuleGameHoursRandomCheckbox::indicator:checked,
+    QCheckBox#TimerRuleGameDaysRandomCheckbox::indicator:checked {{
+        background-color: {base_color};
+    }}
+    QCheckBox#TimerRuleIntervalRandomCheckbox::indicator:hover,
+    QCheckBox#TimerRuleGameMinutesRandomCheckbox::indicator:hover,
+    QCheckBox#TimerRuleGameHoursRandomCheckbox::indicator:hover,
+    QCheckBox#TimerRuleGameDaysRandomCheckbox::indicator:hover {{
+        border: 1px solid {brighter};
+    }}
+
+    /* Styling for Timer Rule Random Interval Min/Max SpinBoxes */
+    QSpinBox#TimerRuleIntervalMinInput, QSpinBox#TimerRuleIntervalMaxInput,
+    QSpinBox#TimerRuleGameMinutesMinInput, QSpinBox#TimerRuleGameMinutesMaxInput,
+    QSpinBox#TimerRuleGameHoursMinInput, QSpinBox#TimerRuleGameHoursMaxInput,
+    QSpinBox#TimerRuleGameDaysMinInput, QSpinBox#TimerRuleGameDaysMaxInput {{
+        color: {base_color};
+        background-color: {darker_bg}; 
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 1px 3px; 
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 10pt "Consolas";
+        min-width: 60px; 
+    }}
+    /* Buttons for these Min/Max spinboxes */
+    QSpinBox#TimerRuleIntervalMinInput::up-button, QSpinBox#TimerRuleIntervalMaxInput::up-button,
+    QSpinBox#TimerRuleGameMinutesMinInput::up-button, QSpinBox#TimerRuleGameMinutesMaxInput::up-button,
+    QSpinBox#TimerRuleGameHoursMinInput::up-button, QSpinBox#TimerRuleGameHoursMaxInput::up-button,
+    QSpinBox#TimerRuleGameDaysMinInput::up-button, QSpinBox#TimerRuleGameDaysMaxInput::up-button,
+    QSpinBox#TimerRuleIntervalMinInput::down-button, QSpinBox#TimerRuleIntervalMaxInput::down-button,
+    QSpinBox#TimerRuleGameMinutesMinInput::down-button, QSpinBox#TimerRuleGameMinutesMaxInput::down-button,
+    QSpinBox#TimerRuleGameHoursMinInput::down-button, QSpinBox#TimerRuleGameHoursMaxInput::down-button,
+    QSpinBox#TimerRuleGameDaysMinInput::down-button, QSpinBox#TimerRuleGameDaysMaxInput::down-button {{
+        background-color: {base_color};
+        border: 1px solid {bg_color};
+        width: 12px;
+        min-height: 10px; 
+        subcontrol-origin: border;
+        margin: 1px;
+    }}
+    /* Arrows for these Min/Max spinboxes */
+    QSpinBox#TimerRuleIntervalMinInput::up-arrow, QSpinBox#TimerRuleIntervalMaxInput::up-arrow,
+    QSpinBox#TimerRuleGameMinutesMinInput::up-arrow, QSpinBox#TimerRuleGameMinutesMaxInput::up-arrow,
+    QSpinBox#TimerRuleGameHoursMinInput::up-arrow, QSpinBox#TimerRuleGameHoursMaxInput::up-arrow,
+    QSpinBox#TimerRuleGameDaysMinInput::up-arrow, QSpinBox#TimerRuleGameDaysMaxInput::up-arrow,
+    QSpinBox#TimerRuleIntervalMinInput::down-arrow, QSpinBox#TimerRuleIntervalMaxInput::down-arrow,
+    QSpinBox#TimerRuleGameMinutesMinInput::down-arrow, QSpinBox#TimerRuleGameMinutesMaxInput::down-arrow,
+    QSpinBox#TimerRuleGameHoursMinInput::down-arrow, QSpinBox#TimerRuleGameHoursMaxInput::down-arrow,
+    QSpinBox#TimerRuleGameDaysMinInput::down-arrow, QSpinBox#TimerRuleGameDaysMaxInput::down-arrow {{
+        width: 0px; 
+        height: 0px;
+    }}
+    
+    /* Enable/Disable Checkbox */
+    QCheckBox#TimerRuleEnableCheckbox {{
+        color: {base_color};
+        font: 10pt "Consolas";
+        /* Standard checkbox indicator styling will be inherited if not overridden here */
+    }}
+    
+    /* Actions Area */
+    QWidget#TimerRuleActionsContainer {{
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+    }}
+    QWidget#TimerRuleActionRow {{
+        background-color: {darker_bg}; /* Ensure rows also have this if they are separate widgets */
+    }}
+    QComboBox#TimerRuleActionTypeCombo {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 2px;
+        font: 9pt "Consolas";
+    }}
+    QComboBox#TimerRuleActionTypeCombo::drop-down {{
+        border: none;
+    }}
+    QComboBox#TimerRuleActionTypeCombo::down-arrow {{
+        image: none;
+    }}
+    QLineEdit#TimerRuleActionValueInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 9pt "Consolas";
+    }}
+    QPushButton#TimerRuleActionRemoveButton {{
+        color: {base_color};
+        background-color: {darker_bg}; /* Changed from bg_color to match other small buttons */
+        border: 1px solid {base_color};
+        border-radius: 2px; /* Consistent with other small buttons */
+    }}
+    QPushButton#TimerRuleActionRemoveButton:hover {{
+        background-color: {highlight};
+        color: white;
+    }}
+    
+    /* Main Action Buttons (Add Action, Save Rule) */
+    QPushButton#TimerRuleAddActionButton, QPushButton#TimerRuleSaveButton {{
+        color: {base_color};
+        background-color: {bg_color};
+        border: 1px solid {base_color}; /* Ensure consistent border */
+        border-radius: 3px;
+        padding: 5px; /* Default padding from general QPushButton */
+        font: 10pt "Consolas"; /* Slightly smaller than general QPushButton if needed */
+    }}
+    QPushButton#TimerRuleAddActionButton:hover, QPushButton#TimerRuleSaveButton:hover {{
+        background-color: {highlight};
+        color: white;
+    }}
+    /* --- End Timer Rules Styling --- */
+
+    /* --- Styling for Start After Label --- */
+    QLabel#TimerRuleStartAfterLabel {{
+        color: {base_color};
+        font: 10pt "Consolas";
+        /* margin-right: 5px; */ /* Add if more space needed before radios */
+    }}
+
+    /* --- Styling for Timer Rule Start After Radio Buttons --- */
+    QRadioButton#TimerRuleStartAfterPlayerRadio, QRadioButton#TimerRuleStartAfterCharacterRadio, QRadioButton#TimerRuleStartAfterSceneChangeRadio {{
+        color: {base_color};
+        font: 10pt "Consolas";
+        spacing: 5px;
+        background-color: transparent;
+    }}
+    QRadioButton#TimerRuleStartAfterPlayerRadio::indicator, QRadioButton#TimerRuleStartAfterCharacterRadio::indicator, QRadioButton#TimerRuleStartAfterSceneChangeRadio::indicator {{
+        width: 16px;
+        height: 16px;
+        border-radius: 8px; /* For round radio buttons */
+        border: 1px solid {base_color};
+        background: transparent;
+    }}
+    QRadioButton#TimerRuleStartAfterPlayerRadio::indicator:checked, QRadioButton#TimerRuleStartAfterCharacterRadio::indicator:checked, QRadioButton#TimerRuleStartAfterSceneChangeRadio::indicator:checked {{
+        background-color: {base_color};
+        border: 1px solid {base_color};
+    }}
+    QRadioButton#TimerRuleStartAfterPlayerRadio::indicator:hover, QRadioButton#TimerRuleStartAfterCharacterRadio::indicator:hover, QRadioButton#TimerRuleStartAfterSceneChangeRadio::indicator:hover {{
+        border: 1px solid {brighter};
+    }}
+
+    /* --- Styling for Timer Rule Variable Scope Radio Buttons (Global/Character) --- */
+    QRadioButton#TimerRuleVarScopeGlobalRadio, QRadioButton#TimerRuleVarScopeCharacterRadio {{
+        color: {base_color}; /* CORRECTED: Single braces */
+        font: 10pt "Consolas";
+        spacing: 5px;
+        background-color: transparent;
+    }}
+    QRadioButton#TimerRuleVarScopeGlobalRadio::indicator, QRadioButton#TimerRuleVarScopeCharacterRadio::indicator {{
+        width: 16px;
+        height: 16px;
+        border-radius: 8px; /* For round radio buttons */
+        border: 1px solid {base_color}; /* CORRECTED: Single braces */
+        background: transparent; /* CORRECTED: Single braces */
+    }}
+    QRadioButton#TimerRuleVarScopeGlobalRadio::indicator:checked, QRadioButton#TimerRuleVarScopeCharacterRadio::indicator:checked {{
+        background-color: {base_color}; /* CORRECTED: Single braces */
+        border: 1px solid {base_color}; /* CORRECTED: Single braces */
+    }}
+    QRadioButton#TimerRuleVarScopeGlobalRadio::indicator:hover, QRadioButton#TimerRuleVarScopeCharacterRadio::indicator:hover {{
+        border: 1px solid {brighter}; /* CORRECTED: Single braces */
+    }}
+
+    /* --- Styling for Timer Rule Condition Variable Input Labels & LineEdits --- */
+    QLabel#TimerRuleConditionVarNameLabel, QLabel#TimerRuleConditionVarValueLabel {{
+        color: {base_color};
+        font: 10pt "Consolas";
+        font-weight: normal; /* Explicitly normal */
+    }}
+    QLineEdit#TimerRuleConditionVarNameInput, QLineEdit#TimerRuleConditionVarValueInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 10pt "Consolas"; /* Changed from 9pt for consistency */
+    }}
+
+    /* --- Styling for MULTIPLE Variable Conditions Area --- */
+    QWidget#VariableConditionsArea {{
+        /* Optional: Add border/background to visually group */
+        /* background-color: rgba(0,0,0, 0.1); */
+        /* border: 1px dotted {base_color}; */
+        /* border-radius: 3px; */
+        margin-top: 5px; /* Add some space above this section */
+    }}
+
+    QLabel#TimerConditionsOperatorLabel {{
+        color: {base_color};
+        font: 10pt "Consolas";
+        margin-right: 5px;
+    }}
+    
+    QComboBox#TimerConditionsOperatorCombo {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 2px;
+        font: 10pt "Consolas";
+        min-width: 60px;
+    }}
+    QComboBox#TimerConditionsOperatorCombo::drop-down {{
+        border: none;
+    }}
+    QComboBox#TimerConditionsOperatorCombo::down-arrow {{
+        image: none;
+    }}
+
+    /* Styling for widgets WITHIN each VariableConditionRow */
+    QWidget#VariableConditionRow QLineEdit#ConditionVarNameInput,
+    QWidget#VariableConditionRow QLineEdit#ConditionValueInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 2px; /* Slightly smaller padding */
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 9pt "Consolas"; /* Smaller font for rows */
+    }}
+    QWidget#VariableConditionRow QComboBox#ConditionOperatorCombo {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 1px;
+        font: 9pt "Consolas";
+        min-width: 80px; /* Adjust width */
+    }}
+    QWidget#VariableConditionRow QComboBox#ConditionOperatorCombo::drop-down {{
+        border: none;
+    }}
+    QWidget#VariableConditionRow QComboBox#ConditionOperatorCombo::down-arrow {{
+        image: none;
+    }}
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeGlobalRadio,
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeCharacterRadio,
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeSettingRadio {{
+        color: {base_color};
+        font: 9pt "Consolas";
+        spacing: 3px; /* Less spacing */
+        background-color: transparent;
+    }}
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeGlobalRadio::indicator,
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeCharacterRadio::indicator,
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeSettingRadio::indicator {{
+        width: 12px;
+        height: 12px;
+        border-radius: 6px;
+        border: 1px solid {base_color};
+        background: transparent;
+    }}
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeGlobalRadio::indicator:checked,
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeCharacterRadio::indicator:checked,
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeSettingRadio::indicator:checked {{
+        background-color: {base_color};
+        border: 1px solid {base_color};
+    }}
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeGlobalRadio::indicator:hover,
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeCharacterRadio::indicator:hover,
+    QWidget#VariableConditionRow QRadioButton#ConditionScopeSettingRadio::indicator:hover {{
+        border: 1px solid {brighter};
+    }}
+    QWidget#VariableConditionRow QPushButton#RemoveVariableConditionButton {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 2px;
+        min-width: 20px; /* Match size? */
+        max-width: 20px;
+        min-height: 20px;
+        max-height: 20px;
+        padding: 0px;
+        font-size: 12pt; /* Adjust for '-' sign */
+    }}
+    QWidget#VariableConditionRow QPushButton#RemoveVariableConditionButton:hover {{
+        background-color: {highlight};
+        color: white;
+    }}
+
+    /* Button to add new rows */
+    QPushButton#AddVariableConditionButton {{
+        color: {base_color};
+        background-color: {bg_color};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt "Consolas";
+        margin-top: 5px; /* Add space above button */
+    }}
+    QPushButton#AddVariableConditionButton:hover {{
+        background-color: {highlight};
+        color: white;
+    }}
+
+    /* --- Styling for Inter-Row Operator Combo --- */
+    QComboBox#ConditionRowOperatorCombo {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 1px;
+        font: 9pt "Consolas";
+        min-width: 55px; /* Keep narrow */
+        max-width: 55px;
+    }}
+    QComboBox#ConditionRowOperatorCombo::drop-down {{
+        border: none;
+    }}
+    QComboBox#ConditionRowOperatorCombo::down-arrow {{
+        image: none;
+    }}
+
+    /* --- Styling for Set Var Action Specific Inputs --- */
+    QLineEdit#TimerRuleActionVarNameInput,
+    QLineEdit#TimerRuleActionVarValueInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 2px; /* Smaller padding for dense row */
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 9pt "Consolas";
+    }}
+
+    QComboBox#TimerRuleSetVarOperationSelector {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 1px;
+        font: 9pt "Consolas";
+        min-width: 65px; /* Adjust as needed */
+    }}
+    QComboBox#TimerRuleSetVarOperationSelector::drop-down {{
+        border: none;
+    }}
+    QComboBox#TimerRuleSetVarOperationSelector::down-arrow {{
+        image: none;
+    }}
+
+    QRadioButton#TimerRuleActionScopeGlobalRadio,
+    QRadioButton#TimerRuleActionScopeCharacterRadio,
+    QRadioButton#TimerRuleActionScopeSettingRadio {{
+        color: {base_color};
+        font: 9pt "Consolas";
+        spacing: 3px;
+        background-color: transparent;
+    }}
+    QRadioButton#TimerRuleActionScopeGlobalRadio::indicator,
+    QRadioButton#TimerRuleActionScopeCharacterRadio::indicator,
+    QRadioButton#TimerRuleActionScopeSettingRadio::indicator {{
+        width: 12px;
+        height: 12px;
+        border-radius: 6px;
+        border: 1px solid {base_color};
+        background: transparent;
+    }}
+    QRadioButton#TimerRuleActionScopeGlobalRadio::indicator:checked,
+    QRadioButton#TimerRuleActionScopeCharacterRadio::indicator:checked,
+    QRadioButton#TimerRuleActionScopeSettingRadio::indicator:checked {{
+        background-color: {base_color};
+        border: 1px solid {base_color};
+    }}
+    QRadioButton#TimerRuleActionScopeGlobalRadio::indicator:hover,
+    QRadioButton#TimerRuleActionScopeCharacterRadio::indicator:hover,
+    QRadioButton#TimerRuleActionScopeSettingRadio::indicator:hover {{
+        border: 1px solid {brighter};
+    }}
+
+    /* NEW: Setting Manager Variable Name/Value Inputs - with more specific selector */
+    QWidget#VariableRow QLineEdit#SettingManagerVarNameInput,
+    QWidget#VariableRow QLineEdit#SettingManagerVarValueInput,
+    QLineEdit#SettingManagerVarNameInput,
+    QLineEdit#SettingManagerVarValueInput {{
+        color: {base_color} !important;
+        background-color: {darker_bg} !important;
+        border: 1px solid {base_color} !important;
+        border-radius: 3px !important;
+        padding: 3px !important;
+        font: 10pt "Consolas" !important;
+        selection-background-color: {highlight} !important;
+        selection-color: white !important;
+    }}
+    /* END NEW */
+
+    QLineEdit#PathDetailsNameInput, QTextEdit#PathDetailsDescInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt 'Consolas';
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+
+    QWidget[styleClass="PathDetailsNameInput"], QWidget[styleClass="PathDetailsDescInput"] {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt 'Consolas';
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+    
+    /* World Editor Scale Inputs */
+    QLineEdit#WORLDToolbar_ScaleNumberInput, QLineEdit#WORLDToolbar_ScaleTimeInput,
+    QLineEdit#LOCATIONToolbar_ScaleNumberInput, QLineEdit#LOCATIONToolbar_ScaleTimeInput {{
+        color: {base_color}; 
+        background-color: {darker_bg}; 
+        border: 1px solid {base_color}; 
+        selection-background-color: {highlight}; 
+        selection-color: white;
+        font: 9pt "Consolas";
+        border-radius: 3px;
+        padding: 3px;
+        max-width: 40px;
+        min-width: 35px;
+    }}
+    
+    QComboBox#WORLDToolbar_ScaleUnitDropdown, QComboBox#LOCATIONToolbar_ScaleUnitDropdown {{
+        color: {base_color}; 
+        background-color: {darker_bg}; 
+        border: 1px solid {base_color}; 
+        font: 9pt "Consolas";
+        border-radius: 3px;
+        padding: 3px;
+        max-width: 70px;
+        min-width: 65px;
+    }}
+    
+    QComboBox#WORLDToolbar_ScaleUnitDropdown::drop-down, QComboBox#LOCATIONToolbar_ScaleUnitDropdown::drop-down {{
+        border: none;
+    }}
+    
+    QComboBox#WORLDToolbar_ScaleUnitDropdown::down-arrow, QComboBox#LOCATIONToolbar_ScaleUnitDropdown::down-arrow {{
+        image: none;
+    }}
+    
+    QComboBox#WORLDToolbar_ScaleUnitDropdown QAbstractItemView, QComboBox#LOCATIONToolbar_ScaleUnitDropdown QAbstractItemView {{
+        color: {base_color}; 
+        background-color: {darker_bg}; 
+        selection-background-color: {highlight}; 
+        selection-color: white;
+        font: 9pt "Consolas";
+    }}
+    /* --- Inventory Scroll Area Fix --- */
+    QScrollArea#InventoryScrollArea {{
+        background-color: {darker_bg};
+    }}
+    QScrollArea#InventoryScrollArea QWidget {{
+        background-color: {darker_bg};
+    }}
+    
+    QRadioButton#TimerGenerateLastExchangeRadio, QRadioButton#TimerGenerateUserMsgRadio, QRadioButton#TimerGenerateFullConvoRadio,
+    QRadioButton#GenerateLastExchangeRadio, QRadioButton#GenerateUserMsgRadio, QRadioButton#GenerateFullConvoRadio {{
+        color: {base_color};
+        font: 9pt "Consolas";
+        spacing: 3px;
+        background-color: transparent;
+    }}
+    
+    QRadioButton#TimerGenerateLastExchangeRadio::indicator, QRadioButton#TimerGenerateUserMsgRadio::indicator, QRadioButton#TimerGenerateFullConvoRadio::indicator,
+    QRadioButton#GenerateLastExchangeRadio::indicator, QRadioButton#GenerateUserMsgRadio::indicator, QRadioButton#GenerateFullConvoRadio::indicator {{
+        width: 12px;
+        height: 12px;
+        border-radius: 6px;
+        border: 1px solid {base_color};
+        background-color: {bg_color};
+    }}
+    
+    QRadioButton#TimerGenerateLastExchangeRadio::indicator:checked, QRadioButton#TimerGenerateUserMsgRadio::indicator:checked, QRadioButton#TimerGenerateFullConvoRadio::indicator:checked,
+    QRadioButton#GenerateLastExchangeRadio::indicator:checked, QRadioButton#GenerateUserMsgRadio::indicator:checked, QRadioButton#GenerateFullConvoRadio::indicator:checked {{
+        background: {highlight};
+        border: 1px solid {brighter};
+    }}
+    
+    QRadioButton#TimerGenerateLastExchangeRadio::indicator:hover, QRadioButton#TimerGenerateUserMsgRadio::indicator:hover, QRadioButton#TimerGenerateFullConvoRadio::indicator:hover,
+    QRadioButton#GenerateLastExchangeRadio::indicator:hover, QRadioButton#GenerateUserMsgRadio::indicator:hover, QRadioButton#GenerateFullConvoRadio::indicator:hover {{
+        border: 1px solid {brighter};
+        background: transparent;
+    }}
+    
+    QLabel#TimerGenerateContextLabel, QLabel#TimerGenerateInstructionsLabel,
+    QLabel#GenerateContextLabel, QLabel#GenerateInstructionsLabel {{
+        color: {base_color};
+        font: 9pt "Consolas";
+        background-color: transparent;
+    }}
+    
+    QTextEdit#TimerGenerateInstructionsInput, QTextEdit#GenerateInstructionsInput {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 9pt "Consolas";
+        padding: 3px;
+    }}
+    
+    QWidget#TimerGenerateContextWidget, QWidget#GenerateContextWidget {{
+        background-color: {darker_bg};
+        border-radius: 3px;
+    }}
+
+    /* --- NEW: Generate Mode Radio Buttons Styling --- */
+    QRadioButton#GenerateModeLLMRadio, QRadioButton#GenerateModeRandomRadio {{
+        color: {base_color};
+        font: 9pt "Consolas";
+        spacing: 5px;
+        background-color: transparent;
+    }}
+    QRadioButton#GenerateModeLLMRadio::indicator, QRadioButton#GenerateModeRandomRadio::indicator {{
+        width: 13px;
+        height: 13px;
+        border-radius: 6px;
+        border: 1px solid {base_color};
+        background: {bg_color};
+    }}
+    QRadioButton#GenerateModeLLMRadio::indicator:checked, QRadioButton#GenerateModeRandomRadio::indicator:checked {{
+        background: {highlight};
+        border: 1px solid {brighter};
+    }}
+    QRadioButton#GenerateModeLLMRadio::indicator:hover, QRadioButton#GenerateModeRandomRadio::indicator:hover {{
+        border: 1px solid {brighter};
+        background: transparent;
+    }}
+    /* --- END NEW --- */
+
+    /* --- NEW: Random Generate Panel Filter Styling --- */
+    QLineEdit#SettingFilterInput, QLineEdit#CharacterFilterInput,
+    QLineEdit#RandomNumberMin, QLineEdit#RandomNumberMax {{
+        color: {base_color};
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 9pt "Consolas";
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+
+    /* Remove old QListWidget styling that's no longer needed */
+    
+    /* Keep button styling for other buttons */
+    QPushButton#AddSettingFilterBtn, QPushButton#RemoveSettingFilterBtn,
+    QPushButton#AddCharacterFilterBtn, QPushButton#RemoveCharacterFilterBtn {{
+        /* These will inherit from QWidget#ThoughtToolContainer QPushButton for general CoT button style */
+        /* Add specific overrides if general CoT button style isn't quite right */
+        font: 9pt "Consolas";
+        padding: 4px 8px; /* Slightly more padding for clarity */
+    }}
+    /* --- END NEW --- */
+
+    /* --- NEW: Setting Manager Extra Area Styling --- */
+    QWidget#SettingExtraAreaContainer {{
+        background-color: {bg_color}; /* Use general background color */
+        /* border: 1px solid {base_color}; REMOVED BORDER */
+        border-radius: 3px;
+        padding: 5px; /* Add some padding */
+    }}
+
+    QScrollArea#SettingExtraAreaScroll {{
+        background-color: transparent; /* Scroll area itself is transparent */
+        border: none; /* No border on the scroll area */
+    }}
+
+    /* Viewport of the scroll area, if needed for specific styling */
+    QScrollArea#SettingExtraAreaScroll > QWidget > QWidget {{
+        background-color: {bg_color}; /* Match container background */
+    }}
+
+    QCheckBox#SettingExteriorCheckbox {{
+        /* Inherits general QCheckBox styling for color, font, indicator */
+        /* Add specific overrides here if needed, e.g., margin */
+        margin-bottom: 5px; /* Add some space below the checkbox */
+    }}
+    /* --- END NEW --- */
+
+    /* --- NEW: Generation Options Panel Styling --- */
+    QWidget#GenerationOptionsContainer {{
+        background-color: {bg_color}; /* Use general background color */
+        /* border: 1px solid {base_color}; no border for seamless look */
+        border-radius: 3px;
+        padding: 5px; /* Internal padding */
+    }}
+
+    QCheckBox#DescGenCheckbox, QCheckBox#ConnGenCheckbox, QCheckBox#InvGenCheckbox {{
+        /* Inherit general QCheckBox styling */
+        /* Add specific margins if needed, e.g., margin-bottom: 3px; */
+    }}
+
+    QPushButton#GenerateButton {{
+        /* Inherit general QPushButton styling */
+        /* Add specific margins if needed, e.g., margin-top: 5px; */
+    }}
+    /* --- END NEW --- */
+
+    /* --- NEW: Setting Manager Connections Scroll Area Styling --- */
+    QScrollArea#ConnectionsScrollArea {{
+        background-color: {darker_bg};
+        border: 1px solid {base_color};
+        border-radius: 3px;
+    }}
+    QScrollArea#ConnectionsScrollArea > QWidget > QWidget {{
+        background-color: {darker_bg};
+        border: none;
+    }}
+    /* --- END NEW --- */
+
+    /* --- Setting Manager Path Styling --- */
+    /* Path widgets use existing styling classes and are handled automatically */
+
+    /* Inventory Manager List Style (within tabs) */
+    QListWidget#InventoryListWidget_Tab {{
+        background-color: {darker_bg};
+        color: {base_color};
+        border: 1px solid {base_color};
+        selection-background-color: {highlight};
+        selection-color: white;
+        alternate-background-color: {bg_color}; /* Keep or remove based on preference */
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt "Consolas"; /* Match ActorManagerList or adjust as needed */
+    }}
+
+    QListWidget#InventoryListWidget_Tab::item:selected {{
+        background-color: {highlight};
+        color: white;
+    }}
+
+    QListWidget#InventoryListWidget_Tab::item:hover {{
+        background-color: {highlight};
+        color: white; /* Match ActorManagerList hover or adjust */
+    }}
+
+    /* Inventory Manager Table Style (within tabs) */
+    QTableWidget#InventoryTableWidget_Tab {{
+        background-color: {darker_bg};
+        color: {base_color};
+        border: 1px solid {base_color};
+        gridline-color: {even_darker_bg}; /* Color for the grid lines */
+        /* alternate-background-color: {bg_color}; */ /* For alternating row colors, enable if desired */
+        selection-background-color: {highlight};
+        selection-color: white;
+        font: 10pt "Consolas";
+        border-radius: 3px;
+        padding: 1px; /* Minimal padding for the table itself */
+    }}
+
+    QTableWidget#InventoryTableWidget_Tab::item {{
+        border-bottom: 1px solid {even_darker_bg}; /* Separator for items */
+        padding: 4px; /* Padding within each cell */
+        color: {base_color};
+    }}
+
+    QTableWidget#InventoryTableWidget_Tab::item:selected {{
+        background-color: {highlight};
+        color: white; /* Text color for selected items */
+    }}
+
+    /* Style for the horizontal header of the inventory table */
+    QHeaderView#InventoryTableWidget_Tab_HorizontalHeader::section {{
+        background-color: {even_darker_bg};
+        color: {base_color};
+        padding: 4px;
+        border-top: 1px solid {darker_bg};
+        border-left: 1px solid {darker_bg};
+        border-right: 1px solid {darker_bg};
+        border-bottom: 1px solid {base_color}; /* Stronger bottom border for header */
+        font-weight: bold;
+    }}
+
+    /* Style for the vertical header (if made visible) */
+    QHeaderView#InventoryTableWidget_Tab_VerticalHeader::section {{
+        background-color: {even_darker_bg};
+        color: {base_color};
+        padding: 4px;
+        border-top: 1px solid {darker_bg};
+        border-left: 1px solid {base_color}; /* Stronger left border for header */
+        border-right: 1px solid {darker_bg};
+        border-bottom: 1px solid {darker_bg};
+    }}
+    /* End of Inventory Manager Table Style */
+
+    /* Actor Manager: Relations Container (Main widget, might not be visible bg) */
+    QWidget#RelationsContainer {{
+        background-color: transparent; /* Make outer container transparent */
+        border: none; /* No border on outer container */
+    }}
+
+    /* Actor Manager: Relations Scroll Area */
+    QScrollArea#RelationsScrollArea {{
+        background-color: {darker_bg}; /* Match list backgrounds */
+        border: 1px solid {base_color}; /* Use theme border */
+        border-radius: 3px;
+    }}
+
+    /* Actor Manager: Relations Scroll Area Content Widget */
+    QScrollArea#RelationsScrollArea > QWidget > QWidget {{
+        background-color: {darker_bg}; /* Ensure content widget matches scroll area bg */
+        border: none;
+    }}
+
+    /* Actor Manager: Variables Scroll Area */
+    QScrollArea#VariablesScrollArea {{
+        background-color: {darker_bg}; /* Match list backgrounds */
+        border: 1px solid {base_color}; /* Use theme border */
+        border-radius: 3px;
+    }}
+
+    /* Actor Manager: Variables Scroll Area Content Widget */
+    QScrollArea#VariablesScrollArea > QWidget > QWidget {{
+        background-color: {darker_bg}; /* Ensure content widget matches scroll area bg */
+        border: none;
+    }}
+
+    /* Actor Manager: Schedule Scroll Area */
+    QScrollArea#ScheduleScrollArea {{
+        background-color: {darker_bg}; /* Match list backgrounds */
+        border: 1px solid {base_color}; /* Use theme border */
+        border-radius: 3px;
+    }}
+
+    /* Actor Manager: Schedule Scroll Area Content Widget */
+    QScrollArea#ScheduleScrollArea > QWidget > QWidget {{
         background-color: {darker_bg}; /* Ensure content widget matches scroll area bg */
         border: none;
     }}
@@ -6355,6 +6485,18 @@ def generate_and_apply_stylesheet(target_widget, theme_colors):
         color: {base_color};
         background-color: {darker_bg};
         border: 1px solid {base_color};
+        selection-background-color: {highlight};
+        selection-color: white;
+    }}
+
+    /* Actor Manager: Schedule Input Fields */
+    QLineEdit#ActorManagerScheduleTimeInput, QLineEdit#ActorManagerScheduleSettingInput {{
+        color: {base_color};
+        background-color: {darker_bg}; /* Match list background */
+        border: 1px solid {base_color};
+        border-radius: 3px;
+        padding: 3px;
+        font: 10pt "Consolas";
         selection-background-color: {highlight};
         selection-color: white;
     }}

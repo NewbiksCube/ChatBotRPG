@@ -1306,7 +1306,7 @@ def _prepare_condition_text(self, condition_text, player_name, current_char_name
     else:
         pass 
     if current_char_name:
-        modified_text = re.sub(r'\(Character\)', current_char_name, modified_text, flags=re.IGNORECASE)
+        modified_text = re.sub(r'(?<!\[)\(Character\)(?![^,\]]*\])', current_char_name, modified_text, flags=re.IGNORECASE)
     if target_msg:
         final_text = f"Text to analyze:\n---\n{target_msg}\n---\n\n{modified_text}"
         return final_text
@@ -1400,3 +1400,57 @@ def _cleanup_old_backup_files_in_directory(directory):
             print(f"Cleaned up {files_cleaned} old backup files in {directory}")
     except Exception as e:
         print(f"Error during directory backup cleanup: {e}")
+
+
+def detect_dialogue_in_text(text):
+    if not text:
+        return {"has_dialogue": False, "all_dialogue": False, "some_dialogue": False}
+    
+    quote_chars = r'""'
+    closing_quote_chars = r'""'
+    non_tag_non_quote_char = rf'[^<{quote_chars}{closing_quote_chars}]'
+    simple_inline_tag = rf'<(?:em|strong|i|b)\b[^>]*>.*?<\/(?:em|strong|i|b)>'
+    inner_quote_content = rf'(?:{non_tag_non_quote_char}*?(?:{simple_inline_tag})?)*?{non_tag_non_quote_char}*?'
+    quote_pattern_str = rf'([{quote_chars}])({inner_quote_content})([{closing_quote_chars}])'
+    quote_pattern = re.compile(quote_pattern_str, re.DOTALL)
+    
+    dialogue_matches = quote_pattern.findall(text)
+    has_dialogue = len(dialogue_matches) > 0
+    
+    if not has_dialogue:
+        return {"has_dialogue": False, "all_dialogue": False, "some_dialogue": False}
+    
+    text_without_html = re.sub(r'<[^>]+>', '', text)
+    text_cleaned = text_without_html.strip()
+    
+    if not text_cleaned:
+        return {"has_dialogue": False, "all_dialogue": False, "some_dialogue": False}
+    
+    dialogue_text = ""
+    for match in dialogue_matches:
+        dialogue_text += match[0] + match[1] + match[2]
+    
+    dialogue_text_cleaned = re.sub(r'<[^>]+>', '', dialogue_text).strip()
+    non_dialogue_text = text_cleaned
+    for match in dialogue_matches:
+        full_quote = match[0] + match[1] + match[2]
+        quote_cleaned = re.sub(r'<[^>]+>', '', full_quote).strip()
+        non_dialogue_text = non_dialogue_text.replace(quote_cleaned, "").strip()
+    
+    non_dialogue_text = re.sub(r'\s+', ' ', non_dialogue_text).strip()
+    
+    all_dialogue = len(non_dialogue_text) == 0 or non_dialogue_text.isspace()
+    if not all_dialogue:
+        allowed_punct = r"[,\.\!\?\:\;\-\u2013\u2014\(\)\[\]\"'“”‘’\s]*"
+        tag_first = r"(?:i|you|he|she|it|we|they|[A-Z][a-z]+)"
+        tag_verb = r"[A-Za-z]+"
+        tag_pattern = rf"^{allowed_punct}(?:{tag_first}\s+{tag_verb}{allowed_punct})+$"
+        if re.fullmatch(tag_pattern, non_dialogue_text):
+            all_dialogue = True
+    some_dialogue = True
+    
+    return {
+        "has_dialogue": has_dialogue,
+        "all_dialogue": all_dialogue,
+        "some_dialogue": some_dialogue
+    }
