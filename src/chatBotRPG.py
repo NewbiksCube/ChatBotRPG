@@ -2837,12 +2837,6 @@ class ChatbotUI(QWidget):
                         gamestate = json.load(f)
                 except Exception as e:
                     print(f"  Error reading gamestate.json for effects init: {e}")
-            gamestate['effects'] = {
-                "blur": {"enabled": False, "radius": 0, "animation_speed": 2000, "animate": False},
-                "flicker": {"enabled": False, "intensity": 0, "frequency": 1000, "color": "white"},
-                "static": {"enabled": False, "intensity": 0, "frequency": 200, "dot_size": 1},
-                "darken_brighten": {"enabled": False, "factor": 1.0, "animation_speed": 2000, "animate": False}
-            }
             gamestate['effects_by_id'] = {}
             if 'effects_ids_order' in gamestate:
                 del gamestate['effects_ids_order']
@@ -3822,6 +3816,11 @@ p, li { white-space: pre-wrap; }
             return False
 
     def _update_screen_effects(self, tab_data):
+        """
+        Update screen effects based on gamestate.
+        NOTE: This function handles rule-based screen effects (blur, flicker, static, darken/brighten).
+        Scene transition fade effects are handled separately by SceneFadeOverlay and should not conflict.
+        """
         if not tab_data:
             return
         tab_index = self.tabs_data.index(tab_data) if tab_data in self.tabs_data else -1
@@ -3831,16 +3830,42 @@ p, li { white-space: pre-wrap; }
         if tab_index not in self._screen_effects:
             self._screen_effects[tab_index] = {}
         def get_target_widget():
+            # Use the conversation widget instead of the entire tab content widget
+            # This prevents conflicts with the SceneFadeOverlay which needs to be on top
             content_widget = tab_data.get('widget')
             if not content_widget:
                 print(f"Warning: Could not find content_widget for tab {tab_index} to apply effects.")
+                return None
+            
+            # Find the conversation widget within the content widget
+            # This is the area where we want to apply screen effects (output + input)
+            for child in content_widget.findChildren(QWidget):
+                if child.objectName() == "OutputField" or child.objectName().startswith("InputField_"):
+                    # Found the conversation area, return its parent (conversation_widget)
+                    parent = child.parent()
+                    if parent:
+                        return parent
+            
+            # Fallback to content widget if conversation widget not found
             return content_widget
         if not effects_config:
+            # Disable all screen effects and ensure they don't interfere with scene transitions
             for effect_type, effect_instance in self._screen_effects.get(tab_index, {}).items():
                 if hasattr(effect_instance, 'set_config'):
                     effect_instance.set_config(enabled=False)
+                # Also hide the effect widgets to prevent z-order conflicts
+                if hasattr(effect_instance, 'hide'):
+                    effect_instance.hide()
             return
         target_widget = get_target_widget()
+        
+        if not target_widget:
+            print(f"Warning: No target widget found for screen effects in tab {tab_index}")
+            return
+        
+        # Ensure screen effects are applied below the scene fade overlay
+        # by setting them to a lower z-order
+        target_widget.lower()
         
         blur_config = effects_config.get('blur', {})
         if 'blur' not in self._screen_effects[tab_index] and target_widget:
