@@ -134,30 +134,51 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
         return
     obj_type = obj.get('type', '')
     if obj_type == 'Generate Random List':
+        var_format = obj.get('var_format', 'comma')
+        var_format_separator = obj.get('var_format_separator', ' ')
         workflow_data_dir = tab_data.get('workflow_data_dir')
         if not workflow_data_dir:
             print(f"ERROR: Cannot generate random list - workflow_data_dir not found")
             return
         instructions = obj.get('instructions', '')
+        print(f"DEBUG: Original instructions before substitution: '{instructions}'")
+        instructions = _substitute_variables_in_string(instructions, tab_data, character_name)
+        print(f"DEBUG: Instructions after substitution: '{instructions}'")
         generator_name = obj.get('generator_name', '')
+        generator_name = _substitute_variables_in_string(generator_name, tab_data, character_name)
         is_permutate = obj.get('is_permutate', False)
         model_override = obj.get('model_override', None)
         generate_context = obj.get('generate_context', 'No Context')
+        print(f"DEBUG: Generate Random List - generate_context = '{generate_context}'")
+        print(f"DEBUG: Original instructions = '{instructions}'")
         if generate_context != 'No Context':
             context_text = ""
             if generate_context == 'Last Exchange':
                 context_text = self.get_current_context()
+                print(f"DEBUG: Last Exchange context retrieved: '{context_text}'")
             elif generate_context == 'User Message':
                 current_context = self.get_current_context()
+                print(f"DEBUG: Current context for User Message: '{current_context}'")
                 if current_context:
                     lines = current_context.strip().split('\n')
                     user_lines = [line for line in lines if line.startswith('User:')]
                     if user_lines:
                         context_text = user_lines[-1]
+                        print(f"DEBUG: Extracted user message: '{context_text}'")
             elif generate_context == 'Full Conversation':
                 context_text = self.get_current_context()
+                print(f"DEBUG: Full Conversation context retrieved: '{context_text}'")
             if context_text:
-                instructions = f"Based on the following conversation context, {instructions}\n\nConversation context:\n{context_text}"
+                instructions = f"""CONVERSATION CONTEXT:
+{context_text}
+
+INSTRUCTIONS:
+{instructions}"""
+                print(f"DEBUG: Final instructions with context: '{instructions}'")
+            else:
+                print(f"DEBUG: No context text was retrieved, using original instructions")
+        else:
+            print(f"DEBUG: No context requested, using original instructions")
         permutate_objects = obj.get('permutate_objects', False)
         permutate_weights = obj.get('permutate_weights', False)
         var_name = obj.get('var_name', '')
@@ -228,7 +249,20 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                                     if selected_item:
                                         sampled_values.append(selected_item.get("name", ""))
                     if sampled_values:
-                        sample_result = ", ".join(sampled_values)
+                        try:
+                            if var_format == 'comma':
+                                sample_result = ", ".join(sampled_values)
+                            elif var_format == 'space':
+                                sample_result = " ".join(sampled_values)
+                            elif var_format == 'custom':
+                                sample_result = var_format_separator.join(sampled_values)
+                            else:
+                                sample_result = ", ".join(sampled_values)
+                        except NameError:
+                            sample_result = ", ".join(sampled_values)
+                        print(f"  >> Generated Random List: Sampled values from {len(generator_data.get('tables', []))} tables: {sampled_values}")
+                        print(f"  >> Using format: {var_format} (separator: '{var_format_separator}')")
+                        print(f"  >> Final result: {sample_result}")
                     else:
                         sample_result = f"Error: No items found in generator {generator_data.get('name', 'Unknown')}"
                 except Exception as e:
@@ -237,6 +271,9 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
             else:
                 sample_result = f"Error: Could not find generator file to sample from. Result: {result}"
             store_value = sample_result if sample_result is not None else str(result)
+            var_mode = obj.get('var_mode', 'replace')
+            var_delimiter = obj.get('var_delimiter', '/')
+            
             if var_scope == 'Global':
                 variables_file = tab_data.get('variables_file')
                 if variables_file:
@@ -249,7 +286,14 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                                     variables = json.loads(content)
                         except Exception as e:
                             print(f"Error loading variables file: {e}")
-                    variables[var_name] = store_value
+                    
+                    prev_value = variables.get(var_name, "")
+                    if var_mode == 'replace':
+                        variables[var_name] = store_value
+                    elif var_mode == 'prepend':
+                        variables[var_name] = f"{store_value}{var_delimiter}{prev_value}" if prev_value else store_value
+                    elif var_mode == 'append':
+                        variables[var_name] = f"{prev_value}{var_delimiter}{store_value}" if prev_value else store_value
                     try:
                         with open(variables_file, 'w', encoding='utf-8') as f:
                             json.dump(variables, f, indent=2, ensure_ascii=False)
@@ -267,7 +311,13 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                     if actor_data:
                         if 'variables' not in actor_data:
                             actor_data['variables'] = {}
-                        actor_data['variables'][var_name] = store_value
+                        prev_value = actor_data['variables'].get(var_name, "")
+                        if var_mode == 'replace':
+                            actor_data['variables'][var_name] = store_value
+                        elif var_mode == 'prepend':
+                            actor_data['variables'][var_name] = f"{store_value}{var_delimiter}{prev_value}" if prev_value else store_value
+                        elif var_mode == 'append':
+                            actor_data['variables'][var_name] = f"{prev_value}{var_delimiter}{store_value}" if prev_value else store_value
                         
                         try:
                             with open(actor_path, 'w', encoding='utf-8') as f:
@@ -325,7 +375,13 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                         player_data = json.load(f)
                     if 'variables' not in player_data:
                         player_data['variables'] = {}
-                    player_data['variables'][var_name] = store_value
+                    prev_value = player_data['variables'].get(var_name, "")
+                    if var_mode == 'replace':
+                        player_data['variables'][var_name] = store_value
+                    elif var_mode == 'prepend':
+                        player_data['variables'][var_name] = f"{store_value}{var_delimiter}{prev_value}" if prev_value else store_value
+                    elif var_mode == 'append':
+                        player_data['variables'][var_name] = f"{prev_value}{var_delimiter}{store_value}" if prev_value else store_value
                     with open(player_file, 'w', encoding='utf-8') as f:
                         json.dump(player_data, f, indent=2, ensure_ascii=False)
                         f.flush()
@@ -345,7 +401,13 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                             
                             if 'variables' not in setting_data:
                                 setting_data['variables'] = {}
-                            setting_data['variables'][var_name] = store_value
+                            prev_value = setting_data['variables'].get(var_name, "")
+                            if var_mode == 'replace':
+                                setting_data['variables'][var_name] = store_value
+                            elif var_mode == 'prepend':
+                                setting_data['variables'][var_name] = f"{store_value}{var_delimiter}{prev_value}" if prev_value else store_value
+                            elif var_mode == 'append':
+                                setting_data['variables'][var_name] = f"{prev_value}{var_delimiter}{store_value}" if prev_value else store_value
                             with open(setting_file, 'w', encoding='utf-8') as f:
                                 json.dump(setting_data, f, indent=2, ensure_ascii=False)
                                 f.flush()
@@ -360,7 +422,13 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                     if actor_data:
                         if 'variables' not in actor_data:
                             actor_data['variables'] = {}
-                        actor_data['variables'][var_name] = store_value
+                        prev_value = actor_data['variables'].get(var_name, "")
+                        if var_mode == 'replace':
+                            actor_data['variables'][var_name] = store_value
+                        elif var_mode == 'prepend':
+                            actor_data['variables'][var_name] = f"{store_value}{var_delimiter}{prev_value}" if prev_value else store_value
+                        elif var_mode == 'append':
+                            actor_data['variables'][var_name] = f"{prev_value}{var_delimiter}{store_value}" if prev_value else store_value
                         try:
                             with open(actor_path, 'w', encoding='utf-8') as f:
                                 json.dump(actor_data, f, indent=2, ensure_ascii=False)
@@ -672,7 +740,7 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                     print(f"ERROR: Cannot set character variable - workflow_data_dir not found")
                     return
                 actor_data, actor_path = _get_or_create_actor_data(self, workflow_data_dir, character_name)
-                print(f"    <- _get_or_create_actor_data returned: Path={actor_path}, Data={actor_data}")
+        
                 if not actor_data:
                     print(f"ERROR: Could not find or create actor data for '{character_name}'")
                     return
@@ -914,7 +982,7 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                         f.flush()
                         os.fsync(f.fileno())
                     tab_data['variables'] = variables.copy()
-                    print(f"✓ Successfully updated global variable: {var_name} = {new_value} (file and cache updated)")
+                    pass
                 except Exception as e:
                     print(f"✗ FAILED to update global variable: {var_name} = {new_value}. Error: {e}")
             elif variable_scope == 'Scene Characters':
@@ -927,7 +995,7 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                     print(f"ERROR: Cannot set Scene Characters variable - _get_player_current_setting_name could not determine current setting.")
                     return
                 else:
-                    print(f"    -> Current setting identified as: '{current_setting_name}' by _get_player_current_setting_name")
+                    pass
                 setting_file_result = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, current_setting_name)
                 setting_file_path = setting_file_result[0] if isinstance(setting_file_result, tuple) else setting_file_result
                 if not setting_file_path or not os.path.exists(setting_file_path):
@@ -936,7 +1004,7 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                 try:
                     with open(setting_file_path, 'r', encoding='utf-8') as f:
                         setting_data = json.load(f)
-                        print(f"    -> Successfully loaded setting JSON")
+                        pass
                 except Exception as e:
                     print(f"ERROR: Failed to load setting file '{setting_file_path}': {e}")
                     return
@@ -992,7 +1060,6 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
                             f.flush()
                             os.fsync(f.fileno())
                         update_count += 1
-                        print(f"    ✓ Successfully updated variable for character '{char_name}'")
                     except Exception as e:
                         print(f"    ✗ Failed to update variable for character '{char_name}': {e}")
             else:
@@ -1733,6 +1800,54 @@ def _apply_rule_side_effects(self, obj, rule, character_name=None, current_user_
             print(f"ERROR: Failed to change time passage: {e}")
             import traceback
             traceback.print_exc()
+    elif obj_type == 'Delete Character':
+        target_character_name = obj.get('target_character_name', '').strip()
+        workflow_data_dir = tab_data.get('workflow_data_dir')
+        if not workflow_data_dir:
+            print(f"ERROR: Cannot delete character - workflow_data_dir not found")
+            return
+        
+        if not target_character_name and character_name:
+            target_character_name = character_name
+        elif not target_character_name:
+            print(f"ERROR: Cannot delete character - no target character name provided and no character context")
+            return
+        
+        if character_name == 'Narrator':
+            print(f"ERROR: Cannot delete character - Delete Character action does not work for Narrator")
+            return
+        
+        try:
+            variables_file = os.path.join(workflow_data_dir, "game", "variables.json")
+            variables = {}
+            if os.path.exists(variables_file):
+                try:
+                    with open(variables_file, 'r', encoding='utf-8') as f:
+                        variables = json.load(f)
+                except Exception as e:
+                    print(f"Error loading variables file: {e}")
+                    variables = {}
+            
+            characters_to_delete = variables.get('CharactersToDelete', [])
+            if not isinstance(characters_to_delete, list):
+                characters_to_delete = []
+            
+            if target_character_name not in characters_to_delete:
+                characters_to_delete.append(target_character_name)
+                variables['CharactersToDelete'] = characters_to_delete
+                
+                try:
+                    with open(variables_file, 'w', encoding='utf-8') as f:
+                        json.dump(variables, f, indent=2, ensure_ascii=False)
+                    print(f"✓ Successfully marked character '{target_character_name}' for deletion")
+                except Exception as e:
+                    print(f"✗ FAILED to save deletion mark: {e}")
+            else:
+                print(f"Character '{target_character_name}' is already marked for deletion")
+        except Exception as e:
+            print(f"ERROR: Failed to mark character for deletion: {e}")
+            import traceback
+            traceback.print_exc()
     else:
         print(f"Warning: Unknown rule side effect type: {obj_type}")
         return
@@ -1764,11 +1879,12 @@ def _substitute_variables_in_string(text_to_process, tab_data, actor_name_contex
     result_text = text_to_process
     workflow_data_dir = tab_data.get('workflow_data_dir') if tab_data else None
     if '(character)' in result_text.lower() and actor_name_context:
-        result_text = re.sub(r'\(character\)', actor_name_context, result_text, flags=re.IGNORECASE)
+        result_text = re.sub(r'(?<!\[)\(character\)(?![^,\]]*\])', actor_name_context, result_text, flags=re.IGNORECASE)
     if '(player)' in result_text.lower() and workflow_data_dir:
         player_name = _get_player_character_name(workflow_data_dir)
         if player_name:
             result_text = re.sub(r'\(player\)', player_name, result_text, flags=re.IGNORECASE)
+            result_text = re.sub(r'\(Player\)', player_name, result_text)
     if '(setting)' in result_text.lower() and workflow_data_dir:
         setting_name = _get_player_current_setting_name(workflow_data_dir)
         if setting_name and setting_name != "Unknown Setting":

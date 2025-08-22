@@ -3,6 +3,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 from rules.timer_rules_manager import TimerRulesWidget
 from core.utils import is_valid_widget
+from rules.rule_debug import RuleDebugWidget
 
 class RulesToggleManager(QWidget):
     rules_type_changed = pyqtSignal(str)
@@ -34,10 +35,18 @@ class RulesToggleManager(QWidget):
         self.timer_rules_btn.setMinimumHeight(30)
         self.timer_rules_btn.setFont(QFont('Consolas', 10))
         self.timer_rules_btn.setFocusPolicy(Qt.NoFocus)
+        self.debug_rules_btn = QPushButton("Debug")
+        self.debug_rules_btn.setObjectName("DebugRulesToggleButton")
+        self.debug_rules_btn.setCheckable(True)
+        self.debug_rules_btn.setMinimumHeight(30)
+        self.debug_rules_btn.setFont(QFont('Consolas', 10))
+        self.debug_rules_btn.setFocusPolicy(Qt.NoFocus)
         self.toggle_group.addButton(self.standard_rules_btn)
         self.toggle_group.addButton(self.timer_rules_btn)
+        self.toggle_group.addButton(self.debug_rules_btn)
         toggle_layout.addWidget(self.standard_rules_btn)
         toggle_layout.addWidget(self.timer_rules_btn)
+        toggle_layout.addWidget(self.debug_rules_btn)
         main_layout.addWidget(toggle_container)
         self.content_stack = QStackedWidget()
         self.content_stack.setObjectName("RulesContentStack")
@@ -45,12 +54,15 @@ class RulesToggleManager(QWidget):
             self.standard_rules_widget = QWidget()
             self.standard_rules_widget.setObjectName("StandardRulesPlaceholder")
         self.timer_rules_widget = TimerRulesWidget(theme_colors=self.theme_colors)
+        self.debug_rules_widget = RuleDebugWidget()
         self.content_stack.addWidget(self.standard_rules_widget)
         self.content_stack.addWidget(self.timer_rules_widget)
+        self.content_stack.addWidget(self.debug_rules_widget)
         self.content_stack.setCurrentIndex(0)
         main_layout.addWidget(self.content_stack)
         self.standard_rules_btn.toggled.connect(self._on_standard_rules_toggle)
         self.timer_rules_btn.toggled.connect(self._on_timer_rules_toggle)
+        self.debug_rules_btn.toggled.connect(self._on_debug_rules_toggle)
         self._apply_theme()
     def _on_standard_rules_toggle(self, checked):
         if checked:
@@ -60,6 +72,10 @@ class RulesToggleManager(QWidget):
         if checked:
             self.content_stack.setCurrentIndex(1)
             self.rules_type_changed.emit("timer")
+    def _on_debug_rules_toggle(self, checked):
+        if checked:
+            self.content_stack.setCurrentIndex(2)
+            self.rules_type_changed.emit("debug")
     def _apply_theme(self):
         if not self.theme_colors:
             return
@@ -86,6 +102,7 @@ class RulesToggleManager(QWidget):
         """
         self.standard_rules_btn.setStyleSheet(button_style)
         self.timer_rules_btn.setStyleSheet(button_style)
+        self.debug_rules_btn.setStyleSheet(button_style)
         if is_valid_widget(self.timer_rules_widget):
             self.timer_rules_widget.update_theme(self.theme_colors)
     def update_theme(self, theme_colors):
@@ -103,11 +120,19 @@ class RulesToggleManager(QWidget):
             self.content_stack.setCurrentIndex(0)
         return True
     def get_current_rules_type(self):
-        return "standard" if self.standard_rules_btn.isChecked() else "timer"
+        if self.standard_rules_btn.isChecked():
+            return "standard"
+        if self.timer_rules_btn.isChecked():
+            return "timer"
+        return "debug"
     def set_active_rules_type(self, rules_type):
         if rules_type.lower() == "standard":
             self.standard_rules_btn.setChecked(True)
         elif rules_type.lower() == "timer":
             self.timer_rules_btn.setChecked(True)
+        elif rules_type.lower() == "debug":
+            self.debug_rules_btn.setChecked(True)
     def get_timer_rules_widget(self):
-        return self.timer_rules_widget 
+        return self.timer_rules_widget
+    def get_debug_rules_widget(self):
+        return self.debug_rules_widget 

@@ -31,6 +31,9 @@ def create_generate_random_list_widget(parent=None):
     mode_permutate_radio = QRadioButton("Permutate")
     mode_permutate_radio.setObjectName("GenRandomListPermutateRadio")
     mode_permutate_radio.setFont(QFont('Consolas', 9))
+    mode_group = QButtonGroup(widget)
+    mode_group.addButton(mode_new_radio)
+    mode_group.addButton(mode_permutate_radio)
     mode_layout.addWidget(mode_label)
     mode_layout.addWidget(mode_new_radio)
     mode_layout.addWidget(mode_permutate_radio)
@@ -150,6 +153,12 @@ def create_generate_random_list_widget(parent=None):
     var_scope_scene_chars_radio = QRadioButton("Scene Characters")
     var_scope_scene_chars_radio.setObjectName("GenRandomListVarScopeSceneCharsRadio")
     var_scope_scene_chars_radio.setFont(QFont('Consolas', 9))
+    var_scope_group = QButtonGroup(widget)
+    var_scope_group.addButton(var_scope_global_radio)
+    var_scope_group.addButton(var_scope_player_radio)
+    var_scope_group.addButton(var_scope_character_radio)
+    var_scope_group.addButton(var_scope_setting_radio)
+    var_scope_group.addButton(var_scope_scene_chars_radio)
     var_scope_layout = QHBoxLayout()
     var_scope_layout.addWidget(scope_label)
     var_scope_layout.addWidget(var_scope_global_radio)
@@ -161,6 +170,72 @@ def create_generate_random_list_widget(parent=None):
     variable_layout.addLayout(variable_header)
     variable_layout.addLayout(var_name_layout)
     variable_layout.addLayout(var_scope_layout)
+    
+    var_mode_layout = QHBoxLayout()
+    var_mode_label = QLabel("Variable Mode:")
+    var_mode_label.setObjectName("GenRandomListVarModeLabel")
+    var_mode_label.setFont(QFont('Consolas', 9))
+    var_mode_prepend_radio = QRadioButton("Prepend")
+    var_mode_prepend_radio.setObjectName("GenRandomListVarModePrependRadio")
+    var_mode_prepend_radio.setFont(QFont('Consolas', 9))
+    var_mode_replace_radio = QRadioButton("Replace")
+    var_mode_replace_radio.setObjectName("GenRandomListVarModeReplaceRadio")
+    var_mode_replace_radio.setFont(QFont('Consolas', 9))
+    var_mode_replace_radio.setChecked(True)
+    var_mode_append_radio = QRadioButton("Append")
+    var_mode_append_radio.setObjectName("GenRandomListVarModeAppendRadio")
+    var_mode_append_radio.setFont(QFont('Consolas', 9))
+    var_mode_delimiter_label = QLabel("Delimiter:")
+    var_mode_delimiter_label.setFont(QFont('Consolas', 9))
+    var_mode_delimiter_input = QLineEdit("/")
+    var_mode_delimiter_input.setObjectName("GenRandomListVarModeDelimiterInput")
+    var_mode_delimiter_input.setFont(QFont('Consolas', 9))
+    var_mode_delimiter_input.setMaximumWidth(50)
+    var_mode_delimiter_input.setToolTip("Optional delimiter to use when prepending or appending text")
+    var_mode_group = QButtonGroup()
+    var_mode_group.addButton(var_mode_prepend_radio)
+    var_mode_group.addButton(var_mode_replace_radio)
+    var_mode_group.addButton(var_mode_append_radio)
+    var_mode_layout.addWidget(var_mode_label)
+    var_mode_layout.addWidget(var_mode_prepend_radio)
+    var_mode_layout.addWidget(var_mode_replace_radio)
+    var_mode_layout.addWidget(var_mode_append_radio)
+    var_mode_layout.addWidget(var_mode_delimiter_label)
+    var_mode_layout.addWidget(var_mode_delimiter_input)
+    var_mode_layout.addStretch(1)
+    variable_layout.addLayout(var_mode_layout)
+    
+    var_format_layout = QHBoxLayout()
+    var_format_label = QLabel("Result Format:")
+    var_format_label.setObjectName("GenRandomListVarFormatLabel")
+    var_format_label.setFont(QFont('Consolas', 9))
+    var_format_comma_radio = QRadioButton("Comma Separated")
+    var_format_comma_radio.setObjectName("GenRandomListVarFormatCommaRadio")
+    var_format_comma_radio.setFont(QFont('Consolas', 9))
+    var_format_comma_radio.setChecked(True)
+    var_format_space_radio = QRadioButton("Space Separated")
+    var_format_space_radio.setObjectName("GenRandomListVarFormatSpaceRadio")
+    var_format_space_radio.setFont(QFont('Consolas', 9))
+    var_format_custom_radio = QRadioButton("Custom Separator:")
+    var_format_custom_radio.setObjectName("GenRandomListVarFormatCustomRadio")
+    var_format_custom_radio.setFont(QFont('Consolas', 9))
+    var_format_custom_input = QLineEdit(" ")
+    var_format_custom_input.setObjectName("GenRandomListVarFormatCustomInput")
+    var_format_custom_input.setFont(QFont('Consolas', 9))
+    var_format_custom_input.setMaximumWidth(50)
+    var_format_custom_input.setToolTip("Custom separator for joining multi-table results")
+    var_format_group = QButtonGroup()
+    var_format_group.addButton(var_format_comma_radio)
+    var_format_group.addButton(var_format_space_radio)
+    var_format_group.addButton(var_format_custom_radio)
+    var_format_layout.addWidget(var_format_label)
+    var_format_layout.addWidget(var_format_comma_radio)
+    var_format_layout.addWidget(var_format_space_radio)
+    var_format_layout.addWidget(var_format_custom_radio)
+    var_format_layout.addWidget(var_format_custom_input)
+    var_format_layout.addStretch(1)
+    variable_layout.addLayout(var_format_layout)
+    
     layout.addLayout(variable_layout)
     def update_mode_ui():
         is_permutate = mode_permutate_radio.isChecked()
@@ -253,7 +328,7 @@ def create_pair_widget(tab_data):
             "Rewrite Post", "Generate Setting",
             "Generate Character", "Generate Random List",
             "Text Tag", "New Scene", "Change Actor Location", "Force Narrator", "Set Screen Effect", "Skip Post", "Change Brightness", "Exit Rule Processing", "Game Over",
-            "Post Visibility", "Add Item", "Remove Item", "Move Item", "Determine Items", "Post Streaming", "Advance Time", "Change Time Passage"
+            "Post Visibility", "Add Item", "Remove Item", "Move Item", "Determine Items", "Post Streaming", "Advance Time", "Change Time Passage", "Delete Character"
         ]
         type_selector.addItems(action_items)
         
@@ -474,6 +549,22 @@ def create_pair_widget(tab_data):
         switch_model_layout.addStretch()
         switch_model_widget.setVisible(False)
         top_h_layout.addWidget(switch_model_widget)
+        rewrite_model_widget = QWidget()
+        rewrite_model_layout = QHBoxLayout(rewrite_model_widget)
+        rewrite_model_layout.setContentsMargins(5, 0, 0, 0)
+        rewrite_model_layout.setSpacing(5)
+        rewrite_model_label = QLabel("Rewrite Model:")
+        rewrite_model_label.setFont(QFont('Consolas', 9))
+        rewrite_model_editor = QLineEdit()
+        rewrite_model_editor.setObjectName("RewriteModelEditor")
+        rewrite_model_editor.setFont(QFont('Consolas', 9))
+        rewrite_model_editor.setPlaceholderText("optional model name")
+        rewrite_model_editor.setMinimumWidth(180)
+        rewrite_model_layout.addWidget(rewrite_model_label)
+        rewrite_model_layout.addWidget(rewrite_model_editor)
+        rewrite_model_layout.addStretch()
+        rewrite_model_widget.setVisible(False)
+        top_h_layout.addWidget(rewrite_model_widget)
         text_tag_mode_widget = QWidget()
         text_tag_mode_layout = QHBoxLayout(text_tag_mode_widget)
         text_tag_mode_layout.setContentsMargins(0, 0, 0, 0)
@@ -2122,6 +2213,7 @@ def create_pair_widget(tab_data):
             is_determine_items = (t == "Determine Items")
             is_advance_time = (t == "Advance Time")
             is_change_time_passage = (t == "Change Time Passage")
+            is_delete_character = (t == "Delete Character")
             is_generate_operation = False
             is_from_random_list = False
             if is_set_var and operation_selector:
@@ -2163,6 +2255,7 @@ def create_pair_widget(tab_data):
             change_time_passage_widget.setVisible(is_change_time_passage)
             position_container.setVisible(is_sys_msg)
             switch_model_widget.setVisible(is_switch_model)
+            rewrite_model_widget.setVisible(is_rewrite)
             generate_setting_widget.setVisible(is_generate_setting)
             generate_character_widget.setVisible(is_generate_character)
             generate_random_list_widget.setVisible(is_generate_random_list)
@@ -2187,6 +2280,7 @@ def create_pair_widget(tab_data):
                 elif t == "Switch Model": value_editor.setPlaceholderText("Model name")
                 elif is_rewrite: value_editor.setPlaceholderText("Rewrite instructions")
                 elif is_text_tag: value_editor.setPlaceholderText("Tag text (displays centered)")
+                elif is_delete_character: value_editor.setPlaceholderText("Character name to delete (leave empty to delete current character)")
                 elif is_advance_time: value_editor.setPlaceholderText("Time advancement amount (e.g., 2h 30m)")
                 elif is_change_time_passage: value_editor.setPlaceholderText("Time passage configuration")
                 else: value_editor.setPlaceholderText("Action value")
@@ -2391,6 +2485,8 @@ def create_pair_widget(tab_data):
             'generate_full_convo_radio': generate_full_convo_radio,
             'switch_model_widget': switch_model_widget,
             'switch_model_temp_editor': temp_editor,
+            'rewrite_model_widget': rewrite_model_widget,
+            'rewrite_model_editor': rewrite_model_editor,
             'screen_effects_widget': screen_effects_widget,
             'effect_type_combo': effect_type_combo,
             'effect_operation_combo': effect_operation_combo,
@@ -2614,6 +2710,10 @@ def create_pair_widget(tab_data):
             for radio, mode_value in tag_mode_radios:
                 if radio and is_valid_widget(radio):
                     radio.setChecked(tag_mode == mode_value)
+
+        elif action_type == 'Delete Character':
+            if is_valid_widget(value_editor):
+                value_editor.setPlainText(data.get('target_character_name', ''))
 
         elif action_type == 'Change Actor Location':
             populate_change_actor_location(data, row)
@@ -2885,6 +2985,36 @@ def create_pair_widget(tab_data):
             radio = gen_random_list_widget.findChild(QRadioButton, radio_name)
             if radio and is_valid_widget(radio):
                 radio.setChecked(context == context_value)
+        
+        var_mode = data.get('var_mode', 'replace')
+        var_mode_radios = [
+            ("GenRandomListVarModePrependRadio", "prepend"),
+            ("GenRandomListVarModeReplaceRadio", "replace"),
+            ("GenRandomListVarModeAppendRadio", "append")
+        ]
+        for radio_name, mode_value in var_mode_radios:
+            radio = gen_random_list_widget.findChild(QRadioButton, radio_name)
+            if radio and is_valid_widget(radio):
+                radio.setChecked(var_mode == mode_value)
+        
+        var_delimiter_input = gen_random_list_widget.findChild(QLineEdit, "GenRandomListVarModeDelimiterInput")
+        if var_delimiter_input and is_valid_widget(var_delimiter_input):
+            var_delimiter_input.setText(data.get('var_delimiter', '/'))
+        
+        var_format = data.get('var_format', 'comma')
+        var_format_radios = [
+            ("GenRandomListVarFormatCommaRadio", "comma"),
+            ("GenRandomListVarFormatSpaceRadio", "space"),
+            ("GenRandomListVarFormatCustomRadio", "custom")
+        ]
+        for radio_name, format_value in var_format_radios:
+            radio = gen_random_list_widget.findChild(QRadioButton, radio_name)
+            if radio and is_valid_widget(radio):
+                radio.setChecked(var_format == format_value)
+        
+        var_format_custom_input = gen_random_list_widget.findChild(QLineEdit, "GenRandomListVarFormatCustomInput")
+        if var_format_custom_input and is_valid_widget(var_format_custom_input):
+            var_format_custom_input.setText(data.get('var_format_separator', ' '))
 
     def populate_force_narrator(data, row):
         fn_order = data.get('force_narrator_order', 'First')

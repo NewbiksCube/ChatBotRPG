@@ -2,12 +2,24 @@ from PyQt5.QtCore import QTimer
 import os
 import json
 import random
+from core.make_inference import make_inference
+from config import get_default_utility_model
+import re
 from core.move_character import move_characters
-from rules.apply_rules import _apply_rule_side_effects
+from rules.apply_rules import _apply_rule_side_effects, _substitute_variables_in_string
 from core.utils import (_get_player_character_name, _prepare_condition_text, 
                  _get_player_current_setting_name, 
                  _get_random_filtered_entity_name)
 import time
+
+def _is_transit_rule(rule):
+    pairs = rule.get('tag_action_pairs', [])
+    for pair in pairs:
+        actions = pair.get('actions', [])
+        for action in actions:
+            if action.get('type') == 'Change Actor Location' and action.get('location_mode') in ('Fast Travel', 'Adjacent'):
+                return True
+    return False
 
 def _evaluate_conditions(self, tab_data, conditions, operator, current_turn, triggered_directly=False, character_name=None):
     time_manager_widget = tab_data.get('time_manager_widget')
@@ -28,23 +40,17 @@ def _evaluate_conditions(self, tab_data, conditions, operator, current_turn, tri
                 print(f"ERROR: Could not reload variables for rule evaluation: {e}")
     if not conditions:
         if triggered_directly:
-            print(f"[RULE EVAL] No conditions and triggered_directly=True -> TRUE")
             return True
-        print(f"[RULE EVAL] No conditions and triggered_directly=False -> FALSE")
         return False
     results = []
     for idx, cond_row_data in enumerate(conditions):
         if 'applies_to' not in cond_row_data and character_name:
             cond_row_data['character_name'] = character_name
-        print(f"[RULE EVAL] Condition {idx+1}: {cond_row_data}")
         result = self._evaluate_condition_row(tab_data, cond_row_data, current_turn, triggered_directly)
-        print(f"[RULE EVAL] Condition {idx+1} result: {result}")
         results.append(result)
         if (operator.upper() == "AND" or operator.upper() == "ALL") and not result:
-            print(f"[RULE EVAL] AND operator: condition {idx+1} failed, short-circuiting -> FALSE")
             return False
         elif (operator.upper() == "OR" or operator.upper() == "ANY") and result:
-            print(f"[RULE EVAL] OR operator: condition {idx+1} passed, short-circuiting -> TRUE")
             return True
     if operator.upper() == "OR" or operator.upper() == "ANY":
         final_result = any(results)
@@ -130,6 +136,8 @@ def _process_specific_rule(self, rule, current_user_msg, prev_assistant_msg, rul
                     self._cot_next_step = None
             return
     conditions_met = _evaluate_conditions(self, tab_data, rule.get('conditions', []), rule.get('conditions_operator', 'AND'), tab_data.get('turn_count', 1), triggered_directly, character_name)
+    if _is_transit_rule(rule):
+        print(f"[TRANSIT] Structured conditions for '{rule.get('id')}': {conditions_met}")
     if not conditions_met:
         if (hasattr(self, '_character_llm_reply_rule_complete_callback') and 
             self._character_llm_reply_rule_complete_callback and
@@ -161,9 +169,25 @@ def _process_specific_rule(self, rule, current_user_msg, prev_assistant_msg, rul
             return
         return
     tag_action_pairs = rule.get('tag_action_pairs', [])
+    
+    # Check if rule has structured conditions array (newer format)
+    structured_conditions = rule.get('conditions', [])
     condition_raw = rule.get('condition', '').strip()
-    actor_for_condition_substitution = character_name
-    condition = self._substitute_variables_in_string(condition_raw, tab_data, actor_for_condition_substitution)
+    
+    if structured_conditions and condition_raw:
+        # Rule has both structured conditions AND a text condition - need to evaluate both
+        # Structured conditions were already evaluated in _evaluate_conditions
+        # Now evaluate the text condition
+        actor_for_condition_substitution = character_name
+        condition = _substitute_variables_in_string(condition_raw, tab_data, actor_for_condition_substitution)
+    elif structured_conditions:
+        # Rule has only structured conditions - they were already evaluated
+        condition = ""
+    else:
+        # Legacy format - only the old 'condition' field
+        actor_for_condition_substitution = character_name
+        condition = _substitute_variables_in_string(condition_raw, tab_data, actor_for_condition_substitution)
+    
     if not condition:
         found_empty_tag_action = False
         for pair in tag_action_pairs:
@@ -259,6 +283,11 @@ def _process_specific_rule(self, rule, current_user_msg, prev_assistant_msg, rul
                                                              current_user_msg, prev_assistant_msg)
             if not any(f"[{tag.lower()}]" in condition.lower() for tag in tags) and "choose" not in condition.lower():
                     prepared_condition_text += f"\nChoose ONLY one of these responses: {tags_for_prompt}"
+            if _is_transit_rule(rule):
+                try:
+                    print(f"[TRANSIT] Text condition length for '{rule_id}': {len(prepared_condition_text)}")
+                except Exception:
+                    pass
             cot_context = [
                 {"role": "system", "content": f"You are analyzing text based on a specific instruction. Respond ONLY with one of the provided choices, based on the text and the instruction. - Respond with only the chosen tag in square brackets (e.g., [TAG_NAME]) - "},
                 {"role": "user", "content": prepared_condition_text}
@@ -294,11 +323,11 @@ def _process_specific_rule(self, rule, current_user_msg, prev_assistant_msg, rul
             self.utility_inference_thread.start()
 
 def _process_next_sequential_rule_pre(self, current_user_msg, prev_assistant_msg, rules):
+    print(f"[DEBUG] Starting sequential rule processing with {len(rules) if rules else 0} rules")
     tab_data = self.get_current_tab_data()
     if not tab_data:
         return
     if tab_data.get('_exit_rule_processing'):
-        print("  Rule processing explicitly exited via 'Exit Rule Processing' action")
         tab_data.pop('_exit_rule_processing', None)
         if hasattr(self, '_cot_next_step') and self._cot_next_step:
             QTimer.singleShot(0, self._cot_next_step)
@@ -326,22 +355,41 @@ def _process_next_sequential_rule_pre(self, current_user_msg, prev_assistant_msg
         if workflow_data_dir and hasattr(self, 'get_character_names_in_scene_for_timers'):
             npcs_in_scene = self.get_character_names_in_scene_for_timers(tab_data)
             if not npcs_in_scene:
-                print(f"[DEBUG] Skipping character rule '{rule_id}' - no characters in scene")
                 should_process = False
         else:
-            print(f"[DEBUG] Skipping character rule '{rule_id}' - no workflow data dir or method")
             should_process = False
     if should_process:
         conditions = rule.get('conditions', [])
         if conditions:
             operator = rule.get('conditions_operator', 'AND')
             current_turn = tab_data.get('turn_count', 1)
+            transit_rule = _is_transit_rule(rule)
+            if transit_rule:
+                setattr(self, '_debug_transit_conditions', True)
+                try:
+                    print(f"[TRANSIT] Evaluating structured conditions for '{rule_id}' ({len(conditions)})")
+                except Exception:
+                    pass
             should_process = _evaluate_conditions(self, tab_data, conditions, operator, current_turn)
+            if transit_rule:
+                try:
+                    print(f"[TRANSIT] Structured conditions for '{rule_id}': {should_process}")
+                except Exception:
+                    pass
+                try:
+                    delattr(self, '_debug_transit_conditions')
+                except Exception:
+                    pass
     if should_process:
         print(f"[DEBUG] Executing rule '{rule_id}'")
         _process_specific_rule(self, rule, current_user_msg, prev_assistant_msg, rules, 
                               rule_index=self._cot_sequential_index, triggered_directly=False, is_post_phase=False)
     else:
+        is_transit = _is_transit_rule(rule)
+        if is_transit:
+            print(f"[TRANSIT] Skipping transit rule '{rule_id}' - structured conditions evaluated to False")
+        else:
+            print(f"[DEBUG] Skipping rule '{rule_id}' - should_process=False (applies_to='{rule.get('applies_to', 'Narrator')}', npcs_in_scene={hasattr(self, 'get_character_names_in_scene_for_timers') and self.get_character_names_in_scene_for_timers(tab_data) if tab_data else 'N/A'})")
         self._cot_sequential_index += 1
         QTimer.singleShot(0, lambda: _process_next_sequential_rule_pre(self, current_user_msg, prev_assistant_msg, rules))
 
@@ -350,7 +398,6 @@ def _process_next_sequential_rule_post(self, current_user_msg, assistant_msg, ru
     if not tab_data:
         return
     if tab_data.get('_exit_rule_processing'):
-        print("  Rule processing explicitly exited via 'Exit Rule Processing' action")
         tab_data.pop('_exit_rule_processing', None)
         if hasattr(self, '_cot_next_step') and self._cot_next_step:
             QTimer.singleShot(0, self._cot_next_step)
@@ -396,6 +443,7 @@ def _process_next_sequential_rule_post(self, current_user_msg, assistant_msg, ru
         QTimer.singleShot(0, lambda: _process_next_sequential_rule_post(self, current_user_msg, assistant_msg, rules))
 
 def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, current_user_msg, prev_assistant_msg, rules, triggered_directly, is_post_phase, rewrite_context=False, character_name_override=None, character_name_for_rule_context=None):
+    from rules.apply_rules import _substitute_variables_in_string
     tab_data = self.get_current_tab_data()
     if not tab_data: return
     rule_id = rule.get('id', f"Rule #{rule_index if rule_index is not None else 'Triggered'}")
@@ -418,7 +466,14 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
         self._cot_rule_triggered_post = True
     else:
         self._cot_rule_triggered_pre = True
+    abort_actions_in_rule = False
+    
     for action_idx, action_obj in enumerate(actions):
+        # Check if actions have been aborted due to a failed move
+        if abort_actions_in_rule:
+            print(f"[TRANSIT] Skipping action {action_idx + 1} (type: {action_obj.get('type', 'System Message')}) due to aborted rule (abort_actions_in_rule={abort_actions_in_rule})")
+            continue
+            
         action_type = action_obj.get('type', 'System Message')
 
         if action_type == 'Force Narrator':
@@ -429,7 +484,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
             continue
         elif action_type == 'System Message':
             raw_value = action_obj.get('value', '')
-            processed_value = self._substitute_variables_in_string(raw_value, tab_data, actor_for_substitution)
+            processed_value = _substitute_variables_in_string(raw_value, tab_data, actor_for_substitution)
             position = action_obj.get('position', 'prepend')
             sysmsg_position = action_obj.get('system_message_position', 'first')
             if not rewrite_context or (rewrite_context and not is_post_phase):
@@ -489,8 +544,8 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                             actor_context_for_substitution = rule.get('character_name')
                         elif character_name_for_rule_context:
                             actor_context_for_substitution = character_name_for_rule_context
-                        min_str_substituted = self._substitute_variables_in_string(str(min_str), tab_data, actor_context_for_substitution)
-                        max_str_substituted = self._substitute_variables_in_string(str(max_str), tab_data, actor_context_for_substitution)
+                        min_str_substituted = _substitute_variables_in_string(str(min_str), tab_data, actor_context_for_substitution)
+                        max_str_substituted = _substitute_variables_in_string(str(max_str), tab_data, actor_context_for_substitution)
                         def parse_numeric_value(value_str, field_name):
                             try:
                                 return int(value_str)
@@ -551,6 +606,12 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                         continue
                 elif generate_mode == 'LLM':
                     gen_instructions = action_obj.get('generate_instructions', '')
+                    llm_gen_character_context = character_name_override
+                    if llm_gen_character_context is None and rule.get('applies_to') == 'Character':
+                        llm_gen_character_context = rule.get('character_name')
+                    elif llm_gen_character_context is None and character_name_for_rule_context:
+                        llm_gen_character_context = character_name_for_rule_context
+                    gen_instructions = _substitute_variables_in_string(gen_instructions, tab_data, llm_gen_character_context)
                     gen_context_type = action_obj.get('generate_context', 'Last Exchange')
                     context_str = None
                     if gen_context_type == 'Full Conversation':
@@ -574,11 +635,6 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                         context_str = f"Assistant: {prev_assistant_msg}\nUser: {current_user_msg}"
                     else:
                         context_str = current_user_msg
-                    llm_gen_character_context = character_name_override
-                    if llm_gen_character_context is None and rule.get('applies_to') == 'Character':
-                        llm_gen_character_context = rule.get('character_name')
-                    elif llm_gen_character_context is None and character_name_for_rule_context:
-                        llm_gen_character_context = character_name_for_rule_context
                     from generate.generate_summary import generate_summary
                     set_var_mode = action_obj.get('set_var_mode', 'replace')
                     delimiter = action_obj.get('set_var_delimiter', '/')
@@ -603,7 +659,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                 if character_name_for_rule_context and not actor_for_var_set:
                     actor_for_var_set = character_name_for_rule_context
                     actor_context_for_substitution = character_name_for_rule_context
-                processed_var_value = self._substitute_variables_in_string(str(var_value_raw), tab_data, actor_context_for_substitution)
+                processed_var_value = _substitute_variables_in_string(str(var_value_raw), tab_data, actor_context_for_substitution)
                 modified_action_obj = action_obj.copy()
                 modified_action_obj['var_value'] = processed_var_value
                 _apply_rule_side_effects(self, modified_action_obj, rule, actor_for_var_set)
@@ -623,11 +679,12 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                 character_context = character_name_override if character_name_override else actor_for_substitution
                 target_setting = self._substitute_placeholders_in_condition_value(target_setting, tab_data, character_context)
             rule_trigger_context_for_move = None
-            if location_mode == 'Adjacent':
+            if location_mode in ('Adjacent', 'Fast Travel'):
                 if is_post_phase:
                     rule_trigger_context_for_move = prev_assistant_msg
                 else:
                     rule_trigger_context_for_move = current_user_msg
+            print(f"[TRANSIT] Invoking Change Actor Location: actor='{actor_name_str}', mode='{location_mode}', target='{target_setting}', post_phase={is_post_phase}")
             move_success = _perform_change_actor_location(self, tab_data,
                                            actor_name_str,
                                            location_mode,
@@ -636,15 +693,21 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                                            advance_time,
                                            speed_multiplier
                                           )
+            print(f"[TRANSIT] Change Actor Location result: {move_success} (type: {type(move_success).__name__})")
             if not move_success:
+                print(f"[TRANSIT] Move failed, aborting remaining actions in this rule")
+                abort_actions_in_rule = True
+                print(f"[TRANSIT] abort_actions_in_rule set to: {abort_actions_in_rule}")
                 break
+            else:
+                print(f"[TRANSIT] Move was successful, continue processing remaining actions in this rule")
         elif action_type == 'Rewrite Post':
             if not is_post_phase:
                 continue
             rewrite_instructions_val = action_obj.get('value', '').strip()
             if rewrite_instructions_val:
                 character_context = character_name_override if character_name_override else actor_for_substitution
-                rewrite_instructions_val = self._substitute_variables_in_string(rewrite_instructions_val, tab_data, character_context)
+                rewrite_instructions_val = _substitute_variables_in_string(rewrite_instructions_val, tab_data, character_context)
             if rewrite_context:
                 print(f"    Warning: Already in rewrite context, ignoring nested rewrite request.")
             else:
@@ -665,7 +728,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
             tag_text = action_obj.get('value', '').strip()
             if tag_text:
                 character_context = character_name_override if character_name_override else actor_for_substitution
-                tag_text = self._substitute_variables_in_string(tag_text, tab_data, character_context)
+                tag_text = _substitute_variables_in_string(tag_text, tab_data, character_context)
             tag_mode = action_obj.get('tag_mode', 'overwrite').lower()
             if tag_text:
                 applies_to_rule = rule.get('applies_to', 'Narrator')
@@ -807,9 +870,50 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                 new_scene_number = current_scene + 1
                 tab_data['scene_number'] = new_scene_number
                 tab_data['pending_scene_update'] = True
+                
+                workflow_data_dir = tab_data.get('workflow_data_dir')
+                if workflow_data_dir:
+                    try:
+                        variables_file = os.path.join(workflow_data_dir, "game", "variables.json")
+                        if os.path.exists(variables_file):
+                            with open(variables_file, 'r', encoding='utf-8') as f:
+                                variables = json.load(f)
+                            
+                            characters_to_delete = variables.get('CharactersToDelete', [])
+                            if isinstance(characters_to_delete, list) and characters_to_delete:
+                                game_actors_dir = os.path.join(workflow_data_dir, 'game', 'actors')
+                                if os.path.exists(game_actors_dir):
+                                    deleted_count = 0
+                                    for character_name in characters_to_delete:
+                                        if character_name and character_name.strip():
+                                            character_name_clean = character_name.strip()
+                                            for filename in os.listdir(game_actors_dir):
+                                                if filename.lower().endswith('.json'):
+                                                    file_path = os.path.join(game_actors_dir, filename)
+                                                    try:
+                                                        with open(file_path, 'r', encoding='utf-8') as f:
+                                                            actor_data = json.load(f)
+                                                        if actor_data.get('name', '').strip() == character_name_clean:
+                                                            os.remove(file_path)
+                                                            print(f"✓ Deleted character '{character_name_clean}' from game directory")
+                                                            deleted_count += 1
+                                                            break
+                                                    except Exception as e:
+                                                        print(f"Error checking/deleting character file {filename}: {e}")
+                                    
+                                    if deleted_count > 0:
+                                        print(f"✓ Scene change: Deleted {deleted_count} character(s) marked for deletion")
+                                    
+                                    variables['CharactersToDelete'] = []
+                                    with open(variables_file, 'w', encoding='utf-8') as f:
+                                        json.dump(variables, f, indent=2, ensure_ascii=False)
+                    except Exception as e:
+                        print(f"ERROR: Failed to process character deletions during scene change: {e}")
+                        import traceback
+                        traceback.print_exc()
         elif action_type == 'Generate Character':
             raw_instructions = action_obj.get('instructions', '').strip()
-            instructions = self._substitute_variables_in_string(raw_instructions, tab_data, actor_for_substitution)
+            instructions = _substitute_variables_in_string(raw_instructions, tab_data, actor_for_substitution)
             location = action_obj.get('location', '').strip()
             if location:
                 location = self._substitute_placeholders_in_condition_value(location, tab_data, actor_for_substitution)
@@ -832,28 +936,12 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                                          for msg in current_scene_messages])
                 if context_str:
                     instructions = f"[CURRENT SCENE CONTEXT]\n{context_str}\n[/CURRENT SCENE CONTEXT]\n" + instructions
-            if generation_mode == 'Edit Existing' and target_actor_name and workflow_dir:
-                try:
-                    from core.utils import _find_actor_file_path, _load_json_safely
-                    existing_actor_file = _find_actor_file_path(self, workflow_dir, target_actor_name)
-                    if existing_actor_file:
-                        existing_actor_data = _load_json_safely(existing_actor_file)
-                        if existing_actor_data:
-                            import json
-                            existing_data_str = json.dumps(existing_actor_data, indent=2)
-                            instructions = f"[EXISTING CHARACTER DATA]\n{existing_data_str}\n[/EXISTING CHARACTER DATA]\n\n" + instructions
-                except Exception as e:
-                    print(f"    >> Generate Character: Error loading existing character data: {e}")
-            final_location_for_gen = location
-            if not final_location_for_gen and tab_data:
-                current_setting = tab_data.get('current_setting_name', '')
-                if not current_setting and workflow_dir:
-                    from core.utils import _get_player_current_setting_name
-                    current_setting = _get_player_current_setting_name(workflow_dir)
-                    if current_setting and current_setting != "Unknown Setting":
-                        tab_data['current_setting_name'] = current_setting
-                if current_setting: 
-                    final_location_for_gen = current_setting
+            
+            final_location_for_gen = location if location else None
+            if not final_location_for_gen:
+                from core.utils import _get_player_current_setting_name
+                final_location_for_gen = _get_player_current_setting_name(workflow_dir)
+            
             if workflow_dir:
                 print(f"    >> Generate Character: workflow_dir found: {workflow_dir}")
                 try:
@@ -869,55 +957,27 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                             model_override=model_override if model_override else None
                         )
                         character_being_edited = character_name_for_rule_context if character_name_for_rule_context else character_name_override
-                        if (character_being_edited and 
-                            target_actor_name == character_being_edited and 
-                            hasattr(self, 'inference_thread') and self.inference_thread and 
-                            hasattr(self.inference_thread, 'context')):
-                            def refresh_character_context():
-                                try:
-                                    from core.utils import _find_actor_file_path, _load_json_safely
-                                    import os
-                                    npc_file_path = _find_actor_file_path(self, workflow_dir, target_actor_name)
-                                    if npc_file_path and os.path.exists(npc_file_path):
-                                        file_mod_time = os.path.getmtime(npc_file_path)
-                                        current_time = time.time()
-                                        if (current_time - file_mod_time) < 10:
-                                            updated_character_data = _load_json_safely(npc_file_path)
-                                            if updated_character_data:
-                                                context = self.inference_thread.context
-                                                for i, msg in enumerate(context):
-                                                    if (msg.get('role') == 'user' and 
-                                                        msg.get('content', '').startswith('Your character sheet (JSON format):')):
-                                                        import json
-                                                        new_content = f"Your character sheet (JSON format):\n```json\n{json.dumps(updated_character_data, indent=2)}\n```"
-                                                        context[i]['content'] = new_content
-                                                        break
-                                                from chatBotRPG import get_npc_notes_from_character_file, format_npc_notes_for_context
-                                                updated_notes = get_npc_notes_from_character_file(npc_file_path)
-                                                if updated_notes:
-                                                    formatted_updated_notes = format_npc_notes_for_context(updated_notes, target_actor_name)
-                                                    if formatted_updated_notes:
-                                                        for i, msg in enumerate(context):
-                                                            if (msg.get('role') == 'user' and 
-                                                                msg.get('content', '').startswith(f"Your personal notes and memories as {target_actor_name}:")):
-                                                                context[i]['content'] = formatted_updated_notes
-                                                                break
-                                                        else:
-                                                            context.append({"role": "user", "content": formatted_updated_notes})
-                                except Exception as e:
-                                    import traceback
-                                    traceback.print_exc()
-                            QTimer.singleShot(1000, refresh_character_context)
+                        if character_being_edited and final_location_for_gen:
+                            if is_post_phase:
+                                tab_data['_deferred_actor_reload'] = final_location_for_gen
+                            else:
+                                from core.utils import reload_actors_for_setting
+                                reload_actors_for_setting(workflow_dir, final_location_for_gen)
                     else:
                         print(f"    >> Generate Character: Calling trigger_actor_creation_from_rule with fields: {fields_to_generate}")
                         from generate.generate_actor import trigger_actor_creation_from_rule
+                        from core.utils import _get_player_current_setting_name
+                        current_setting_name = _get_player_current_setting_name(workflow_dir)
+                        print(f"DEBUG: Rule evaluator - current_setting_name from _get_player_current_setting_name: '{current_setting_name}'")
+                        
                         trigger_actor_creation_from_rule(
                             fields_to_generate=fields_to_generate,
                             instructions=instructions,
                             location=final_location_for_gen,
                             workflow_data_dir=workflow_dir,
                             target_directory=target_directory,
-                            model_override=model_override if model_override else None
+                            model_override=model_override if model_override else None,
+                            current_setting_name=current_setting_name
                         )
                     if final_location_for_gen:
                         if is_post_phase:
@@ -975,7 +1035,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
         if force_narrator_action_obj:
             force_order = force_narrator_action_obj.get('force_narrator_order', 'First')
             raw_fn_sysmsg = force_narrator_action_obj.get('force_narrator_system_message', '').strip()
-            fn_system_message = self._substitute_variables_in_string(raw_fn_sysmsg, tab_data, actor_for_substitution)
+            fn_system_message = _substitute_variables_in_string(raw_fn_sysmsg, tab_data, actor_for_substitution)
             if tab_data:
                 if 'force_narrator' not in tab_data:
                     tab_data['force_narrator'] = {}
@@ -991,7 +1051,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                     tab_data['_is_force_narrator_first_active'] = True
                     if hasattr(self, '_cot_text_tag') and self._cot_text_tag:
                         tab_data['_force_narrator_first_text_tag'] = self._cot_text_tag
-                    QTimer.singleShot(0, lambda: self._complete_message_processing(current_user_msg))
+                    QTimer.singleShot(0, lambda: self._complete_message_processing(current_user_msg if current_user_msg else ""))
                     if rule.get('applies_to') == 'Character':
                         return npc_text_tag_for_character_rule
                     else:
@@ -1002,44 +1062,90 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                 pass
     finally:
         pass
+    if abort_actions_in_rule:
+        triggered_next_rule_id = None
+        rewrite_instructions = None
+        rewrite_buffer_content = None
+    if not is_post_phase and (not hasattr(self, '_cot_next_step') or not self._cot_next_step):
+        self._cot_next_step = lambda: self._complete_message_processing(current_user_msg if current_user_msg else "")
+        if rule.get('type') == 'Change Actor Location' and rule.get('location_mode') in ('Fast Travel', 'Adjacent'):
+            print(f"[TRANSIT] Scheduled narrator post for rule '{rule_id}'")
     triggered_next_rule_id = None
     rewrite_instructions = None
     rewrite_buffer_content = None
-    for action_obj in actions:
-        action_type = action_obj.get('type')
-        if action_type == 'Next Rule':
-            next_rule_id_val = action_obj.get('value', '').strip()
-            if next_rule_id_val and next_rule_id_val != "None":
-                triggered_next_rule_id = next_rule_id_val
-                break
-        elif action_type == 'Rewrite Post':
-            if not is_post_phase:
-                continue
-            rewrite_instructions_val = action_obj.get('value', '').strip()
-            if rewrite_instructions_val:
-                character_context = character_name_override if character_name_override else actor_for_substitution
-                rewrite_instructions_val = self._substitute_variables_in_string(rewrite_instructions_val, tab_data, character_context)
-            if rewrite_context:
-                pass
-            else:
-                rewrite_instructions = rewrite_instructions_val
-                if rule.get('applies_to') == 'Character':
-                    current_character = character_name_for_rule_context or character_name_override or getattr(self, 'character_name', None)
-                    if current_character and hasattr(self, '_character_message_buffers') and current_character in self._character_message_buffers:
-                        rewrite_buffer_content = self._character_message_buffers[current_character]
+    if not abort_actions_in_rule:
+        for action_obj in actions:
+            action_type = action_obj.get('type')
+            if action_type == 'Next Rule':
+                next_rule_id_val = action_obj.get('value', '').strip()
+                if next_rule_id_val and next_rule_id_val != "None":
+                    triggered_next_rule_id = next_rule_id_val
+                    break
+            elif action_type == 'Rewrite Post':
+                if not is_post_phase:
+                    continue
+                rewrite_instructions_val = action_obj.get('value', '').strip()
+                if rewrite_instructions_val:
+                    character_context = character_name_override if character_name_override else actor_for_substitution
+                    rewrite_instructions_val = _substitute_variables_in_string(rewrite_instructions_val, tab_data, character_context)
+                if rewrite_context:
+                    pass
+                else:
+                    rewrite_instructions = rewrite_instructions_val
+                    if rule.get('applies_to') == 'Character':
+                        current_character = character_name_for_rule_context or character_name_override or getattr(self, 'character_name', None)
+                        if current_character and hasattr(self, '_character_message_buffers') and current_character in self._character_message_buffers:
+                            rewrite_buffer_content = self._character_message_buffers[current_character]
+                        else:
+                            rewrite_buffer_content = self._assistant_message_buffer
                     else:
                         rewrite_buffer_content = self._assistant_message_buffer
-                else:
-                    rewrite_buffer_content = self._assistant_message_buffer
-                break
+                    break
     if rewrite_instructions is not None and rewrite_buffer_content is not None and is_post_phase:
         self._trigger_rule_after_rewrite = triggered_next_rule_id
+        context_messages = []
+        try:
+            tab_data = self.get_current_tab_data()
+            if tab_data:
+                all_msgs = tab_data.get('context', [])
+                current_scene = tab_data.get('scene_number', 1)
+                scene_msgs = [m for m in all_msgs if m.get('role') != 'system' and m.get('scene', 1) == current_scene]
+                convo_text = "\n".join([f"{m.get('role','?').capitalize()}: {m.get('content','')}" for m in scene_msgs])
+                if convo_text:
+                    context_messages.append({"role": "system", "content": f"Context (current scene):\n{convo_text}"})
+                try:
+                    candidate = (rewrite_buffer_content or "").strip()
+                    is_duplicate_original = False
+                    for m in all_msgs:
+                        if m.get('role') == 'assistant':
+                            prev = str(m.get('content', '')).strip()
+                            if prev == candidate:
+                                is_duplicate_original = True
+                                break
+                except Exception:
+                    is_duplicate_original = False
+        except Exception:
+            pass
+        reason_note = ""
+        if 'is_duplicate_original' in locals() and is_duplicate_original:
+            reason_note = "\nReason for rewrite: The original message exactly duplicates a previous assistant post. Ensure the rewrite is meaningfully different from prior messages while staying consistent with the context."
         rewrite_context = [
             {"role": "system", "content": "You are helping to rewrite a message. Follow the instructions exactly and return only the rewritten content."},
-            {"role": "user", "content": f"Original message:\n{rewrite_buffer_content}\n\nRewrite instructions:\n{rewrite_instructions}\n\nRewritten message:"}
+            *context_messages,
+            {"role": "user", "content": f"Original message:\n{rewrite_buffer_content}\n\nRewrite instructions:\n{rewrite_instructions}{reason_note}\n\nRewritten message:"}
         ]
         try:
-            current_model = self.get_current_cot_model()
+            model_override = None
+            try:
+                # Look for a model override on the action if provided
+                for a in (matched_pair.get('actions', []) if matched_pair else []):
+                    if a.get('type') == 'Rewrite Post':
+                        model_override = (a.get('model_override') or '').strip() or None
+                        if model_override:
+                            break
+            except Exception:
+                model_override = None
+            current_model = model_override if model_override else self.get_current_cot_model()
             rewritten_message = self.run_utility_inference_sync(rewrite_context, current_model, 1024)
             if rule.get('applies_to') == 'Character' and character_name_for_rule_context:
                 if hasattr(self, '_character_message_buffers') and character_name_for_rule_context in self._character_message_buffers:
@@ -1149,6 +1255,8 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                     self._cot_next_step = None
                 else:
                     pass
+    if rule.get('type') == 'Change Actor Location' and rule.get('location_mode') in ('Fast Travel', 'Adjacent'):
+        print(f"[TRANSIT] Completed actions for '{rule_id}'. triggered_next_rule_id={triggered_next_rule_id}, post_phase={is_post_phase}, narrator_post_scheduled={hasattr(self, '_cot_next_step') and self._cot_next_step is not None}")
     if (hasattr(self, '_character_llm_reply_rule_complete_callback') and 
         self._character_llm_reply_rule_complete_callback and
         rule.get('applies_to') == 'Character' and 
@@ -1165,7 +1273,7 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
         callback = self._character_llm_reply_rule_complete_callback
         QTimer.singleShot(0, callback)
         return npc_text_tag_for_character_rule
-    return None
+    return not abort_actions_in_rule
 
 def _perform_change_actor_location(self, tab_data, actor_string, mode, target_setting_name, rule_trigger_context=None, advance_time=True, speed_multiplier=1.0):
     if not tab_data:
@@ -1267,7 +1375,45 @@ def _perform_change_actor_location(self, tab_data, actor_string, mode, target_se
         else:
             return False
     elif mode == 'Fast Travel':
-        return False
+        try:
+            result = move_characters(
+                workflow_data_dir=workflow_data_dir,
+                actors_to_move=actors_to_move,
+                target_setting_name="",
+                player_name=player_name,
+                mode='Fast Travel',
+                context_for_move=rule_trigger_context,
+                tab_data=tab_data,
+                advance_time=advance_time,
+                speed_multiplier=speed_multiplier
+            )
+            if result.get('success'):
+                if result.get('tab_data_updates'):
+                    updates = result['tab_data_updates']
+                    if 'allow_narrator_post_after_change' in updates:
+                        tab_data['allow_narrator_post_after_change'] = updates['allow_narrator_post_after_change']
+                    if 'turn_count' in updates:
+                        tab_data['turn_count'] = updates['turn_count']
+                    if updates.get('scene_number_increment'):
+                        if 'scene_number' in tab_data and isinstance(tab_data['scene_number'], int):
+                            tab_data['scene_number'] += 1
+                            tab_data['_has_narrator_posted_this_scene'] = False
+                        else:
+                            tab_data['scene_number'] = 1
+                            tab_data['_has_narrator_posted_this_scene'] = False
+                        tab_data['pending_scene_update'] = True
+                if result.get('process_scene_change_timers') and hasattr(self, 'timer_manager'):
+                    self.timer_manager.process_scene_change(tab_data)
+                if result.get('player_moved'):
+                    self._pending_update_top_splitter = tab_data
+                return True
+            elif result.get('error'):
+                return False
+            else:
+                return False
+        except Exception as e:
+            print(f"[FAST TRAVEL] Error calling move_characters: {e}")
+            return False
     else:
         return False
 
@@ -1304,7 +1450,7 @@ def _retry_rule_with_fallback(self, rule, rule_id, rule_index, current_user_msg,
     tag_action_pairs = rule.get('tag_action_pairs', [])
     condition_raw = rule.get('condition', '').strip()
     actor_for_condition_substitution = character_name_for_rule_context
-    condition = self._substitute_variables_in_string(condition_raw, tab_data, actor_for_condition_substitution)
+    condition = _substitute_variables_in_string(condition_raw, tab_data, actor_for_condition_substitution)
     tags = []
     for pair in tag_action_pairs:
         tag = pair.get('tag', '').strip()
