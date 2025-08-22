@@ -545,7 +545,12 @@ def _start_npc_inference_threads(self):
                 'model': model_to_use,
                 'tag': tag_for_this_npc
             }
-            self._npc_inference_queue.append(npc_inference_data)
+            if (
+                char not in tab_data.get('_characters_to_exit_rules', set())
+                and char not in tab_data.get('_characters_to_skip', set())
+                and not tab_data.get('_exit_rule_processing')
+            ):
+                self._npc_inference_queue.append(npc_inference_data)
             final_npcs_to_infer_after_rules.append(char)
         if not final_npcs_to_infer_after_rules:
             print("[INPUT DEBUG] No characters to process (all skipped or none in scene)")
@@ -649,6 +654,18 @@ def _start_next_npc_inference(self):
     context = npc_data['context']
     model = npc_data['model']
     tag = npc_data['tag']
+    try:
+        tab_data = self.get_current_tab_data()
+        if tab_data:
+            if (
+                character in tab_data.get('_characters_to_exit_rules', set())
+                or character in tab_data.get('_characters_to_skip', set())
+                or tab_data.get('_exit_rule_processing')
+            ):
+                _start_next_npc_inference(self)
+                return
+    except Exception:
+        pass
     timer_final_instruction = tab_data.get('_timer_final_instruction') if tab_data else None
     if timer_final_instruction:
         context.append({"role": "user", "content": f"({timer_final_instruction})"})
