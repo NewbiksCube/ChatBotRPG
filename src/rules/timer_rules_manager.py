@@ -1270,6 +1270,17 @@ class TimerRulesWidget(QWidget):
         screen_effect_layout = QVBoxLayout(screen_effect_widget)
         screen_effect_layout.setContentsMargins(0, 0, 0, 0)
         screen_effect_layout.setSpacing(5)
+        effect_id_layout = QHBoxLayout()
+        effect_id_label = QLabel("Effect ID:")
+        effect_id_label.setObjectName("TimerRuleScreenEffectIdLabel")
+        effect_id_label.setFont(QFont('Consolas', 9))
+        effect_id_input = QLineEdit()
+        effect_id_input.setObjectName("TimerRuleScreenEffectIdInput")
+        effect_id_input.setFont(QFont('Consolas', 9))
+        effect_id_input.setPlaceholderText("Enter unique effect ID (e.g., 'combat_blur', 'warning_flicker')")
+        effect_id_layout.addWidget(effect_id_label)
+        effect_id_layout.addWidget(effect_id_input, 1)
+        screen_effect_layout.addLayout(effect_id_layout)
         effect_type_layout = QHBoxLayout()
         effect_type_label = QLabel("Effect Type:")
         effect_type_label.setObjectName("TimerRuleScreenEffectTypeLabel")
@@ -1277,10 +1288,19 @@ class TimerRulesWidget(QWidget):
         effect_type_combo = QComboBox()
         effect_type_combo.setObjectName("TimerRuleScreenEffectTypeCombo")
         effect_type_combo.setFont(QFont('Consolas', 9))
-        effect_type_combo.addItems(["Blur", "Flicker", "Static", "Darken/Brighten"])
+        effect_type_combo.addItems(["Blur", "Flicker", "Static", "Darken/Brighten", "Clear"])
         if self.theme_colors:
             base_color = self.theme_colors.get("base_color", "#00FF66")
             darker_bg = self.theme_colors.get("darker_bg", "#1A1A1A")
+            effect_id_input.setStyleSheet(f"""
+                background-color: {darker_bg};
+                color: {base_color};
+                border: 1px solid {base_color};
+            """)
+            effect_id_label.setStyleSheet(f"""
+                background-color: transparent;
+                color: {base_color};
+            """)
             effect_type_combo.setStyleSheet(f"""
                 background-color: {darker_bg};
                 color: {base_color};
@@ -1372,8 +1392,11 @@ class TimerRulesWidget(QWidget):
                 param_name_combo.addItems(["intensity", "frequency", "dot_size"])
             elif effect_type == "Darken/Brighten":
                 param_name_combo.addItems(["factor", "animation_speed", "animate"])
+            elif effect_type == "Clear":
+                pass
             update_screen_effect_flicker_color_visibility()
             update_screen_effect_param_description()
+            parameters_widget.setVisible(effect_type != "Clear")
         
         def update_screen_effect_flicker_color_visibility():
             effect_type = effect_type_combo.currentText()
@@ -1474,6 +1497,7 @@ class TimerRulesWidget(QWidget):
         action_widget.setProperty("game_over_widget", game_over_widget)
         action_widget.setProperty("game_over_message_input", game_over_message_input)
         action_widget.setProperty("screen_effect_widget", screen_effect_widget)
+        action_widget.setProperty("screen_effect_id_input", effect_id_input)
         action_widget.setProperty("screen_effect_type_combo", effect_type_combo)
         action_widget.setProperty("screen_effect_operation_combo", effect_operation_combo)
         action_widget.setProperty("screen_effect_param_name_combo", param_name_combo)
@@ -1584,12 +1608,16 @@ class TimerRulesWidget(QWidget):
             elif action_type == "Game Over":
                 game_over_message_input.setPlainText(action.get("message", ""))
             elif action_type == "Set Screen Effect":
+                effect_id_input = action_widget.property("screen_effect_id_input")
                 effect_type_combo = action_widget.property("screen_effect_type_combo")
                 effect_operation_combo = action_widget.property("screen_effect_operation_combo")
                 param_name_combo = action_widget.property("screen_effect_param_name_combo")
                 param_value_input = action_widget.property("screen_effect_param_value_input")
                 enable_combo = action_widget.property("screen_effect_enabled_combo")
                 flicker_color_combo = action_widget.property("screen_effect_flicker_color_combo")
+                
+                if effect_id_input:
+                    effect_id_input.setText(action.get("effect_id", ""))
                 
                 if effect_type_combo:
                     effect_type = action.get("effect_type", "Blur")
@@ -1740,6 +1768,7 @@ class TimerRulesWidget(QWidget):
                     }
                     actions.append(action_data)
                 elif action_type == "Set Screen Effect":
+                    effect_id_input = widget.property("screen_effect_id_input")
                     effect_type_combo = widget.property("screen_effect_type_combo")
                     effect_operation_combo = widget.property("screen_effect_operation_combo")
                     param_name_combo = widget.property("screen_effect_param_name_combo")
@@ -1747,26 +1776,40 @@ class TimerRulesWidget(QWidget):
                     enable_combo = widget.property("screen_effect_enabled_combo")
                     flicker_color_combo = widget.property("screen_effect_flicker_color_combo")
                     
-                    if effect_type_combo and param_name_combo:
+                    if effect_type_combo:
+                        effect_id = effect_id_input.text().strip() if effect_id_input else ""
+                        if not effect_id:
+                            effect_id = "default"
+                        
                         effect_type = effect_type_combo.currentText()
-                        operation = effect_operation_combo.currentText().lower() if effect_operation_combo else "set"
-                        param_name = param_name_combo.currentText()
-                        enabled = enable_combo.currentText() == "True" if enable_combo else True
                         
-                        if effect_type == "Flicker" and param_name == "color":
-                            param_value = flicker_color_combo.currentText() if flicker_color_combo else "white"
-                        else:
-                            param_value = param_value_input.text().strip() if param_value_input else ""
-                        
-                        action_data = {
-                            "type": action_type,
-                            "effect_type": effect_type,
-                            "operation": operation,
-                            "param_name": param_name,
-                            "param_value": param_value,
-                            "enabled": enabled
-                        }
-                        actions.append(action_data)
+                        if effect_type == "Clear":
+                            action_data = {
+                                "type": action_type,
+                                "effect_id": effect_id,
+                                "effect_type": effect_type
+                            }
+                            actions.append(action_data)
+                        elif param_name_combo:
+                            operation = effect_operation_combo.currentText().lower() if effect_operation_combo else "set"
+                            param_name = param_name_combo.currentText()
+                            enabled = enable_combo.currentText() == "True" if enable_combo else True
+                            
+                            if effect_type == "Flicker" and param_name == "color":
+                                param_value = flicker_color_combo.currentText() if flicker_color_combo else "white"
+                            else:
+                                param_value = param_value_input.text().strip() if param_value_input else ""
+                            
+                            action_data = {
+                                "type": action_type,
+                                "effect_id": effect_id,
+                                "effect_type": effect_type,
+                                "operation": operation,
+                                "param_name": param_name,
+                                "param_value": param_value,
+                                "enabled": enabled
+                            }
+                            actions.append(action_data)
                 else:
                     value_input = widget.property("value_input")
                     action_value = value_input.text() if value_input else ""
