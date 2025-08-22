@@ -1745,13 +1745,23 @@ def create_pair_widget(tab_data):
         screen_effects_layout = QVBoxLayout(screen_effects_widget)
         screen_effects_layout.setContentsMargins(0, 0, 0, 0)
         screen_effects_layout.setSpacing(5)
+        effect_id_layout = QHBoxLayout()
+        effect_id_label = QLabel("Effect ID:")
+        effect_id_label.setFont(QFont('Consolas', 9))
+        effect_id_input = QLineEdit()
+        effect_id_input.setObjectName("ScreenEffectIdInput")
+        effect_id_input.setFont(QFont('Consolas', 9))
+        effect_id_input.setPlaceholderText("Enter unique effect ID (e.g., 'combat_blur', 'warning_flicker')")
+        effect_id_layout.addWidget(effect_id_label)
+        effect_id_layout.addWidget(effect_id_input, 1)
+        screen_effects_layout.addLayout(effect_id_layout)
         effect_type_layout = QHBoxLayout()
         effect_type_label = QLabel("Effect Type:")
         effect_type_label.setFont(QFont('Consolas', 9))
         effect_type_combo = QComboBox()
         effect_type_combo.setObjectName("ScreenEffectTypeCombo")
         effect_type_combo.setFont(QFont('Consolas', 9))
-        effect_type_combo.addItems(["Blur", "Flicker", "Static", "Darken/Brighten"])
+        effect_type_combo.addItems(["Blur", "Flicker", "Static", "Darken/Brighten", "Clear"])
         effect_type_layout.addWidget(effect_type_label)
         effect_type_layout.addWidget(effect_type_combo, 1)
         screen_effects_layout.addLayout(effect_type_layout)
@@ -1833,8 +1843,11 @@ def create_pair_widget(tab_data):
                 param_name_combo.addItems(["intensity", "frequency", "dot_size"])
             elif effect_type == "Darken/Brighten":
                 param_name_combo.addItems(["factor", "animation_speed", "animate"])
+            elif effect_type == "Clear":
+                pass
             update_flicker_color_visibility()
             update_param_description()
+            parameters_widget.setVisible(effect_type != "Clear")
         def update_flicker_color_visibility():
             is_flicker_effect = effect_type_combo.currentText() == "Flicker"
             is_color_param = param_name_combo.currentText() == "color"
@@ -2488,6 +2501,7 @@ def create_pair_widget(tab_data):
             'rewrite_model_widget': rewrite_model_widget,
             'rewrite_model_editor': rewrite_model_editor,
             'screen_effects_widget': screen_effects_widget,
+            'effect_id_input': effect_id_input,
             'effect_type_combo': effect_type_combo,
             'effect_operation_combo': effect_operation_combo,
             'param_name_combo': param_name_combo,
@@ -3440,11 +3454,15 @@ def create_pair_widget(tab_data):
                 determine_convo_llm_radio.setChecked(True)
 
     def populate_screen_effect(data, row):
+        effect_id = data.get('effect_id', '')
         effect_type = data.get('effect_type', 'Blur')
         operation = data.get('operation', 'set')
         param_name = data.get('param_name', '')
         param_value = data.get('param_value', '')
         enabled = data.get('enabled', True)
+        effect_id_input = row.get('effect_id_input')
+        if effect_id_input and is_valid_widget(effect_id_input):
+            effect_id_input.setText(effect_id)
         effect_type_combo = row.get('effect_type_combo')
         if effect_type_combo and is_valid_widget(effect_type_combo):
             idx = effect_type_combo.findText(effect_type)
