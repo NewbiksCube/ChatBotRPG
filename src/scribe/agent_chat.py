@@ -1378,7 +1378,6 @@ class AgentPanel(QWidget):
         context_text += '   {"type": "Rewrite Post", "value": "rewrite_instructions"}\n\n'
         context_text += "10. Generate Content:\n"
         context_text += '   {"type": "Generate Setting", "generator_name": "generator_file_name"}\n'
-        context_text += '   {"type": "Generate Story", "generator_name": "story_generator_name"}\n'
         context_text += '   {"type": "Generate Character", "generator_name": "character_generator_name"}\n'
         context_text += '   {"type": "Generate Random List", "generator_name": "list_generator_name", "count": number}\n\n'
         context_text += "11. Screen Effects:\n"
