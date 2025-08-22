@@ -328,6 +328,7 @@ class ChatInput(QTextEdit):
 class ChatOutput(QTextBrowser):
     def __init__(self, theme_colors):
         super().__init__()
+        self.theme_colors = theme_colors
         self.setReadOnly(True)
         self.setOpenLinks(True)
         font = self.font()
@@ -364,14 +365,14 @@ class ChatOutput(QTextBrowser):
         self._show_default_hint()
 
     def _show_default_hint(self):
-        color = self.parent().theme_colors.get('UI_PRIMARY_COLOR', '#00FF66') if self.parent() else '#00FF66'
+        color = self.theme_colors.get('UI_PRIMARY_COLOR', '#808080')
         if color.startswith('#') and len(color) == 7:
             r = int(color[1:3], 16)
             g = int(color[3:5], 16)
             b = int(color[5:7], 16)
             rgba = f'rgba({r},{g},{b},0.5)'
         else:
-            rgba = 'rgba(0,255,102,0.5)'
+            rgba = 'rgba(128,128,128,0.5)'
         hint = (
             f"<span style='color:{rgba};'>"
             "The Scribe agent is your creative and technical assistant for building and running your RPG. "
