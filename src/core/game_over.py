@@ -69,12 +69,6 @@ def _perform_game_over_reset(ui_instance, tab_index, tab_data):
                     gamestate = json.load(f)
             except Exception as e:
                 pass
-        gamestate['effects'] = {
-            "blur": {"enabled": False, "radius": 5, "animation_speed": 2000, "animate": False},
-            "flicker": {"enabled": False, "intensity": 0.1, "frequency": 1000, "color": "white"},
-            "static": {"enabled": False, "intensity": 0.05, "frequency": 200, "dot_size": 1},
-            "darken_brighten": {"enabled": False, "factor": 1.0, "animation_speed": 2000, "animate": False}
-        }
         gamestate['effects_by_id'] = {}
         if 'effects_ids_order' in gamestate:
             del gamestate['effects_ids_order']
