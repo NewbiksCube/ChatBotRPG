@@ -2843,6 +2843,9 @@ class ChatbotUI(QWidget):
                 "static": {"enabled": False, "intensity": 0, "frequency": 200, "dot_size": 1},
                 "darken_brighten": {"enabled": False, "factor": 1.0, "animation_speed": 2000, "animate": False}
             }
+            gamestate['effects_by_id'] = {}
+            if 'effects_ids_order' in gamestate:
+                del gamestate['effects_ids_order']
             try:
                 with open(gamestate_path, 'w', encoding='utf-8') as f:
                     json.dump(gamestate, f, indent=2)
@@ -3465,6 +3468,13 @@ p, li { white-space: pre-wrap; }
         except ImportError:
             pass
         
+        # Add clear effects shortcut (Ctrl+Shift+E)
+        if event.key() == ord('E') and event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier):
+            tab_data = self.get_current_tab_data()
+            if tab_data:
+                self.clear_screen_effects(tab_data)
+            return
+        
         super().keyPressEvent(event)
 
     def _handle_left_splitter_mode_changed(self, button_object_name):
@@ -3788,6 +3798,29 @@ p, li { white-space: pre-wrap; }
             except Exception as e:
                 print(f"Screen effects error: {e}")
 
+    def clear_screen_effects(self, tab_data=None):
+        """Clear all screen effects for the current tab"""
+        if not tab_data:
+            tab_data = self.get_current_tab_data()
+        if not tab_data:
+            return False
+        
+        workflow_data_dir = tab_data.get('workflow_data_dir')
+        if not workflow_data_dir:
+            return False
+        
+        try:
+            from rules.screen_effects import clear_all_screen_effects
+            success = clear_all_screen_effects(workflow_data_dir)
+            if success:
+                # Force update the screen effects display
+                self._update_screen_effects(tab_data)
+                print("Screen effects cleared successfully")
+            return success
+        except Exception as e:
+            print(f"Error clearing screen effects: {e}")
+            return False
+
     def _update_screen_effects(self, tab_data):
         if not tab_data:
             return
@@ -3807,8 +3840,9 @@ p, li { white-space: pre-wrap; }
                 if hasattr(effect_instance, 'set_config'):
                     effect_instance.set_config(enabled=False)
             return
-        blur_config = effects_config.get('blur', {})
         target_widget = get_target_widget()
+        
+        blur_config = effects_config.get('blur', {})
         if 'blur' not in self._screen_effects[tab_index] and target_widget:
             self._screen_effects[tab_index]['blur'] = BlurEffect(target_widget)
         if 'blur' in self._screen_effects[tab_index]:
@@ -3818,6 +3852,7 @@ p, li { white-space: pre-wrap; }
                 animation_speed=blur_config.get('animation_speed', 2000),
                 animate=blur_config.get('animate', True)
             )
+        
         flicker_config = effects_config.get('flicker', {})
         if 'flicker' not in self._screen_effects[tab_index] and target_widget:
              self._screen_effects[tab_index]['flicker'] = FlickerEffect(target_widget)
@@ -3828,6 +3863,7 @@ p, li { white-space: pre-wrap; }
                 frequency=flicker_config.get('frequency', 500),
                 color_mode=flicker_config.get('color', 'white')
             )
+        
         static_config = effects_config.get('static', {})
         if 'static' not in self._screen_effects[tab_index] and target_widget:
             self._screen_effects[tab_index]['static'] = StaticNoiseEffect(target_widget)
@@ -3838,6 +3874,7 @@ p, li { white-space: pre-wrap; }
                 frequency=static_config.get('frequency', 100),
                 dot_size=static_config.get('dot_size', 3)
             )
+        
         darken_brighten_config = effects_config.get('darken_brighten', {})
         if 'darken_brighten' not in self._screen_effects[tab_index] and target_widget:
             self._screen_effects[tab_index]['darken_brighten'] = DarkenBrightenEffect(target_widget)
