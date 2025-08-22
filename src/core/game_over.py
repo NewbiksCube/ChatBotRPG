@@ -75,6 +75,9 @@ def _perform_game_over_reset(ui_instance, tab_index, tab_data):
             "static": {"enabled": False, "intensity": 0.05, "frequency": 200, "dot_size": 1},
             "darken_brighten": {"enabled": False, "factor": 1.0, "animation_speed": 2000, "animate": False}
         }
+        gamestate['effects_by_id'] = {}
+        if 'effects_ids_order' in gamestate:
+            del gamestate['effects_ids_order']
         try:
             with open(gamestate_path, 'w', encoding='utf-8') as f:
                 json.dump(gamestate, f, indent=2)
