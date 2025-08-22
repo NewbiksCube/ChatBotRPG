@@ -199,7 +199,6 @@ def _init_region_masks(self):
         self._region_border_cache = {}
     for region_name in self._region_masks.keys():
         update_region_border_cache(self, region_name)
-
     if hasattr(self, '_world_draw_mode') and getattr(self, '_world_draw_mode') == 'region_edit':
         setattr(self, '_region_edit_mode_active', True)
         if hasattr(self, 'world_map_label') and self.world_map_label:
@@ -244,7 +243,7 @@ def _populate_region_selector(self):
                         region_data = self._load_json(region_json_path)
                         display_name = region_data.get('name', region_folder.replace('_', ' ').title())
                         regions.append((display_name, region_folder))
-                        print(f"Found region: {display_name} ({region_folder})")
+
                     except Exception as e:
                         print(f"Error loading region JSON {region_json_path}: {e}")
     else:
@@ -256,12 +255,10 @@ def _populate_region_selector(self):
         print("No regions found to populate dropdown")
     else:
         self.world_region_selector.setEnabled(True)
-        print("[DEBUG] Populating region selector with:")
         for display_name, folder_name in sorted(regions, key=lambda x: x[0]):
             self.world_region_selector.addItem(display_name)
             index = self.world_region_selector.count() - 1
             self.world_region_selector.setItemData(index, display_name, Qt.UserRole)
-            print(f"  Index {index}: {display_name} -> {display_name}")
         try:
             self.world_region_selector.currentIndexChanged.disconnect()
         except Exception:
@@ -273,16 +270,13 @@ def _populate_region_selector(self):
                 if self.world_region_selector.itemData(i, Qt.UserRole) == self._current_region_name:
                     self.world_region_selector.setCurrentIndex(i)
                     idx_found = True
-                    print(f"Selected previously selected region: {self._current_region_name}")
                     break
             if not idx_found and self.world_region_selector.count() > 0:
                 self.world_region_selector.setCurrentIndex(0)
                 self._current_region_name = self.world_region_selector.itemData(0, Qt.UserRole)
-                print(f"Selected first region: {self._current_region_name}")
         elif self.world_region_selector.count() > 0:
             self.world_region_selector.setCurrentIndex(0)
             self._current_region_name = self.world_region_selector.itemData(0, Qt.UserRole)
-            print(f"Selected first region by default: {self._current_region_name}")
     self.world_region_selector.blockSignals(False)
     if self._world_draw_mode == 'region_edit':
         self.world_region_selector.setVisible(True)

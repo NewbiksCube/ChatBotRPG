@@ -1,14 +1,22 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QSlider, QSplitter, QFrame, QSizePolicy, QLineEdit, QTextEdit, QCheckBox
 from PyQt5.QtCore import Qt, QTimer, QRectF, QPointF, QEvent, QObject, QSize
-from PyQt5.QtGui import QColor, QPen
+from PyQt5.QtGui import QColor, QPen, QBrush, QPainter, QPainterPath, QPixmap, QImage
 from editor_panel.world_editor.world_editor_paint import paintEvent, mousePressEvent, mouseMoveEvent, mouseReleaseEvent, _find_item_at_pos
 from editor_panel.world_editor.world_editor_auto import create_automate_section, connect_automate_checkboxes
 from editor_panel.world_editor.features_toolbar import FeaturesToolbar
 import math
 import time
 
-VIRTUAL_CANVAS_WIDTH = 350
-VIRTUAL_CANVAS_HEIGHT = 350
+VIRTUAL_CANVAS_WIDTH = 1000
+VIRTUAL_CANVAS_HEIGHT = 1000
+
+def add_hover_sound_to_button(button, world_editor_ref):
+    """Add click sound to a button by connecting to clicked signal"""
+    def play_sound():
+        if hasattr(world_editor_ref, 'play_hover_sound'):
+            world_editor_ref.play_hover_sound()
+    button.clicked.connect(play_sound)
+
 
 class PlaceholderLineEditHandler(QObject):
     def __init__(self, line_edit, placeholder_text, parent=None):
@@ -44,6 +52,7 @@ class MapAspectRatioContainer(QWidget):
         layout.addWidget(self.crt_label)
         self._aspect_ratio = 1.0
         self.setMinimumSize(40, 40)
+        self.setMouseTracking(True)
 
     def set_aspect_ratio(self, aspect):
         self._aspect_ratio = max(0.01, aspect)
@@ -52,22 +61,12 @@ class MapAspectRatioContainer(QWidget):
 
     def resizeEvent(self, event):
         w, h = self.width(), self.height()
-        if self._aspect_ratio > 0:
-            if w / h > self._aspect_ratio:
-                new_h = h
-                new_w = int(h * self._aspect_ratio)
-            else:
-                new_w = w
-                new_h = int(w / self._aspect_ratio)
-            x = (w - new_w) // 2
-            y = (h - new_h) // 2
-            self.crt_label.setGeometry(x, y, new_w, new_h)
-        else:
-            self.crt_label.setGeometry(0, 0, w, h)
+        self.crt_label.setGeometry(0, 0, w, h)
         super().resizeEvent(event)
 
     def sizeHint(self):
         return QSize(400, 400)
+
     
 def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_title, theme_colors, choose_map_callback=None, clear_map_callback=None):
     splitter = QSplitter(Qt.Horizontal, parent)
@@ -108,8 +107,8 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
     """
     toolbar = QWidget()
     toolbar.setObjectName(toolbar_title.replace(' ', ''))
-    toolbar.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Expanding)
-    toolbar.setMinimumWidth(220)
+    toolbar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+    toolbar.setFixedWidth(220)
     toolbar_layout = QVBoxLayout(toolbar)
     toolbar_layout.setObjectName(f"{toolbar_title.replace(' ', '')}_Layout")
     toolbar_layout.setContentsMargins(10, 10, 10, 10)
@@ -120,18 +119,26 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
     map_label.setAlignment(Qt.AlignCenter)
     map_label.setStyleSheet("font-size: 8pt; font-weight: bold;")
     map_section.addWidget(map_label)
-    if choose_map_callback:
-        choose_map_btn = QPushButton("Choose Map Image")
-        choose_map_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_ChooseMapImageButton")
-        choose_map_btn.clicked.connect(choose_map_callback)
-        map_section.addWidget(choose_map_btn)
-        choose_map_btn.setStyleSheet(button_style)
+    map_buttons_row = QHBoxLayout()
+    map_buttons_row.setContentsMargins(0, 0, 0, 0)
+    map_buttons_row.setSpacing(2)
+    
     if clear_map_callback:
-        clear_map_btn = QPushButton("Clear Map Image")
+        clear_map_btn = QPushButton("Clear")
         clear_map_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_ClearMapImageButton")
         clear_map_btn.clicked.connect(clear_map_callback)
-        map_section.addWidget(clear_map_btn)
         clear_map_btn.setStyleSheet(button_style)
+        add_hover_sound_to_button(clear_map_btn, world_editor_ref)
+        map_buttons_row.addWidget(clear_map_btn)
+    if choose_map_callback:
+        choose_map_btn = QPushButton("Choose")
+        choose_map_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_ChooseMapImageButton")
+        choose_map_btn.clicked.connect(choose_map_callback)
+        choose_map_btn.setStyleSheet(button_style)
+        add_hover_sound_to_button(choose_map_btn, world_editor_ref)
+        map_buttons_row.addWidget(choose_map_btn)
+    
+    map_section.addLayout(map_buttons_row)
     toolbar_layout.addLayout(map_section)
 
     scale_section = QVBoxLayout()
@@ -140,6 +147,11 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
     scale_label.setAlignment(Qt.AlignCenter)
     scale_label.setStyleSheet("font-size: 8pt; font-weight: bold;")
     scale_section.addWidget(scale_label)
+    
+    scale_help_label = QLabel("Path length → travel time by walking")
+    scale_help_label.setStyleSheet(f"font-size: 7pt; color: {base_color.name()}; font-style: italic;")
+    scale_help_label.setAlignment(Qt.AlignCenter)
+    scale_section.addWidget(scale_help_label)
     
     scale_input_row = QHBoxLayout()
     scale_input_row.setContentsMargins(0, 0, 0, 0)
@@ -172,11 +184,6 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
     
     scale_section.addLayout(scale_input_row)
     
-    scale_help_label = QLabel("Path length → travel time by walking")
-    scale_help_label.setStyleSheet(f"font-size: 7pt; color: {base_color.name()}; font-style: italic;")
-    scale_help_label.setAlignment(Qt.AlignCenter)
-    scale_section.addWidget(scale_help_label)
-    
     toolbar_layout.addLayout(scale_section)
     
     divider1 = QFrame()
@@ -191,22 +198,30 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
     draw_label.setAlignment(Qt.AlignCenter)
     draw_label.setStyleSheet("font-size: 8pt; font-weight: bold;")
     path_section.addWidget(draw_label)
+    path_buttons_row = QHBoxLayout()
+    path_buttons_row.setContentsMargins(0, 0, 0, 0)
+    path_buttons_row.setSpacing(2)
+    
     path_buttons_info = [
         ("Small", "small", "Activate small path drawing mode"),
-        ("Medium", "medium", "Activate medium path drawing mode"),
+        ("Med", "medium", "Activate medium path drawing mode"),
         ("Big", "big", "Activate big path drawing mode"),
     ]
     for label, type_str, tooltip in path_buttons_info:
-        draw_path_btn = QPushButton(f"Draw {label} Path")
-        draw_path_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_Draw{label}PathButton")
+        draw_path_btn = QPushButton(label)
+        draw_path_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_Draw{type_str.capitalize()}PathButton")
         draw_path_btn.setCheckable(True)
         draw_path_btn.setToolTip(tooltip)
-        path_section.addWidget(draw_path_btn)
+        add_hover_sound_to_button(draw_path_btn, world_editor_ref)
+        path_buttons_row.addWidget(draw_path_btn)
         draw_path_btn.setStyleSheet(button_style)
+    
+    path_section.addLayout(path_buttons_row)
     path_details_btn = QPushButton("Path Details")
     path_details_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_PathDetailsButton")
     path_details_btn.setCheckable(True)
     path_details_btn.setToolTip("Edit details for existing paths/roads")
+    add_hover_sound_to_button(path_details_btn, world_editor_ref)
     path_section.addWidget(path_details_btn)
     path_details_btn.setStyleSheet(button_style)
     path_details_widget = QWidget()
@@ -232,6 +247,7 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
     assign_btn.setFixedSize(22, 22)
     assign_btn.setToolTip("Toggle assign mode (click a road to assign name/description)")
     assign_btn.setText("→")
+    add_hover_sound_to_button(assign_btn, world_editor_ref)
     name_row.addWidget(assign_btn)
     name_row.addStretch(1)
     path_details_layout.addLayout(name_row)
@@ -268,11 +284,15 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
     draw_mode_btn.setCheckable(True)
     draw_mode_btn.setChecked(True)
     draw_mode_btn.setToolTip("Freehand drawing mode for paths")
+    draw_mode_btn.setStyleSheet(button_style)
+    add_hover_sound_to_button(draw_mode_btn, world_editor_ref)
     path_mode_layout.addWidget(draw_mode_btn)
     line_mode_btn = QPushButton("Line")
     line_mode_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_LineModeButton")
     line_mode_btn.setCheckable(True)
     line_mode_btn.setToolTip("Straight line mode for paths")
+    line_mode_btn.setStyleSheet(button_style)
+    add_hover_sound_to_button(line_mode_btn, world_editor_ref)
     path_mode_layout.addWidget(line_mode_btn)
     path_mode_widget.setVisible(False)
     path_section.addWidget(path_mode_widget)
@@ -318,12 +338,13 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
         plot_dot_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_Plot{name_suffix}DotButton")
         plot_dot_btn.setCheckable(True)
         plot_dot_btn.setToolTip(tooltip)
+        add_hover_sound_to_button(plot_dot_btn, world_editor_ref)
         poi_section.addWidget(plot_dot_btn)
         plot_dot_btn.setStyleSheet(button_style)
     setting_label = QLabel("Linked Settings:")
     setting_label.setObjectName("ToolbarDropdownLabel")
     setting_label.setAlignment(Qt.AlignCenter)
-    setting_label.setStyleSheet("font-size: 8pt; font-weight: normal;")
+    setting_label.setStyleSheet(f"font-size: 8pt; font-weight: normal; color: {base_color.name()};")
     setting_label.setVisible(False)
     poi_section.addWidget(setting_label)
     setting_dropdown = QComboBox()
@@ -347,6 +368,7 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
         unlink_setting_btn.setObjectName("WorldUnlinkSettingButton")
         unlink_setting_btn.setVisible(False)
         unlink_setting_btn.setStyleSheet(button_style)
+        add_hover_sound_to_button(unlink_setting_btn, world_editor_ref)
         poi_section.addWidget(unlink_setting_btn)
         world_unlink_setting_btn = unlink_setting_btn
     elif map_type == 'location':
@@ -354,6 +376,7 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
         unlink_setting_btn.setObjectName("LocationUnlinkSettingButton")
         unlink_setting_btn.setVisible(False)
         unlink_setting_btn.setStyleSheet(button_style)
+        add_hover_sound_to_button(unlink_setting_btn, world_editor_ref)
         poi_section.addWidget(unlink_setting_btn)
         location_unlink_setting_btn = unlink_setting_btn
 
@@ -361,7 +384,7 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
         location_label = QLabel("Linked Locations:")
         location_label.setObjectName("ToolbarDropdownLabel")
         location_label.setAlignment(Qt.AlignCenter)
-        location_label.setStyleSheet("font-size: 8pt; font-weight: normal;")
+        location_label.setStyleSheet(f"font-size: 8pt; font-weight: normal; color: {base_color.name()};")
         location_label.setVisible(False)
         poi_section.addWidget(location_label)
         location_dropdown = QComboBox()
@@ -384,6 +407,7 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
         unlink_location_btn.setObjectName("WorldUnlinkLocationButton")
         unlink_location_btn.setVisible(False)
         unlink_location_btn.setStyleSheet(button_style)
+        add_hover_sound_to_button(unlink_location_btn, world_editor_ref)
         poi_section.addWidget(unlink_location_btn)
         world_unlink_location_btn = unlink_location_btn
     toolbar_layout.addLayout(poi_section)
@@ -398,6 +422,8 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
         region_edit_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_RegionEditButton")
         region_edit_btn.setCheckable(True)
         region_edit_btn.setToolTip("Edit regions on the map (select or paint)")
+        region_edit_btn.setStyleSheet(button_style)
+        add_hover_sound_to_button(region_edit_btn, world_editor_ref)
         toolbar_layout.addWidget(region_edit_btn)
         region_submode_widget = QWidget()
         region_submode_widget.setObjectName(f"{toolbar_title.replace(' ', '')}_RegionSubmodeWidget")
@@ -408,10 +434,14 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
         region_select_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_RegionSelectButton")
         region_select_btn.setCheckable(True)
         region_select_btn.setChecked(True)
+        region_select_btn.setStyleSheet(button_style)
+        add_hover_sound_to_button(region_select_btn, world_editor_ref)
         region_submode_layout.addWidget(region_select_btn)
         region_paint_btn = QPushButton("Paint")
         region_paint_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_RegionPaintButton")
         region_paint_btn.setCheckable(True)
+        region_paint_btn.setStyleSheet(button_style)
+        add_hover_sound_to_button(region_paint_btn, world_editor_ref)
         region_submode_layout.addWidget(region_paint_btn)
         region_submode_widget.setVisible(False)
         toolbar_layout.addWidget(region_submode_widget)
@@ -484,6 +514,7 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
     reset_map_btn.setObjectName(f"{toolbar_title.replace(' ', '')}_ResetMapButton")
     reset_map_btn.setToolTip("Reset map image, zoom, pan, and clear all drawings for this map.")
     reset_map_btn.setStyleSheet(button_style)
+    add_hover_sound_to_button(reset_map_btn, world_editor_ref)
     toolbar_layout.addWidget(reset_map_btn)
     splitter.addWidget(toolbar)
     map_space = QWidget()
@@ -495,6 +526,8 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
     map_space_title_label = QLabel(map_space_title)
     map_space_title_label.setObjectName(f"{map_space_title.replace(' ', '')}_TitleLabel")
     map_space_title_label.setAlignment(Qt.AlignCenter)
+    map_space_title_label.setFixedHeight(25)
+    map_space_title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     map_layout.addWidget(map_space_title_label, 0)
     map_display = QWidget()
     map_display.setObjectName(f"{map_space_title.replace(' ', '')}_Display")
@@ -512,7 +545,7 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
     map_display_layout.addWidget(aspect_container, 1)
     map_layout.addWidget(map_display, 1)
     splitter.addWidget(map_space)
-    splitter.setSizes([150, 550])
+    splitter.setSizes([220, 550])
     splitter.setStretchFactor(0, 0)
     splitter.setStretchFactor(1, 1)
     return splitter, image_label, aspect_container, map_space_title_label, reset_map_btn, \
@@ -522,7 +555,7 @@ def _create_editor_layout(world_editor_ref, parent, toolbar_title, map_space_tit
 
 class CRTEffectLabel(QLabel):
     def __init__(self, text, parent_editor, map_type, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(text, *args, **kwargs)
         self.parent_editor = parent_editor
         self.map_type = map_type
         self._crt_pixmap = None
@@ -553,43 +586,77 @@ class CRTEffectLabel(QLabel):
         self._location_dragging_selection = False
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
+        self.setAttribute(Qt.WA_Hover, True)
+        self.installEventFilter(self)
         self._zoom_level = 0
         self._zoom_step_factor = 1.15
         self._max_zoom_level_allowed = 20
         self._pulse_time = 0.0
         self._virtual_width = VIRTUAL_CANVAS_WIDTH
         self._virtual_height = VIRTUAL_CANVAS_HEIGHT
-        self.setText(text)
         self._pulse_timer = QTimer(self)
         self._pulse_timer.timeout.connect(self._pulse_animate)
-        self._pulse_timer.start(50)
         self._region_border_cache = {}
         self._last_visible_rect = None
         self._show_region_fills = True
+        self._is_scrolling = False
+        self._scroll_timer = QTimer(self)
+        self._scroll_timer.setSingleShot(True)
+        self._scroll_timer.timeout.connect(self._on_scroll_finished)
+        self.setFocusPolicy(Qt.StrongFocus)
     paintEvent = paintEvent
     mousePressEvent = mousePressEvent
     mouseMoveEvent = mouseMoveEvent
     mouseReleaseEvent = mouseReleaseEvent
     _find_item_at_pos = _find_item_at_pos
+    
 
+    def eventFilter(self, obj, event):
+        if obj == self:
+            current_draw_mode = self.parent_editor.get_draw_mode(self.map_type) if self.parent_editor else 'none'
+            needs_special_handling = False
+            if getattr(self, '_is_linking_dots', False):
+                needs_special_handling = True
+            elif (current_draw_mode == 'region_edit' and self.map_type == 'world' and 
+                  hasattr(self.parent_editor, '_world_region_sub_mode') and 
+                  self.parent_editor._world_region_sub_mode == 'paint'):
+                needs_special_handling = True
+            elif (current_draw_mode == 'feature_paint' and
+                  ((self.map_type == 'world' and hasattr(self.parent_editor, '_world_feature_sub_mode') and 
+                    self.parent_editor._world_feature_sub_mode == 'paint') or
+                   (self.map_type == 'location' and hasattr(self.parent_editor, '_location_feature_sub_mode') and 
+                    self.parent_editor._location_feature_sub_mode == 'paint'))):
+                needs_special_handling = True
+            if needs_special_handling:
+                if event.type() == QEvent.MouseMove:
+                    mouseMoveEvent(self, event)
+                elif event.type() == QEvent.MouseButtonPress:
+                    mousePressEvent(self, event)
+                elif event.type() == QEvent.MouseButtonRelease:
+                    mouseReleaseEvent(self, event)
+                elif event.type() == QEvent.KeyPress:
+                    if event.key() == Qt.Key_Escape and getattr(self, '_is_linking_dots', False):
+                        self._is_linking_dots = False
+                        self._link_start_dot_index = -1
+                        self._link_start_dot_img_pos = None
+                        self._link_start_dot_widget_pos = None
+                        self._link_preview_end_widget_pos = None
+                        self._link_path_widget = []
+                        self._link_path_image = []
+                        self._link_visited_dot_indices = []
+                        self._link_visited_dot_positions = []
+                        self._hovered_dot_index = -1
+                        self.setCursor(Qt.ArrowCursor)
+                        self.update()
+                        return True
+        return super().eventFilter(obj, event)
+    
     def _pulse_animate(self):
-        self._pulse_time += 0.1
-        if self._pulse_time > 2 * math.pi:
-            self._pulse_time -= 2 * math.pi
-        current_draw_mode = ""
-        needs_update = False
-        if self.parent_editor and hasattr(self.parent_editor, 'get_draw_mode'):
-            current_draw_mode = self.parent_editor.get_draw_mode(self.map_type)
-            if current_draw_mode == 'region_edit':
-                needs_update = self._dragging or hasattr(self, '_painting_active') and self._painting_active
-            elif current_draw_mode == 'feature_paint':
-                needs_update = self._dragging
-            else:
-                needs_update = True
-        else:
-            needs_update = True
-        if needs_update:
-            self.update()
+        pass
+
+    def _animate(self):
+        self._pulse_time = time.time()
+        self.update()
 
     def _min_zoom(self):
         label_w, label_h = self.width(), self.height()
@@ -640,6 +707,209 @@ class CRTEffectLabel(QLabel):
                     return True
             return False
 
+    def _get_image_rect(self):
+        label_w, label_h = self.width(), self.height()
+        if label_w <= 0 or label_h <= 0:
+            return QRectF(0, 0, label_w, label_h)
+        if self._crt_image is None:
+            img_w, img_h = self._virtual_width, self._virtual_height
+        else:
+            img_w, img_h = self._crt_image.width(), self._crt_image.height()
+        if img_w <= 0 or img_h <= 0:
+            return QRectF(0, 0, label_w, label_h)
+        scale = min(label_w / img_w, label_h / img_h)
+        draw_w = img_w * scale
+        draw_h = img_h * scale
+        x = (label_w - draw_w) / 2
+        y = (label_h - draw_h) / 2
+        return QRectF(x, y, draw_w, draw_h)
+
+    def _widget_to_image_coords(self, widget_pos):
+        img_rect_base = self._get_image_rect()
+        if img_rect_base.width() <= 0 or img_rect_base.height() <= 0:
+            return None
+        if self._crt_image is None:
+            scale = self._zoom_step_factor ** self._zoom_level
+            if abs(scale) < 1e-9: return None
+            virtual_x = (widget_pos.x() - self._pan[0]) / scale
+            virtual_y = (widget_pos.y() - self._pan[1]) / scale
+            return (virtual_x, virtual_y)
+        else:
+            img_w, img_h = self._crt_image.width(), self._crt_image.height()
+            if img_w <= 0 or img_h <= 0: return None
+            user_zoom_factor = self._zoom_step_factor ** self._zoom_level
+            pan_x, pan_y = self._pan[0], self._pan[1]
+        draw_w = img_rect_base.width() * user_zoom_factor
+        draw_h = img_rect_base.height() * user_zoom_factor
+        center_x = img_rect_base.x() + img_rect_base.width() / 2.0 + pan_x
+        center_y = img_rect_base.y() + img_rect_base.height() / 2.0 + pan_y
+        x_top_left = center_x - draw_w / 2.0
+        y_top_left = center_y - draw_h / 2.0
+        if draw_w <= 1e-6 or draw_h <= 1e-6:
+             return None
+        relative_x = (widget_pos.x() - x_top_left) / draw_w
+        relative_y = (widget_pos.y() - y_top_left) / draw_h
+        image_x = relative_x * img_w
+        image_y = relative_y * img_h
+        image_x = max(0, min(img_w, image_x))
+        image_y = max(0, min(img_h, image_y))
+        return (image_x, image_y)
+
+    def _image_to_widget_coords(self, image_pos):
+        img_rect_base = self._get_image_rect()
+        if img_rect_base.width() <= 0 or img_rect_base.height() <= 0:
+            return None
+        if self._crt_image is None:
+            scale = self._zoom_step_factor ** self._zoom_level
+            widget_x = image_pos[0] * scale + self._pan[0]
+            widget_y = image_pos[1] * scale + self._pan[1]
+            return QPointF(widget_x, widget_y)
+        else:
+            img_w, img_h = self._crt_image.width(), self._crt_image.height()
+            if img_w <= 0 or img_h <= 0: return None
+            user_zoom_factor = self._zoom_step_factor ** self._zoom_level
+            pan_x, pan_y = self._pan[0], self._pan[1]
+        draw_w = img_rect_base.width() * user_zoom_factor
+        draw_h = img_rect_base.height() * user_zoom_factor
+        center_x = img_rect_base.x() + img_rect_base.width() / 2.0 + pan_x
+        center_y = img_rect_base.y() + img_rect_base.height() / 2.0 + pan_y
+        x_top_left = center_x - draw_w / 2.0
+        y_top_left = center_y - draw_h / 2.0
+        relative_x = image_pos[0] / img_w if img_w > 0 else 0
+        relative_y = image_pos[1] / img_h if img_h > 0 else 0
+        widget_x = x_top_left + relative_x * draw_w
+        widget_y = y_top_left + relative_y * draw_h
+        return QPointF(widget_x, widget_y)
+
+    def _is_line_visible(self, path_points, visible_rect):
+        if not path_points or len(path_points) < 2:
+            return False
+        widget_points = self._batch_convert_coords(path_points)
+        if not widget_points:
+            return False
+        for widget_point in widget_points:
+            if widget_point and visible_rect.contains(widget_point):
+                return True
+        return False
+
+    def _get_cached_widget_coords(self, image_coords):
+        if not hasattr(self, '_coord_cache'):
+            self._coord_cache = {}
+            self._cache_generation = 0
+        cache_key = (image_coords[0], image_coords[1])
+        cache_entry = self._coord_cache.get(cache_key)
+        if cache_entry and cache_entry['generation'] == self._cache_generation:
+            return cache_entry['result']
+        result = self._image_to_widget_coords(image_coords)
+        self._coord_cache[cache_key] = {
+            'result': result,
+            'generation': self._cache_generation
+        }
+        return result
+
+    def _batch_convert_coords(self, image_coords_list):
+        if not hasattr(self, '_coord_cache'):
+            self._coord_cache = {}
+            self._cache_generation = 0
+        results = []
+        for image_coords in image_coords_list:
+            cache_key = (image_coords[0], image_coords[1])
+            cache_entry = self._coord_cache.get(cache_key)
+            if cache_entry and cache_entry['generation'] == self._cache_generation:
+                results.append(cache_entry['result'])
+            else:
+                result = self._image_to_widget_coords(image_coords)
+                self._coord_cache[cache_key] = {
+                    'result': result,
+                    'generation': self._cache_generation
+                }
+                results.append(result)
+        return results
+
+    def _clear_coord_cache(self):
+        if hasattr(self, '_coord_cache'):
+            self._cache_generation += 1
+            if self._cache_generation > 1000:
+                self._coord_cache.clear()
+                self._cache_generation = 0
+
+    def _draw_virtual_grid(self, painter):
+        if self._crt_image is not None:
+            return
+        grid_color = QColor(60, 60, 60, 150)
+        grid_pen = QPen(grid_color, 0.5)
+        painter.setPen(grid_pen)
+        painter.setBrush(Qt.NoBrush)
+        base_grid_spacing = 50.0
+        user_zoom_factor = self._zoom_step_factor ** self._zoom_level
+        widget_pixels_per_virtual_unit = self._get_image_rect().width() / self._virtual_width * user_zoom_factor if self._virtual_width > 0 else 1.0
+        current_grid_spacing = base_grid_spacing
+        while current_grid_spacing * widget_pixels_per_virtual_unit < 15:
+             current_grid_spacing *= 5
+        while current_grid_spacing * widget_pixels_per_virtual_unit > 150:
+             current_grid_spacing /= 5
+        top_left_widget = QPointF(0, 0)
+        bottom_right_widget = QPointF(self.width(), self.height())
+        top_left_virtual = self._widget_to_image_coords(top_left_widget)
+        bottom_right_virtual = self._widget_to_image_coords(bottom_right_widget)
+        if top_left_virtual is None or bottom_right_virtual is None:
+             start_x_virtual, start_y_virtual = 0, 0
+             end_x_virtual, end_y_virtual = self._virtual_width, self._virtual_height
+        else:
+            start_x_virtual = max(0, top_left_virtual[0])
+            start_y_virtual = max(0, top_left_virtual[1])
+            end_x_virtual = bottom_right_virtual[0]
+            end_y_virtual = bottom_right_virtual[1]
+        first_vx = math.floor(start_x_virtual / current_grid_spacing) * current_grid_spacing
+        first_vy = math.floor(start_y_virtual / current_grid_spacing) * current_grid_spacing
+        vx = first_vx
+        while True:
+            p1_virtual = (vx, start_y_virtual - current_grid_spacing)
+            p2_virtual = (vx, end_y_virtual + current_grid_spacing)
+            p1_widget = self._image_to_widget_coords(p1_virtual)
+            p2_widget = self._image_to_widget_coords(p2_virtual)
+            if p1_widget and p2_widget:
+                 line_rect = QRectF(p1_widget, p2_widget).normalized()
+                 if line_rect.intersects(QRectF(self.rect().adjusted(-1,-1,1,1))):
+                      painter.drawLine(p1_widget, p2_widget)
+            if p1_widget and p1_widget.x() > self.width() + 10: break
+            if vx > end_x_virtual + current_grid_spacing: break
+            vx += current_grid_spacing
+            if vx > self._virtual_width + current_grid_spacing * 2: break
+        vy = first_vy
+        while True:
+            p1_virtual = (start_x_virtual - current_grid_spacing, vy)
+            p2_virtual = (end_x_virtual + current_grid_spacing, vy)
+            p1_widget = self._image_to_widget_coords(p1_virtual)
+            p2_widget = self._image_to_widget_coords(p2_virtual)
+            if p1_widget and p2_widget:
+                 line_rect = QRectF(p1_widget, p2_widget).normalized()
+                 if line_rect.intersects(QRectF(self.rect().adjusted(-1,-1,1,1))):
+                      painter.drawLine(p1_widget, p2_widget)
+            if p1_widget and p1_widget.y() > self.height() + 10: break
+            if vy > end_y_virtual + current_grid_spacing: break
+            vy += current_grid_spacing
+            if vy > self._virtual_height + current_grid_spacing * 2: break
+
+    def _expand_virtual_canvas(self, coord_x, coord_y):
+        expanded = False
+        new_width = self._virtual_width
+        new_height = self._virtual_height
+        if coord_x >= self._virtual_width:
+            new_width = coord_x + 100
+            expanded = True
+        if coord_y >= self._virtual_height:
+            new_height = coord_y + 100
+            expanded = True
+        if expanded:
+            self._virtual_width = new_width
+            self._virtual_height = new_height
+            self.update()
+
+    def setBorderColor(self, color):
+        self._border_color = QColor(color)
+        self.update()
+
     def setPixmap(self, pixmap, orig_image=None):
         self._crt_pixmap = pixmap
         if orig_image is not None and not orig_image.isNull():
@@ -663,10 +933,6 @@ class CRTEffectLabel(QLabel):
         self._zoom_level = 0
         self._pan = [0, 0]
         self.updateGeometry()
-        self.update()
-
-    def setBorderColor(self, color):
-        self._border_color = QColor(color)
         self.update()
 
     def wheelEvent(self, event):
@@ -744,17 +1010,106 @@ class CRTEffectLabel(QLabel):
                 self.update()
         event.accept()
 
-    def keyPressEvent(self, event):
-        if self.parent_editor is None:
-            super().keyPressEvent(event)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._clamp_pan()
+        self.update()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and \
+                getattr(self, '_dragging', False) and getattr(self, '_dragging_selection', False) and getattr(self, '_last_mouse_pos', None):
+            if self.parent_editor:
+                selected_type, selected_index = self.parent_editor.get_selected_item(self.map_type)
+                if selected_type == 'dot':
+                    delta_widget_x = event.pos().x() - self._last_mouse_pos.x()
+                    delta_widget_y = event.pos().y() - self._last_mouse_pos.y()
+                    if abs(delta_widget_x) > 2 or abs(delta_widget_y) > 2:
+                        image_pos = self._widget_to_image_coords(event.pos())
+                        if image_pos and hasattr(self.parent_editor, '_world_dots'):
+                            dots_attr = f"_{self.map_type}_dots"
+                            dots = getattr(self.parent_editor, dots_attr)
+                            if 0 <= selected_index < len(dots):
+                                old_dot = list(dots[selected_index])
+                                old_dot[0] = image_pos[0]
+                                old_dot[1] = image_pos[1]
+                                dots[selected_index] = tuple(old_dot)
+                        self._last_mouse_pos = event.pos()
+                        self.update()
+                    return
+        if event.buttons() == Qt.LeftButton and \
+                getattr(self, '_dragging', False) and not getattr(self, '_dragging_selection', False) and getattr(self, '_last_mouse_pos', None):
+            if not self.hasFocus():
+                self.setFocus()
+            delta = event.pos() - self._last_mouse_pos
+            self._pan[0] += delta.x()
+            self._pan[1] += delta.y()
+            self._last_mouse_pos = event.pos()
+            self._clamp_pan()
+            if hasattr(self, '_clear_coord_cache'):
+                self._clear_coord_cache()
+            if not getattr(self, '_is_scrolling', False):
+                self._is_scrolling = True
+            if hasattr(self, '_scroll_timer'):
+                self._scroll_timer.start(150)
+            self.update()
             return
+        if self.parent_editor is not None:
+            is_dragging = event.buttons() == Qt.LeftButton and getattr(self, '_dragging', False)
+            item_type_hover, item_index_hover = self._find_item_at_pos(event.pos())
+            new_hovered_line_index = -1
+            new_hovered_dot_index = -1
+            if item_type_hover == 'line':
+                new_hovered_line_index = item_index_hover
+            elif item_type_hover == 'dot':
+                new_hovered_dot_index = item_index_hover
+            if hasattr(self, '_hovered_line_index'):
+                if self._hovered_line_index != new_hovered_line_index:
+                    self._hovered_line_index = new_hovered_line_index
+                    self.update()
+            else:
+                self._hovered_line_index = new_hovered_line_index
+                if new_hovered_line_index != -1:
+                    self.update()
+            if hasattr(self, '_hovered_dot_index'):
+                if self._hovered_dot_index != new_hovered_dot_index:
+                    self._hovered_dot_index = new_hovered_dot_index
+                    self.update()
+            else:
+                self._hovered_dot_index = new_hovered_dot_index
+                if new_hovered_dot_index != -1:
+                    self.update()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and getattr(self, '_dragging_selection', False):
+            if self.parent_editor:
+                selected_type, selected_index = self.parent_editor.get_selected_item(self.map_type)
+                if selected_type == 'dot' and self.map_type == 'world':
+                    dots_attr = f"_{self.map_type}_dots"
+                    dots = getattr(self.parent_editor, dots_attr)
+                    if 0 <= selected_index < len(dots):
+                        dot_data = list(dots[selected_index])
+                        if hasattr(self.parent_editor, '_get_region_at_point'):
+                            new_region = self.parent_editor._get_region_at_point(dot_data[0], dot_data[1])
+                            if len(dot_data) >= 6:
+                                dot_data[5] = new_region
+                                dots[selected_index] = tuple(dot_data)
+                    save_method = f"_save_{self.map_type}_map_data"
+                    if hasattr(self.parent_editor, save_method):
+                        QTimer.singleShot(0, getattr(self.parent_editor, save_method))
+                elif selected_type == 'dot':
+                    save_method = f"_save_{self.map_type}_map_data"
+                    if hasattr(self.parent_editor, save_method):
+                        QTimer.singleShot(0, getattr(self.parent_editor, save_method))
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event):
         if event.key() == Qt.Key_Delete:
-            selected_type, selected_index = self.parent_editor.get_selected_item(self.map_type)
-            if selected_type == 'region' and isinstance(selected_index, str) and selected_index:
-                self.parent_editor.delete_selected_item(self.map_type)
-                event.accept()
+            if self.parent_editor is None:
+                super().keyPressEvent(event)
                 return
-            elif selected_type is not None and isinstance(selected_index, int) and selected_index >= 0:
+            selected_type, selected_index = self.parent_editor.get_selected_item(self.map_type)
+            if selected_type is not None and hasattr(self.parent_editor, 'delete_selected_item'):
                 self.parent_editor.delete_selected_item(self.map_type)
                 event.accept()
                 return
@@ -762,186 +1117,15 @@ class CRTEffectLabel(QLabel):
                 event.accept()
                 return
         super().keyPressEvent(event)
-
-    def _get_image_rect(self):
-        label_w, label_h = self.width(), self.height()
-        if label_w <= 0 or label_h <= 0:
-            return QRectF(0, 0, label_w, label_h)
-        if self._crt_image is None:
-            img_w, img_h = self._virtual_width, self._virtual_height
-        else:
-            img_w, img_h = self._crt_image.width(), self._crt_image.height()
-        if img_w <= 0 or img_h <= 0:
-            return QRectF(0, 0, label_w, label_h)
-        scale = min(label_w / img_w, label_h / img_h)
-        draw_w = img_w * scale
-        draw_h = img_h * scale
-        x = (label_w - draw_w) / 2
-        y = (label_h - draw_h) / 2
-        return QRectF(x, y, draw_w, draw_h)
-
-    def _animate(self):
-        self._pulse_time = time.time()
+    def _on_scroll_finished(self):
+        self._is_scrolling = False
         self.update()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._clamp_pan()
-        self.update()
-
-    def _widget_to_image_coords(self, widget_pos):
-        img_rect_base = self._get_image_rect()
-        if img_rect_base.width() <= 0 or img_rect_base.height() <= 0:
-            return None
-        if self._crt_image is None:
-            scale = self._zoom_step_factor ** self._zoom_level
-            if abs(scale) < 1e-9: return None
-            virtual_x = (widget_pos.x() - self._pan[0]) / scale
-            virtual_y = (widget_pos.y() - self._pan[1]) / scale
-            return (virtual_x, virtual_y)
-        else:
-            img_w, img_h = self._crt_image.width(), self._crt_image.height()
-            if img_w <= 0 or img_h <= 0: return None
-            user_zoom_factor = self._zoom_step_factor ** self._zoom_level
-            pan_x, pan_y = self._pan[0], self._pan[1]
-        draw_w = img_rect_base.width() * user_zoom_factor
-        draw_h = img_rect_base.height() * user_zoom_factor
-        center_x = img_rect_base.x() + img_rect_base.width() / 2.0 + pan_x
-        center_y = img_rect_base.y() + img_rect_base.height() / 2.0 + pan_y
-        x_top_left = center_x - draw_w / 2.0
-        y_top_left = center_y - draw_h / 2.0
-        if draw_w <= 1e-6 or draw_h <= 1e-6:
-             return None
-        relative_x = (widget_pos.x() - x_top_left) / draw_w
-        relative_y = (widget_pos.y() - y_top_left) / draw_h
-        image_x = relative_x * img_w
-        image_y = relative_y * img_h
-        image_x = max(0, min(img_w, image_x))
-        image_y = max(0, min(img_h, image_y))
-        return (image_x, image_y)
-
-    def _image_to_widget_coords(self, image_pos):
-        img_rect_base = self._get_image_rect()
-        if img_rect_base.width() <= 0 or img_rect_base.height() <= 0:
-            return None
-
-        if self._crt_image is None:
-            scale = self._zoom_step_factor ** self._zoom_level
-            widget_x = image_pos[0] * scale + self._pan[0]
-            widget_y = image_pos[1] * scale + self._pan[1]
-            return QPointF(widget_x, widget_y)
-        else:
-            img_w, img_h = self._crt_image.width(), self._crt_image.height()
-            if img_w <= 0 or img_h <= 0: return None
-            user_zoom_factor = self._zoom_step_factor ** self._zoom_level
-            pan_x, pan_y = self._pan[0], self._pan[1]
-        draw_w = img_rect_base.width() * user_zoom_factor
-        draw_h = img_rect_base.height() * user_zoom_factor
-        center_x = img_rect_base.x() + img_rect_base.width() / 2.0 + pan_x
-        center_y = img_rect_base.y() + img_rect_base.height() / 2.0 + pan_y
-        x_top_left = center_x - draw_w / 2.0
-        y_top_left = center_y - draw_h / 2.0
-        relative_x = image_pos[0] / img_w if img_w > 0 else 0
-        relative_y = image_pos[1] / img_h if img_h > 0 else 0
-        widget_x = x_top_left + relative_x * draw_w
-        widget_y = y_top_left + relative_y * draw_h
-        return QPointF(widget_x, widget_y)
-
-    def _expand_virtual_canvas(self, coord_x, coord_y):
-        expanded = False
-        new_width = self._virtual_width
-        new_height = self._virtual_height
-        if coord_x >= self._virtual_width:
-            new_width = coord_x + 100
-            expanded = True
-        if coord_y >= self._virtual_height:
-            new_height = coord_y + 100
-            expanded = True
-        if expanded:
-            self._virtual_width = new_width
-            self._virtual_height = new_height
+    
+    def leaveEvent(self, event):
+        if hasattr(self, '_hovered_line_index') and self._hovered_line_index != -1:
+            self._hovered_line_index = -1
             self.update()
-
-    def _draw_virtual_grid(self, painter):
-        if self._crt_image is not None:
-            return
-        grid_color = QColor(60, 60, 60, 150)
-        grid_pen = QPen(grid_color, 0.5)
-        painter.setPen(grid_pen)
-        painter.setBrush(Qt.NoBrush)
-        base_grid_spacing = 50.0
-        user_zoom_factor = self._zoom_step_factor ** self._zoom_level
-        widget_pixels_per_virtual_unit = self._get_image_rect().width() / self._virtual_width * user_zoom_factor if self._virtual_width > 0 else 1.0
-        current_grid_spacing = base_grid_spacing
-        while current_grid_spacing * widget_pixels_per_virtual_unit < 15:
-             current_grid_spacing *= 5
-        while current_grid_spacing * widget_pixels_per_virtual_unit > 150:
-             current_grid_spacing /= 5
-        top_left_widget = QPointF(0, 0)
-        bottom_right_widget = QPointF(self.width(), self.height())
-        top_left_virtual = self._widget_to_image_coords(top_left_widget)
-        bottom_right_virtual = self._widget_to_image_coords(bottom_right_widget)
-        if top_left_virtual is None or bottom_right_virtual is None:
-             start_x_virtual, start_y_virtual = 0, 0
-             end_x_virtual, end_y_virtual = self._virtual_width, self._virtual_height
-        else:
-            start_x_virtual = max(0, top_left_virtual[0])
-            start_y_virtual = max(0, top_left_virtual[1])
-            end_x_virtual = bottom_right_virtual[0]
-            end_y_virtual = bottom_right_virtual[1]
-        first_vx = math.floor(start_x_virtual / current_grid_spacing) * current_grid_spacing
-        first_vy = math.floor(start_y_virtual / current_grid_spacing) * current_grid_spacing
-        vx = first_vx
-        while True:
-            p1_virtual = (vx, start_y_virtual - current_grid_spacing)
-            p2_virtual = (vx, end_y_virtual + current_grid_spacing)
-            p1_widget = self._image_to_widget_coords(p1_virtual)
-            p2_widget = self._image_to_widget_coords(p2_virtual)
-            if p1_widget and p2_widget:
-                 line_rect = QRectF(p1_widget, p2_widget).normalized()
-                 if line_rect.intersects(QRectF(self.rect().adjusted(-1,-1,1,1))):
-                      painter.drawLine(p1_widget, p2_widget)
-            if p1_widget and p1_widget.x() > self.width() + 10: break
-            if vx > end_x_virtual + current_grid_spacing: break
-            vx += current_grid_spacing
-            if vx > self._virtual_width + current_grid_spacing * 2: break
-        vy = first_vy
-        while True:
-            p1_virtual = (start_x_virtual - current_grid_spacing, vy)
-            p2_virtual = (end_x_virtual + current_grid_spacing, vy)
-            p1_widget = self._image_to_widget_coords(p1_virtual)
-            p2_widget = self._image_to_widget_coords(p2_virtual)
-            if p1_widget and p2_widget:
-                 line_rect = QRectF(p1_widget, p2_widget).normalized()
-                 if line_rect.intersects(QRectF(self.rect().adjusted(-1,-1,1,1))):
-                      painter.drawLine(p1_widget, p2_widget)
-            if p1_widget and p1_widget.y() > self.height() + 10: break
-            if vy > end_y_virtual + current_grid_spacing: break
-            vy += current_grid_spacing
-            if vy > self._virtual_height + current_grid_spacing * 2: break
-
-    def _is_line_visible(self, path_points, visible_rect):
-        if not path_points or len(path_points) < 2:
-            return False
-        for point in path_points:
-            widget_point = self._get_cached_widget_coords(point)
-            if widget_point and visible_rect.contains(widget_point):
-                return True
-        
-        return False
-
-    def _get_cached_widget_coords(self, image_coords):
-        if not hasattr(self, '_coord_cache'):
-            self._coord_cache = {}
-        
-        cache_key = (image_coords[0], image_coords[1], self._zoom_level, self._pan[0], self._pan[1])
-        if cache_key in self._coord_cache:
-            return self._coord_cache[cache_key]
-        
-        result = self._image_to_widget_coords(image_coords)
-        self._coord_cache[cache_key] = result
-        return result
-
-    def _clear_coord_cache(self):
-        if hasattr(self, '_coord_cache'):
-            self._coord_cache.clear()
+        if hasattr(self, '_hovered_dot_index') and self._hovered_dot_index != -1:
+            self._hovered_dot_index = -1
+            self.update()
+        super().leaveEvent(event)

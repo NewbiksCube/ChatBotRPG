@@ -11,6 +11,7 @@ import shutil
 from editor_panel.world_editor.world_editor_auto import handle_dot_deletion, set_automate_section_mode, generate_setting_file
 from editor_panel.world_editor.region_toolbar import update_region_border_cache, _set_region_edit_mode
 from editor_panel.world_editor.world_editor_select import select_item
+import pygame
 
 def sanitize_path_name(name):
     sanitized = re.sub(r'[^a-zA-Z0-9_\-\\. ]', '', name).strip()
@@ -93,7 +94,30 @@ class WorldEditorWidget(QWidget):
         self._world_region_name = None
         self._feature_erase_save_timer = None
         self._pending_feature_erase_save_map_type = None
+        self._active_threads = []
+        self._active_workers = []
         self.settingAddedOrRemoved.connect(self._handle_setting_added_or_removed)
+        
+        self.hover_message_sound = None
+        mixer_initialized = False
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+                mixer_initialized = pygame.mixer.get_init()
+            else:
+                mixer_initialized = True
+        except pygame.error as e:
+            pass
+        except Exception as e:
+            pass
+        if mixer_initialized:
+            try:
+                self.hover_message_sound = pygame.mixer.Sound("sounds/hoverMessage.mp3")
+            except pygame.error as e:
+                pass
+            except Exception as e:
+                pass
+                
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -212,6 +236,12 @@ class WorldEditorWidget(QWidget):
         if self.world_region_paint_submode_btn:
             self.world_region_paint_submode_btn.clicked.connect(self._on_region_paint_submode_clicked)
         self._region_border_cache = {}
+        from PyQt5.QtWidgets import QShortcut
+        from PyQt5.QtGui import QKeySequence
+        cleanup_shortcut = QShortcut(QKeySequence("Ctrl+Shift+C"), self)
+        cleanup_shortcut.activated.connect(self.manual_cleanup_orphaned_regions)
+        force_remove_shortcut = QShortcut(QKeySequence("Ctrl+Shift+X"), self)
+        force_remove_shortcut.activated.connect(self.force_remove_all_orphaned_regions)
         self.world_path_mode_widget = world_toolbar.findChild(QWidget, "WORLDToolbar_PathModeWidget")
         self.world_draw_mode_btn = world_toolbar.findChild(QPushButton, "WORLDToolbar_DrawModeButton")
         self.world_line_mode_btn = world_toolbar.findChild(QPushButton, "WORLDToolbar_LineModeButton")
@@ -516,6 +546,9 @@ class WorldEditorWidget(QWidget):
                                 self._region_masks[region_name] = mask
                         except Exception as e:
                             print(f"[ERROR] Failed to load mask for region '{region_name}': {e}")
+            if not hasattr(self, '_region_masks'):
+                self._region_masks = {}
+            self._ensure_region_masks_exist()
             self._world_features_data = json_data.get('features_data', {}) or {}
             for fname in features_from_json:
                 if fname and fname not in self._world_features_data:
@@ -641,7 +674,6 @@ class WorldEditorWidget(QWidget):
         try:
             with open(map_data_file, 'w', encoding='utf-8') as f:
                 json.dump(json_data, f, indent=2)
-            print(f"Saved location map data to {map_data_file}")
         except Exception as e:
             print(f"Error saving location map data: {e}")
 
@@ -928,9 +960,13 @@ class WorldEditorWidget(QWidget):
         self._region_border_cache = {}
         self._region_fill_cache = {}
         self._load_world_map_data()
-        self._init_region_masks() 
-        self._update_dots_region_assignments()
         self.update_world_map()
+        self._init_region_masks() 
+        self._ensure_region_masks_exist()
+        self._update_dots_region_assignments()
+        if hasattr(self, 'world_region_edit_btn') and self.world_region_edit_btn:
+            QTimer.singleShot(100, lambda: self._auto_activate_region_edit())
+        QTimer.singleShot(200, lambda: self._cleanup_orphaned_regions())
         self._location_dots = []
         self._location_lines = []
         self.update_location_map()
@@ -1035,36 +1071,12 @@ class WorldEditorWidget(QWidget):
                 self.world_map_label.setPixmap(QPixmap(), orig_image=cached_pixmap)
             self.world_map_label.repaint()
             return
-        original_image = QImage(image_path)
-        if original_image.isNull():
-            print(f"Warning: Could not load image from {image_path}. Creating placeholder.")
-            self.world_map_label.setPixmap(QPixmap(), orig_image=None)
-            self.world_map_label.setScaledContents(False)
-            self._map_cache[cache_key] = None
-            self._last_map_key = cache_key
-            return
-        self.world_map_label.setPixmap(QPixmap(), orig_image=original_image)
-        self.world_map_label.setScaledContents(False)
-        self.world_map_label.repaint()
-        self._map_cache[cache_key] = original_image
-        self._last_map_key = cache_key
-        if hasattr(self, 'world_map_aspect_container'):
-            w, h = original_image.width(), original_image.height()
-            if w > 0 and h > 0:
-                self.world_map_aspect_container.set_aspect_ratio(w / h)
-            else:
-                self.world_map_aspect_container.set_aspect_ratio(1.0)
-            self.world_map_aspect_container.updateGeometry()
-            self.world_map_aspect_container.update()
-            self.world_map_aspect_container.resizeEvent(None)
-            if self.world_map_aspect_container.parentWidget():
-                self.world_map_aspect_container.parentWidget().updateGeometry()
-                self.world_map_aspect_container.parentWidget().update()
+        self._load_world_map_image_async(image_path, cache_key)
 
     def clear_world_map_image(self):
         if not self.current_world_name:
             return
-        world_settings_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings', self.current_world_name) # MODIFIED path
+        world_settings_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings', self.current_world_name)
         world_json_path = os.path.join(world_settings_dir, f"{self.current_world_name}_world.json")
         try:
             data = {}
@@ -1088,7 +1100,7 @@ class WorldEditorWidget(QWidget):
     def clear_location_map_image(self):
         if not self.current_world_name or not self.current_location_name:
             return
-        world_settings_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings', self.current_world_name) # MODIFIED path
+        world_settings_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings', self.current_world_name)
         world_json_path = os.path.join(world_settings_dir, f"{self.current_world_name}_world.json")
         try:
             data = {}
@@ -1160,7 +1172,7 @@ class WorldEditorWidget(QWidget):
             if hasattr(self, 'location_map_aspect_container'):
                 self.location_map_aspect_container.set_aspect_ratio(1.0)
             return
-        world_settings_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings', self.current_world_name) # MODIFIED path
+        world_settings_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings', self.current_world_name)
         world_json_path = os.path.join(world_settings_dir, f"{self.current_world_name}_world.json")
         try:
             if not os.path.exists(world_json_path):
@@ -1177,26 +1189,70 @@ class WorldEditorWidget(QWidget):
             if not isinstance(location_data, dict):
                 print(f"Invalid location data for {self.current_location_name}")
                 self.location_map_label.setPixmap(QPixmap(), orig_image=None)
-                if hasattr(self, 'location_map_aspect_container'): self.location_map_aspect_container.set_aspect_ratio(1.0)
+                if hasattr(self, 'location_map_aspect_container'): 
+                    self.location_map_aspect_container.set_aspect_ratio(1.0)
                 return
             map_image = location_data.get("map_image")
             if not map_image:
                 self.location_map_label.setPixmap(QPixmap(), orig_image=None)
-                if hasattr(self, 'location_map_aspect_container'): self.location_map_aspect_container.set_aspect_ratio(1.0)
+                if hasattr(self, 'location_map_aspect_container'): 
+                    self.location_map_aspect_container.set_aspect_ratio(1.0)
                 return
             maps_dir = os.path.join(world_settings_dir, "resources", "maps")
             image_path = os.path.join(maps_dir, map_image)
             if not os.path.exists(image_path):
                 print(f"Map image not found at {image_path}")
                 self.location_map_label.setPixmap(QPixmap(), orig_image=None)
-                if hasattr(self, 'location_map_aspect_container'): self.location_map_aspect_container.set_aspect_ratio(1.0)
+                if hasattr(self, 'location_map_aspect_container'): 
+                    self.location_map_aspect_container.set_aspect_ratio(1.0)
                 return
-            original_image = QImage(image_path)
-            if original_image.isNull():
-                print(f"Failed to load map image from {image_path}")
-                self.location_map_label.setPixmap(QPixmap(), orig_image=None)
-                if hasattr(self, 'location_map_aspect_container'): self.location_map_aspect_container.set_aspect_ratio(1.0)
-                return
+            self._load_map_image_async(image_path)
+        except Exception as e:
+            print(f"Error updating location map: {e}")
+            self.location_map_label.clear()
+            if hasattr(self, 'location_map_aspect_container'):
+                self.location_map_aspect_container.set_aspect_ratio(1.0)
+
+    def _load_map_image_async(self, image_path):
+        from PyQt5.QtCore import QThread, pyqtSignal, QObject
+        class ImageLoader(QObject):
+            image_loaded = pyqtSignal(object)
+            load_failed = pyqtSignal(str)
+            def __init__(self, image_path):
+                super().__init__()
+                self.image_path = image_path
+            def load_image(self):
+                try:
+                    from PyQt5.QtGui import QImage
+                    image = QImage(self.image_path)
+                    if image.isNull():
+                        self.load_failed.emit(f"Failed to load map image from {self.image_path}")
+                    else:
+                        self.image_loaded.emit(image)
+                except Exception as e:
+                    self.load_failed.emit(f"Error loading image: {e}")
+        image_loader_thread = QThread()
+        image_loader = ImageLoader(image_path)
+        image_loader.moveToThread(image_loader_thread)
+        self._active_threads.append(image_loader_thread)
+        self._active_workers.append(image_loader)
+        image_loader_thread.started.connect(image_loader.load_image)
+        image_loader.image_loaded.connect(self._on_map_image_loaded)
+        image_loader.image_loaded.connect(image_loader_thread.quit)
+        image_loader.load_failed.connect(self._on_map_image_failed)
+        image_loader.load_failed.connect(image_loader_thread.quit)
+        image_loader_thread.finished.connect(image_loader.deleteLater)
+        image_loader_thread.finished.connect(image_loader_thread.deleteLater)
+        def cleanup_thread():
+            if image_loader_thread in self._active_threads:
+                self._active_threads.remove(image_loader_thread)
+            if image_loader in self._active_workers:
+                self._active_workers.remove(image_loader)
+        image_loader_thread.finished.connect(cleanup_thread)
+        image_loader_thread.start()
+    
+    def _on_map_image_loaded(self, original_image):
+        try:
             base_color = self.theme_colors.get("base_color", "#CCCCCC")
             self.location_map_label.setBorderColor(base_color)
             self.location_map_label.setPixmap(QPixmap(), orig_image=original_image)
@@ -1212,12 +1268,91 @@ class WorldEditorWidget(QWidget):
                     self.location_map_aspect_container.parentWidget().updateGeometry()
                     self.location_map_aspect_container.parentWidget().update()
             self.location_map_label.update()
-        
         except Exception as e:
-            print(f"Error updating location map: {e}")
+            print(f"Error setting loaded map image: {e}")
             self.location_map_label.clear()
-            if hasattr(self, 'location_map_aspect_container'):
-                self.location_map_aspect_container.set_aspect_ratio(1.0)
+    
+    def _on_map_image_failed(self, error_message):
+        print(error_message)
+        self.location_map_label.setPixmap(QPixmap(), orig_image=None)
+        if hasattr(self, 'location_map_aspect_container'):
+            self.location_map_aspect_container.set_aspect_ratio(1.0)
+
+    def _load_world_map_image_async(self, image_path, cache_key):
+        from PyQt5.QtCore import QThread, pyqtSignal, QObject
+        
+        class WorldImageLoader(QObject):
+            image_loaded = pyqtSignal(object, object)
+            load_failed = pyqtSignal(str, object)
+            def __init__(self, image_path, cache_key):
+                super().__init__()
+                self.image_path = image_path
+                self.cache_key = cache_key
+            
+            def load_image(self):
+                try:
+                    from PyQt5.QtGui import QImage
+                    image = QImage(self.image_path)
+                    if image.isNull():
+                        self.load_failed.emit("", self.cache_key)
+                    else:
+                        self.image_loaded.emit(image, self.cache_key)
+                except Exception as e:
+                    self.load_failed.emit(f"Error loading world map image: {e}", self.cache_key)
+        world_image_loader_thread = QThread()
+        world_image_loader = WorldImageLoader(image_path, cache_key)
+        world_image_loader.moveToThread(world_image_loader_thread)
+        self._active_threads.append(world_image_loader_thread)
+        self._active_workers.append(world_image_loader)
+        world_image_loader_thread.started.connect(world_image_loader.load_image)
+        world_image_loader.image_loaded.connect(self._on_world_map_image_loaded)
+        world_image_loader.image_loaded.connect(world_image_loader_thread.quit)
+        world_image_loader.load_failed.connect(self._on_world_map_image_failed)
+        world_image_loader.load_failed.connect(world_image_loader_thread.quit)
+        world_image_loader_thread.finished.connect(world_image_loader.deleteLater)
+        world_image_loader_thread.finished.connect(world_image_loader_thread.deleteLater)
+        def cleanup_thread():
+            if world_image_loader_thread in self._active_threads:
+                self._active_threads.remove(world_image_loader_thread)
+            if world_image_loader in self._active_workers:
+                self._active_workers.remove(world_image_loader)
+        world_image_loader_thread.finished.connect(cleanup_thread)
+        world_image_loader_thread.start()
+    
+    def _on_world_map_image_loaded(self, original_image, cache_key):
+        try:
+            self.world_map_label.setPixmap(QPixmap(), orig_image=original_image)
+            self.world_map_label.setScaledContents(False)
+            self.world_map_label.repaint()
+            self._map_cache[cache_key] = original_image
+            self._last_map_key = cache_key
+            if hasattr(self, '_world_regions') and self._world_regions and hasattr(self, '_init_region_masks'):
+                self._init_region_masks()
+            if hasattr(self, '_ensure_region_masks_exist'):
+                self._ensure_region_masks_exist()
+            
+            if hasattr(self, 'world_map_aspect_container'):
+                w, h = original_image.width(), original_image.height()
+                if w > 0 and h > 0:
+                    self.world_map_aspect_container.set_aspect_ratio(w / h)
+                else:
+                    self.world_map_aspect_container.set_aspect_ratio(1.0)
+                self.world_map_aspect_container.updateGeometry()
+                self.world_map_aspect_container.update()
+                self.world_map_aspect_container.resizeEvent(None)
+                if self.world_map_aspect_container.parentWidget():
+                    self.world_map_aspect_container.parentWidget().updateGeometry()
+                    self.world_map_aspect_container.parentWidget().update()
+        except Exception as e:
+            print(f"Error setting loaded world map image: {e}")
+            self.world_map_label.clear()
+    
+    def _on_world_map_image_failed(self, error_message, cache_key):
+        print(error_message)
+        self.world_map_label.setPixmap(QPixmap(), orig_image=None)
+        self.world_map_label.setScaledContents(False)
+        self._map_cache[cache_key] = None
+        self._last_map_key = cache_key
 
     def set_location(self, location_name):
         if self.current_location_name and self._world_region_name:
@@ -1236,7 +1371,6 @@ class WorldEditorWidget(QWidget):
         self._load_location_map_data()
         self.update_location_map()
         if hasattr(self, 'location_map_label') and self.location_map_label:
-            print("Forcing repaint of location map label")
             self.location_map_label.update()
         self.current_location_setting_name = None
         self.force_populate_dropdowns()
@@ -1276,7 +1410,6 @@ class WorldEditorWidget(QWidget):
                                     if os.path.isfile(location_json_path):
                                         location_data = self._load_json(location_json_path)
                                         display_name = location_data.get('name', '')
-                                        
                                         if display_name.lower() == location_name.lower():
                                             self._world_region_name = region_folder
                                             found_location_path = location_path
@@ -1628,50 +1761,62 @@ class WorldEditorWidget(QWidget):
         elif map_type == 'location':
             self._save_location_map_data()
 
+    def add_line(self, map_type, start_dot_index, end_dot_index, image_path):
+        self._add_or_update_line(map_type, start_dot_index, end_dot_index, image_path)
+    
     def add_world_line(self, start_dot_index, end_dot_index, image_path):
-        self._add_or_update_line('world', start_dot_index, end_dot_index, image_path)
-
-    def add_world_dot(self, p_img):
-        dot_type = self._world_dot_type_mode
-        pulse_offset = random.uniform(0, 2 * math.pi)
-        region_name = self._get_region_at_point(p_img[0], p_img[1])
-        linked_name = None
-        if dot_type == 'small' and hasattr(self, 'automate_checkboxes_dict'):
-            add_setting_cbs = self.automate_checkboxes_dict.get('add_setting_mode', [])
-            for text, cb in add_setting_cbs:
-                if text == 'Generate Setting' and cb.isChecked():
-                    linked_name = generate_setting_file(self, p_img[0], p_img[1], 'world')
-                    if linked_name:
-                        self.settingAddedOrRemoved.emit()
-                    break
-        dot_data = (p_img[0], p_img[1], pulse_offset, dot_type, linked_name, region_name)
-        self._world_dots.append(dot_data)
-        self._save_world_map_data()
-
+        self.add_line('world', start_dot_index, end_dot_index, image_path)
+    
     def add_location_line(self, start_dot_index, end_dot_index, image_path):
-        self._add_or_update_line('location', start_dot_index, end_dot_index, image_path)
+        self.add_line('location', start_dot_index, end_dot_index, image_path)
 
-    def add_location_dot(self, p_img):
-        dot_type = self._location_dot_type_mode
-        pulse_offset = random.uniform(0, 2 * math.pi)
+    def add_dot(self, map_type, p_img):
+        dot_type_attr = f"_{map_type}_dot_type_mode"
+        dots_attr = f"_{map_type}_dots"
+        save_method = f"_save_{map_type}_map_data"
+        
+        dot_type = getattr(self, dot_type_attr)
+        pulse_offset = 0.0
         linked_name = None
-        if dot_type == 'small' and hasattr(self, 'location_automate_checkboxes_dict'):
-            add_setting_cbs = self.location_automate_checkboxes_dict.get('add_setting_mode', [])
-            for text, cb in add_setting_cbs:
-                if text == 'Generate Setting' and cb.isChecked():
-                    linked_name = generate_setting_file(self, p_img[0], p_img[1], 'location')
-                    if linked_name:
-                        self.settingAddedOrRemoved.emit()
-                    break
-        dot_data = (p_img[0], p_img[1], pulse_offset, dot_type, linked_name, None)
-        self._location_dots.append(dot_data)
-        self._save_location_map_data()
+        
+        if dot_type == 'small':
+            automate_dict_attr = f"{map_type}_automate_checkboxes_dict" if map_type == 'location' else 'automate_checkboxes_dict'
+            if hasattr(self, automate_dict_attr):
+                add_setting_cbs = getattr(self, automate_dict_attr).get('add_setting_mode', [])
+                for text, cb in add_setting_cbs:
+                    if text == 'Generate Setting' and cb.isChecked():
+                        linked_name = generate_setting_file(self, p_img[0], p_img[1], map_type)
+                        if linked_name:
+                            self.settingAddedOrRemoved.emit()
+                        break
+        region_name = None
+        if map_type == 'world':
+            if not hasattr(self, '_region_masks') or not self._region_masks:
+                if hasattr(self, '_world_regions') and self._world_regions and hasattr(self, '_ensure_region_masks_exist'):
+                    self._ensure_region_masks_exist()
+                region_name = self._get_region_at_point(p_img[0], p_img[1])
+            else:
+                region_name = self._get_region_at_point(p_img[0], p_img[1])
+        dot_data = (p_img[0], p_img[1], pulse_offset, dot_type, linked_name, region_name)
+        getattr(self, dots_attr).append(dot_data)
+        QTimer.singleShot(0, getattr(self, save_method))
+    
+    def add_world_dot(self, p_img):
+        self.add_dot('world', p_img)
+    
+    def add_location_dot(self, p_img):
+        self.add_dot('location', p_img)
 
+    def get_draw_data(self, map_type):
+        lines_attr = f"_{map_type}_lines"
+        dots_attr = f"_{map_type}_dots"
+        return getattr(self, lines_attr), getattr(self, dots_attr)
+    
     def get_world_draw_data(self):
-        return self._world_lines, self._world_dots
-
+        return self.get_draw_data('world')
+    
     def get_location_draw_data(self):
-        return self._location_lines, self._location_dots
+        return self.get_draw_data('location')
 
     def clear_selection(self, map_type=None, trigger_update=True):
         cleared = False
@@ -1688,17 +1833,6 @@ class WorldEditorWidget(QWidget):
                     self.world_location_dropdown.setVisible(False)
                 if hasattr(self, 'world_unlink_location_btn') and self.world_unlink_location_btn:
                     self.world_unlink_location_btn.setVisible(False)
-                world_set_label = None
-                for label_widget in self.world_tab.findChildren(QLabel):
-                    if label_widget.text() == "Linked Settings:":
-                        world_set_label = label_widget
-                        break
-                if world_set_label:
-                    world_set_label.setVisible(False)
-                if hasattr(self, 'world_setting_dropdown') and self.world_setting_dropdown:
-                    self.world_setting_dropdown.setVisible(False)
-                if hasattr(self, 'world_unlink_setting_btn') and self.world_unlink_setting_btn:
-                    self.world_unlink_setting_btn.setVisible(False)
             if hasattr(self, 'world_map_label') and self.world_map_label:
                 label_selection_cleared = False
                 if getattr(self.world_map_label, '_world_selected_item_type', None) is not None:
@@ -1788,9 +1922,17 @@ class WorldEditorWidget(QWidget):
                         item_index_or_name = label_index_or_name
         return item_type, item_index_or_name
 
-    def update_world_dot_position(self, index, new_pos_img):
-        if 0 <= index < len(self._world_dots):
-            to_delete = [line for line in self._world_lines if isinstance(line[1], dict) and (line[1]['start'] == index or line[1]['end'] == index)]
+    def update_dot_position(self, map_type, index, new_pos_img):
+        dots_attr = f"_{map_type}_dots"
+        lines_attr = f"_{map_type}_lines"
+        save_method = f"_save_{map_type}_map_data"
+        map_label_attr = f"{map_type}_map_label"
+        
+        dots = getattr(self, dots_attr)
+        lines = getattr(self, lines_attr)
+        
+        if 0 <= index < len(dots):
+            to_delete = [line for line in lines if isinstance(line[1], dict) and (line[1]['start'] == index or line[1]['end'] == index)]
             if to_delete:
                 reply = QMessageBox.question(
                     None,
@@ -1802,110 +1944,94 @@ class WorldEditorWidget(QWidget):
                 if reply != QMessageBox.Yes:
                     print("Move cancelled by user.")
                     return False
-            current_dot_data = list(self._world_dots[index])
+            
+            current_dot_data = list(dots[index])
             current_region = None
-            if len(current_dot_data) >= 6:
-                current_region = current_dot_data[5]
-            new_region = self._get_region_at_point(new_pos_img[0], new_pos_img[1])
-            if current_region != new_region:
-                region_change_text = ""
-                if new_region is None:
-                    region_change_text = "outside all regions"
+            new_region = None
+            
+            if map_type == 'world':
+                if len(current_dot_data) >= 6:
+                    current_region = current_dot_data[5]
+                if not hasattr(self, '_region_masks') or not self._region_masks:
+                    new_region = None
                 else:
-                    region_change_text = f"into {self._format_region_name_for_display(new_region)}"
-                if current_region is None:
-                    print(f"Dot moved from outside any region {region_change_text}")
-                else:
-                    print(f"Dot moved from {self._format_region_name_for_display(current_region)} {region_change_text}")
+                    new_region = self._get_region_at_point(new_pos_img[0], new_pos_img[1])
+                if current_region != new_region:
+                    region_change_text = ""
+                    if new_region is None:
+                        region_change_text = "outside all regions"
+                    else:
+                        region_change_text = f"into {self._format_region_name_for_display(new_region)}"
+                    if current_region is None:
+                        print(f"Dot moved from outside any region {region_change_text}")
+                    else:
+                        print(f"Dot moved from {self._format_region_name_for_display(current_region)} {region_change_text}")
             linked_name = None
             dot_type = None
             if len(current_dot_data) >= 6:
                 linked_name = current_dot_data[4]
                 dot_type = current_dot_data[3]
-                self._world_dots[index] = (new_pos_img[0], new_pos_img[1], current_dot_data[2], 
-                                           current_dot_data[3], current_dot_data[4], new_region)
+                dots[index] = (new_pos_img[0], new_pos_img[1], current_dot_data[2], 
+                              current_dot_data[3], current_dot_data[4], new_region)
             elif len(current_dot_data) == 5:
                 linked_name = current_dot_data[4]
                 dot_type = current_dot_data[3]
-                self._world_dots[index] = (new_pos_img[0], new_pos_img[1], current_dot_data[2], 
-                                           current_dot_data[3], current_dot_data[4], new_region)
+                dots[index] = (new_pos_img[0], new_pos_img[1], current_dot_data[2], 
+                              current_dot_data[3], current_dot_data[4], new_region)
             else:
                 if len(current_dot_data) >= 4:
                     dot_type = current_dot_data[3]
-                    self._world_dots[index] = (new_pos_img[0], new_pos_img[1], current_dot_data[2], 
-                                              current_dot_data[3], None, new_region)
+                    dots[index] = (new_pos_img[0], new_pos_img[1], current_dot_data[2], 
+                                  current_dot_data[3], None, new_region)
                 else:
                     print(f"Warning: Dot data at index {index} has unexpected format with only {len(current_dot_data)} elements")
                     return False
-            if current_region != new_region and linked_name and dot_type in ('big', 'medium'):
-                print(f"Dot moved to different region with linked location - updating location '{linked_name}' to region '{new_region}'")
-                self._update_location_region(linked_name, new_region)
-            elif current_region != new_region and linked_name and dot_type == 'small':
-                print(f"Dot moved to different region with linked setting - updating setting '{linked_name}' to region '{new_region}'")
-                self._update_setting_region(linked_name, new_region, linked_name)
-            self._world_lines = [line for line in self._world_lines if not (isinstance(line[1], dict) and (line[1]['start'] == index or line[1]['end'] == index))]
-            self._save_world_map_data()
-            select_item(self, 'world', 'dot', index)
-            if hasattr(self, 'world_map_label') and self.world_map_label:
-                self.world_map_label.update()
+            if map_type == 'world' and current_region != new_region and linked_name:
+                if dot_type in ('big', 'medium'):
+                    print(f"Dot moved to different region with linked location - updating location '{linked_name}' to region '{new_region}'")
+                    self._update_location_region(linked_name, new_region)
+                elif dot_type == 'small':
+                    print(f"Dot moved to different region with linked setting - updating setting '{linked_name}' to region '{new_region}'")
+                    self._update_setting_region(linked_name, new_region, linked_name)
+            lines[:] = [line for line in lines if not (isinstance(line[1], dict) and (line[1]['start'] == index or line[1]['end'] == index))]
+            getattr(self, save_method)()
+            if map_type == 'world':
+                select_item(self, 'world', 'dot', index)
+            map_label = getattr(self, map_label_attr, None)
+            if map_label:
+                map_label.update()
             return True
         return False
-
+    
+    def update_line_position(self, map_type, index, new_path):
+        lines_attr = f"_{map_type}_lines"
+        lines = getattr(self, lines_attr)
+        
+        if 0 <= index < len(lines):
+            if isinstance(new_path, list) and len(new_path) >= 2:
+                line_data = lines[index]
+                if isinstance(line_data, tuple) and len(line_data) == 2:
+                    _, existing_meta = line_data
+                else:
+                    print(f"Warning: Updating {map_type} line {index} with default meta.")
+                    existing_meta = {'type': 'medium'}
+                lines[index] = (tuple(new_path), existing_meta)
+                return True
+            else:
+                print(f"Error updating {map_type} path {index}: new_path is not a valid list of points.")
+        return False
+    
+    def update_world_dot_position(self, index, new_pos_img):
+        return self.update_dot_position('world', index, new_pos_img)
+    
     def update_world_line_position(self, index, new_path):
-        if 0 <= index < len(self._world_lines):
-            if isinstance(new_path, list) and len(new_path) >= 2:
-                line_data = self._world_lines[index]
-                if isinstance(line_data, tuple) and len(line_data) == 2:
-                    _, existing_meta = line_data
-                else:
-                    print(f"Warning: Updating world line {index} with default meta.")
-                    existing_meta = {'type': 'medium'}
-                self._world_lines[index] = (tuple(new_path), existing_meta)
-                return True
-            else:
-                print(f"Error updating world path {index}: new_path is not a valid list of points.")
-        return False
-
+        return self.update_line_position('world', index, new_path)
+    
     def update_location_dot_position(self, index, new_pos_img):
-        if 0 <= index < len(self._location_dots):
-            to_delete = [line for line in self._location_lines if isinstance(line[1], dict) and (line[1]['start'] == index or line[1]['end'] == index)]
-            if to_delete:
-                reply = QMessageBox.question(
-                    None,
-                    "Delete Connected Paths?",
-                    f"Moving this dot will delete {len(to_delete)} connected path(s). Continue?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No
-                )
-                if reply != QMessageBox.Yes:
-                    print("Move cancelled by user.")
-                    return False
-            _x, _y, existing_offset, existing_type, existing_linked_name, _none_region = self._location_dots[index]
-            self._location_dots[index] = (new_pos_img[0], new_pos_img[1], existing_offset, existing_type, existing_linked_name, None)
-            before = len(self._location_lines)
-            self._location_lines = [line for line in self._location_lines if not (isinstance(line[1], dict) and (line[1]['start'] == index or line[1]['end'] == index))]
-            after = len(self._location_lines)
-            if before != after:
-                print(f"Deleted {before - after} location lines connected to dot {index}")
-            self.location_map_label.update()
-            self._save_location_map_data()
-            return True
-        return False
-
+        return self.update_dot_position('location', index, new_pos_img)
+    
     def update_location_line_position(self, index, new_path):
-        if 0 <= index < len(self._location_lines):
-            if isinstance(new_path, list) and len(new_path) >= 2:
-                line_data = self._location_lines[index]
-                if isinstance(line_data, tuple) and len(line_data) == 2:
-                    _, existing_meta = line_data
-                else:
-                    print(f"Warning: Updating location line {index} with default meta.")
-                    existing_meta = {'type': 'medium'}
-                self._location_lines[index] = (tuple(new_path), existing_meta)
-                return True
-            else:
-                print(f"Error updating location path {index}: new_path is not a valid list of points.")
-        return False
+        return self.update_line_position('location', index, new_path)
 
     def delete_selected_item(self, map_type):
         selected_item_type = getattr(self, f"_{map_type}_selected_item_type", None)
@@ -1976,7 +2102,28 @@ class WorldEditorWidget(QWidget):
                             import traceback
                             traceback.print_exc()
                     deleted = True
-            
+                    if map_type == 'world':
+                        if hasattr(self, 'world_location_label') and self.world_location_label:
+                            self.world_location_label.setVisible(False)
+                        if hasattr(self, 'world_location_dropdown') and self.world_location_dropdown:
+                            self.world_location_dropdown.setVisible(False)
+                        if hasattr(self, 'world_unlink_location_btn') and self.world_unlink_location_btn:
+                            self.world_unlink_location_btn.setVisible(False)
+                        if hasattr(self, 'world_setting_dropdown') and self.world_setting_dropdown:
+                            self.world_setting_dropdown.setVisible(False)
+                        if hasattr(self, 'world_unlink_setting_btn') and self.world_unlink_setting_btn:
+                            self.world_unlink_setting_btn.setVisible(False)
+                        for label_widget in self.world_tab.findChildren(QLabel):
+                            if label_widget.text() in ["Linked Settings:", "Linked Locations:"]:
+                                label_widget.setVisible(False)
+                    elif map_type == 'location':
+                        if hasattr(self, 'location_setting_dropdown') and self.location_setting_dropdown:
+                            self.location_setting_dropdown.setVisible(False)
+                        if hasattr(self, 'location_unlink_setting_btn') and self.location_unlink_setting_btn:
+                            self.location_unlink_setting_btn.setVisible(False)
+                        for label in self.location_tab.findChildren(QLabel):
+                            if label.text() == "Settings:":
+                                label.setVisible(False)
             elif selected_item_type == 'line':
                 if 0 <= selected_item_index < len(lines_list):
                     line_data = lines_list[selected_item_index]
@@ -1986,7 +2133,7 @@ class WorldEditorWidget(QWidget):
                         if isinstance(line_data, tuple) and len(line_data) == 2 and isinstance(line_data[1], dict):
                             meta = line_data[1]
                             associated_setting = meta.get('associated_setting')
-                            if associated_setting and map_type == 'location':
+                            if associated_setting:
                                 start_idx = meta.get('start')
                                 end_idx = meta.get('end')
                                 if start_idx is not None and end_idx is not None:
@@ -2028,7 +2175,7 @@ class WorldEditorWidget(QWidget):
         except Exception as e:
             print(f"[DEBUG DELETE] Error while deleting {map_type} {selected_item_type} at index {selected_item_index}: {e}")
         if deleted:
-            self.clear_selection(map_type)
+            self.clear_selection(map_type, trigger_update=True)
             if map_type == 'world':
                 self._save_world_map_data()
                 if hasattr(self, 'world_map_label'):
@@ -2973,16 +3120,13 @@ class WorldEditorWidget(QWidget):
             location_setting_dropdown.blockSignals(False)
 
     def _get_dot_description(self, dot_index, dot_list):
+        if dot_index is None or not isinstance(dot_index, int):
+            return ""
         if 0 <= dot_index < len(dot_list):
             dot_data = dot_list[dot_index]
             x, y, size, dot_type, name, desc = dot_data[:6]
             type_display = f"{dot_type.capitalize()} Dot"
-            region_name = self._get_region_at_point(x, y)
-            if region_name:
-                display_region = self._format_region_name_for_display(region_name)
-                return f"{type_display} ({x:.1f}, {y:.1f}) in {display_region}"
-            else:
-                return f"{type_display} ({x:.1f}, {y:.1f})"
+            return f"{type_display} ({x:.1f}, {y:.1f})"
         return ""
 
     def _format_region_name_for_display(self, region_name):
@@ -3062,9 +3206,9 @@ class WorldEditorWidget(QWidget):
             if hasattr(self, '_region_border_cache'):
                 self._region_border_cache[region_name] = []
             if mask.format() != QImage.Format_ARGB32:
-                 self._region_masks[region_name] = mask.convertToFormat(QImage.Format_ARGB32)
+                self._region_masks[region_name] = mask.convertToFormat(QImage.Format_ARGB32)
             if hasattr(self, '_region_border_cache'):
-                from region_toolbar import update_region_border_cache
+                from editor_panel.world_editor.region_toolbar import update_region_border_cache
                 import functools
                 update_func = functools.partial(update_region_border_cache, self, region_name)
                 QTimer.singleShot(300, update_func)
@@ -3139,7 +3283,134 @@ class WorldEditorWidget(QWidget):
             update_func = functools.partial(update_region_border_cache, self, region_name)
             QTimer.singleShot(200, update_func)
 
+    def _ensure_region_masks_exist(self):
+        if not hasattr(self, '_world_regions') or not self._world_regions:
+            return
+        
+        if not hasattr(self, '_region_masks'):
+            self._region_masks = {}
+        base_width = 1000
+        base_height = 1000
+        if hasattr(self, 'world_map_label') and self.world_map_label:
+            if hasattr(self.world_map_label, '_crt_image') and self.world_map_label._crt_image and not self.world_map_label._crt_image.isNull():
+                base_width = self.world_map_label._crt_image.width()
+                base_height = self.world_map_label._crt_image.height()
+            elif hasattr(self.world_map_label, '_virtual_width'):
+                base_width = getattr(self.world_map_label, '_virtual_width', 1000)
+                base_height = getattr(self.world_map_label, '_virtual_height', 1000)
+        mask_scale = 1.0
+        if max(base_width, base_height) < 2000:
+            mask_scale = 2.0
+        max_dimension = max(base_width, base_height)
+        if max_dimension > 4000:
+            mask_scale = 0.25
+        elif max_dimension > 6000:
+            mask_scale = 0.125
+        elif max_dimension > 8000:
+            mask_scale = 0.0625
+        self._region_mask_scale = mask_scale
+        mask_width = max(10, int(base_width * mask_scale))
+        mask_height = max(10, int(base_height * mask_scale))
+        from PyQt5.QtGui import QImage, QColor
+        for region_name in self._world_regions.keys():
+            if region_name not in self._region_masks or not self._region_masks[region_name] or self._region_masks[region_name].isNull():
+                mask = QImage(mask_width, mask_height, QImage.Format_ARGB32)
+                mask.fill(QColor(0, 0, 0, 0))
+                self._region_masks[region_name] = mask
+                if self._world_regions.get(region_name):
+                    self._rebuild_region_mask_from_strokes(region_name)
+
+    def _auto_activate_region_edit(self):
+        if hasattr(self, 'world_region_edit_btn') and self.world_region_edit_btn:
+            self.world_region_edit_btn.blockSignals(True)
+            self.world_region_edit_btn.setChecked(True)
+            self.world_region_edit_btn.blockSignals(False)
+            from editor_panel.world_editor.region_toolbar import _set_region_edit_mode
+            _set_region_edit_mode(self, 'world', True)
+            
+    def _cleanup_orphaned_regions(self):
+        if not hasattr(self, '_region_masks') or not self._region_masks:
+            return
+        valid_regions = set()
+        if hasattr(self, '_world_regions') and self._world_regions:
+            valid_regions = set(self._world_regions.keys())
+        if hasattr(self, 'world_region_selector') and self.world_region_selector:
+            selector_regions = []
+            for i in range(self.world_region_selector.count()):
+                region_name = self.world_region_selector.itemData(i, Qt.UserRole)
+                if region_name and region_name != "No regions available":
+                    selector_regions.append(region_name)
+        orphaned_regions = []
+        for region_name in self._region_masks.keys():
+            if region_name not in valid_regions:
+                orphaned_regions.append(region_name)
+        if orphaned_regions:
+            for region_name in orphaned_regions:
+                if region_name in self._region_masks:
+                    del self._region_masks[region_name]
+            if hasattr(self, '_region_border_cache'):
+                for region_name in orphaned_regions:
+                    if region_name in self._region_border_cache:
+                        del self._region_border_cache[region_name]
+            if hasattr(self, '_region_fill_cache'):
+                for region_name in orphaned_regions:
+                    if region_name in self._region_fill_cache:
+                        del self._region_fill_cache[region_name]
+            if hasattr(self, 'current_world_name') and self.current_world_name:
+                world_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings', self.current_world_name)
+                region_resources_dir = os.path.join(world_dir, "resources", "regions")
+                if os.path.isdir(region_resources_dir):
+                    for region_name in orphaned_regions:
+                        mask_filename = f"{region_name.replace(' ', '_').lower()}_region_mask.png"
+                        mask_path = os.path.join(region_resources_dir, mask_filename)
+                        if os.path.isfile(mask_path):
+                            try:
+                                os.remove(mask_path)
+                                print(f"[CLEANUP] Removed orphaned region mask file: {mask_path}")
+                            except Exception as e:
+                                print(f"[CLEANUP] Failed to remove {mask_path}: {e}")
+            if hasattr(self, 'world_map_label') and self.world_map_label:
+                self.world_map_label.update()
+            
+    def manual_cleanup_orphaned_regions(self):
+        self._cleanup_orphaned_regions()
+        
+    def force_remove_region(self, region_name):
+        if hasattr(self, '_region_masks') and region_name in self._region_masks:
+            del self._region_masks[region_name]
+        if hasattr(self, '_world_regions') and region_name in self._world_regions:
+            del self._world_regions[region_name]
+        if hasattr(self, '_region_border_cache') and region_name in self._region_border_cache:
+            del self._region_border_cache[region_name]
+        if hasattr(self, '_region_fill_cache') and region_name in self._region_fill_cache:
+            del self._region_fill_cache[region_name]
+        if hasattr(self, 'world_map_label') and self.world_map_label:
+            self.world_map_label.update()
+        
+    def force_remove_all_orphaned_regions(self):
+        if not hasattr(self, '_region_masks') or not self._region_masks:
+            return
+        valid_selector_regions = set()
+        if hasattr(self, 'world_region_selector') and self.world_region_selector:
+            for i in range(self.world_region_selector.count()):
+                region_name = self.world_region_selector.itemData(i, Qt.UserRole)
+                if region_name and region_name != "No regions available":
+                    valid_selector_regions.add(region_name)
+        orphaned_regions = []
+        for region_name in list(self._region_masks.keys()):
+            if region_name not in valid_selector_regions:
+                orphaned_regions.append(region_name)
+        if not orphaned_regions:
+            return
+        for region_name in orphaned_regions:
+            self.force_remove_region(region_name)
+
     def _get_region_at_point(self, point_x, point_y):
+        if not hasattr(self, '_region_masks') or not self._region_masks:
+            if hasattr(self, '_world_regions') and self._world_regions:
+                self._ensure_region_masks_exist()
+            else:
+                return None
         if not hasattr(self, '_region_masks') or not self._region_masks:
             return None
         mask_scale = getattr(self, '_region_mask_scale', 1.0)
@@ -3742,6 +4013,15 @@ class WorldEditorWidget(QWidget):
             paint_btn.setObjectName(f"{prefix}_paint_submode_btn")
             paint_btn.setCheckable(True)
             paint_btn.setToolTip("Paint features")
+            
+            def select_sound():
+                self.play_hover_sound()
+            select_btn.clicked.connect(select_sound)
+            
+            def paint_sound():
+                self.play_hover_sound()
+            paint_btn.clicked.connect(paint_sound)
+            
             submode_layout.addWidget(select_btn)
             submode_layout.addWidget(paint_btn)
             select_btn.setChecked(True)
@@ -3761,66 +4041,47 @@ class WorldEditorWidget(QWidget):
         submode_widget = getattr(self, submode_widget_name)
         submode_widget.setVisible(True)
 
+    def _on_feature_submode(self, map_type, submode):
+        sub_mode_attr = f"_{map_type}_feature_sub_mode"
+        setattr(self, sub_mode_attr, submode)
+        select_btn_attr = f"{map_type}_feature_select_submode_btn"
+        paint_btn_attr = f"{map_type}_feature_paint_submode_btn"
+        toolbar_attr = f"{map_type}_features_toolbar"
+        map_label_attr = f"{map_type}_map_label"
+        select_btn = getattr(self, select_btn_attr, None)
+        paint_btn = getattr(self, paint_btn_attr, None)
+        toolbar = getattr(self, toolbar_attr, None)
+        map_label = getattr(self, map_label_attr, None)
+        if submode == 'select':
+            if select_btn: select_btn.setChecked(True)
+            if paint_btn: paint_btn.setChecked(False)
+            if toolbar:
+                if hasattr(toolbar, 'brush_size_label'): toolbar.brush_size_label.setVisible(False)
+                if hasattr(toolbar, 'brush_size_slider'): toolbar.brush_size_slider.setVisible(False)
+            if map_label:
+                map_label.setCursor(Qt.ArrowCursor)
+                map_label.update()
+        else:
+            if select_btn: select_btn.setChecked(False)
+            if paint_btn: paint_btn.setChecked(True)
+            if toolbar:
+                if hasattr(toolbar, 'brush_size_label'): toolbar.brush_size_label.setVisible(True)
+                if hasattr(toolbar, 'brush_size_slider'): toolbar.brush_size_slider.setVisible(True)
+            if map_label:
+                map_label.setCursor(Qt.CrossCursor)
+                map_label.update()
+    
     def _on_world_feature_select_submode(self):
-        self._world_feature_sub_mode = 'select'
-        world_feature_select_btn = getattr(self, 'world_feature_select_submode_btn', None)
-        world_feature_paint_btn = getattr(self, 'world_feature_paint_submode_btn', None)
-        if world_feature_select_btn: world_feature_select_btn.setChecked(True)
-        if world_feature_paint_btn: world_feature_paint_btn.setChecked(False)
-        toolbar = getattr(self, 'world_features_toolbar', None)
-        if toolbar:
-            if hasattr(toolbar, 'brush_size_label'): toolbar.brush_size_label.setVisible(False)
-            if hasattr(toolbar, 'brush_size_slider'): toolbar.brush_size_slider.setVisible(False)
-            
-        map_label = getattr(self, 'world_map_label', None)
-        if map_label:
-            map_label.setCursor(Qt.ArrowCursor)
-            map_label.update()
-
+        self._on_feature_submode('world', 'select')
+    
     def _on_world_feature_paint_submode(self):
-        self._world_feature_sub_mode = 'paint'
-        world_feature_select_btn = getattr(self, 'world_feature_select_submode_btn', None)
-        world_feature_paint_btn = getattr(self, 'world_feature_paint_submode_btn', None)
-        if world_feature_select_btn: world_feature_select_btn.setChecked(False)
-        if world_feature_paint_btn: world_feature_paint_btn.setChecked(True)
-        toolbar = getattr(self, 'world_features_toolbar', None)
-        if toolbar:
-            if hasattr(toolbar, 'brush_size_label'): toolbar.brush_size_label.setVisible(True)
-            if hasattr(toolbar, 'brush_size_slider'): toolbar.brush_size_slider.setVisible(True)
-        map_label = getattr(self, 'world_map_label', None)
-        if map_label:
-            map_label.setCursor(Qt.CrossCursor)
-            map_label.update()
-
+        self._on_feature_submode('world', 'paint')
+    
     def _on_location_feature_select_submode(self):
-        self._location_feature_sub_mode = 'select'
-        loc_feature_select_btn = getattr(self, 'location_feature_select_submode_btn', None)
-        loc_feature_paint_btn = getattr(self, 'location_feature_paint_submode_btn', None)
-        if loc_feature_select_btn: loc_feature_select_btn.setChecked(True)
-        if loc_feature_paint_btn: loc_feature_paint_btn.setChecked(False)
-        toolbar = getattr(self, 'location_features_toolbar', None)
-        if toolbar:
-            if hasattr(toolbar, 'brush_size_label'): toolbar.brush_size_label.setVisible(False)
-            if hasattr(toolbar, 'brush_size_slider'): toolbar.brush_size_slider.setVisible(False)
-        map_label = getattr(self, 'location_map_label', None)
-        if map_label:
-            map_label.setCursor(Qt.ArrowCursor)
-            map_label.update()
-
+        self._on_feature_submode('location', 'select')
+    
     def _on_location_feature_paint_submode(self):
-        self._location_feature_sub_mode = 'paint'
-        loc_feature_select_btn = getattr(self, 'location_feature_select_submode_btn', None)
-        loc_feature_paint_btn = getattr(self, 'location_feature_paint_submode_btn', None)
-        if loc_feature_select_btn: loc_feature_select_btn.setChecked(False)
-        if loc_feature_paint_btn: loc_feature_paint_btn.setChecked(True)
-        toolbar = getattr(self, 'location_features_toolbar', None)
-        if toolbar:
-            if hasattr(toolbar, 'brush_size_label'): toolbar.brush_size_label.setVisible(True)
-            if hasattr(toolbar, 'brush_size_slider'): toolbar.brush_size_slider.setVisible(True)
-        map_label = getattr(self, 'location_map_label', None)
-        if map_label:
-            map_label.setCursor(Qt.CrossCursor)
-            map_label.update()
+        self._on_feature_submode('location', 'paint')
 
     def on_feature_paint_mode_changed(self, map_type, checked):
         if map_type == 'world':
@@ -4118,6 +4379,15 @@ class WorldEditorWidget(QWidget):
             ))
         painter.end()
         self._feature_border_cache[map_type].pop(feature_name, None)
+
+    def play_hover_sound(self):
+        if self.hover_message_sound:
+            try:
+                self.hover_message_sound.play()
+            except pygame.error as e:
+                pass
+            except Exception as e:
+                pass
 
     def _handle_setting_added_or_removed(self):
         if self.current_world_name and hasattr(self, 'world_features_toolbar') and self.world_features_toolbar:
@@ -4449,7 +4719,7 @@ class WorldEditorWidget(QWidget):
         try:
             with open(map_data_file, 'w', encoding='utf-8') as f:
                 json.dump(json_data, f, indent=2)
-            print(f"Saved location map data to {map_data_file}")
+            pass
         except Exception as e:
             print(f"Error saving location map data: {e}")
 
@@ -4564,90 +4834,79 @@ class WorldEditorWidget(QWidget):
             from functools import partial
             QTimer.singleShot(500, partial(self._init_region_masks))
     
-    def _get_world_scale_settings(self):
+    def _get_scale_settings(self, map_type):
         scale_data = {}
-        if hasattr(self, 'world_scale_number_input') and self.world_scale_number_input:
+        number_input_attr = f"{map_type}_scale_number_input"
+        time_input_attr = f"{map_type}_scale_time_input"
+        unit_dropdown_attr = f"{map_type}_scale_unit_dropdown"
+        
+        if hasattr(self, number_input_attr) and getattr(self, number_input_attr):
             try:
-                scale_data['distance'] = float(self.world_scale_number_input.text() or '1.0')
+                scale_data['distance'] = float(getattr(self, number_input_attr).text() or '1.0')
             except ValueError:
                 scale_data['distance'] = 1.0
         else:
             scale_data['distance'] = 1.0
         
-        if hasattr(self, 'world_scale_time_input') and self.world_scale_time_input:
+        if hasattr(self, time_input_attr) and getattr(self, time_input_attr):
             try:
-                scale_data['time'] = float(self.world_scale_time_input.text() or '1.0')
+                scale_data['time'] = float(getattr(self, time_input_attr).text() or '1.0')
             except ValueError:
                 scale_data['time'] = 1.0
         else:
             scale_data['time'] = 1.0
-        if hasattr(self, 'world_scale_unit_dropdown') and self.world_scale_unit_dropdown:
-            scale_data['unit'] = self.world_scale_unit_dropdown.currentText()
+        
+        if hasattr(self, unit_dropdown_attr) and getattr(self, unit_dropdown_attr):
+            scale_data['unit'] = getattr(self, unit_dropdown_attr).currentText()
         else:
             scale_data['unit'] = 'minutes'
+        
         return scale_data
+    
+    def _load_scale_settings(self, map_type, scale_data):
+        number_input_attr = f"{map_type}_scale_number_input"
+        time_input_attr = f"{map_type}_scale_time_input"
+        unit_dropdown_attr = f"{map_type}_scale_unit_dropdown"
+        
+        if hasattr(self, number_input_attr) and getattr(self, number_input_attr):
+            distance = scale_data.get('distance', 1.0)
+            getattr(self, number_input_attr).setText(str(distance))
+        
+        if hasattr(self, time_input_attr) and getattr(self, time_input_attr):
+            time = scale_data.get('time', 1.0)
+            getattr(self, time_input_attr).setText(str(time))
+        
+        if hasattr(self, unit_dropdown_attr) and getattr(self, unit_dropdown_attr):
+            unit = scale_data.get('unit', 'minutes')
+            dropdown = getattr(self, unit_dropdown_attr)
+            index = dropdown.findText(unit)
+            if index >= 0:
+                dropdown.setCurrentIndex(index)
+    
+    def _get_world_scale_settings(self):
+        return self._get_scale_settings('world')
     
     def _load_world_scale_settings(self, scale_data):
-        if hasattr(self, 'world_scale_number_input') and self.world_scale_number_input:
-            distance = scale_data.get('distance', 1.0)
-            self.world_scale_number_input.setText(str(distance))
-        if hasattr(self, 'world_scale_time_input') and self.world_scale_time_input:
-            time = scale_data.get('time', 1.0)
-            self.world_scale_time_input.setText(str(time))
-        if hasattr(self, 'world_scale_unit_dropdown') and self.world_scale_unit_dropdown:
-            unit = scale_data.get('unit', 'minutes')
-            index = self.world_scale_unit_dropdown.findText(unit)
-            if index >= 0:
-                self.world_scale_unit_dropdown.setCurrentIndex(index)
+        self._load_scale_settings('world', scale_data)
     
     def _get_location_scale_settings(self):
-        scale_data = {}
-        if hasattr(self, 'location_scale_number_input') and self.location_scale_number_input:
-            try:
-                scale_data['distance'] = float(self.location_scale_number_input.text() or '1.0')
-            except ValueError:
-                scale_data['distance'] = 1.0
-        else:
-            scale_data['distance'] = 1.0
-        if hasattr(self, 'location_scale_time_input') and self.location_scale_time_input:
-            try:
-                scale_data['time'] = float(self.location_scale_time_input.text() or '1.0')
-            except ValueError:
-                scale_data['time'] = 1.0
-        else:
-            scale_data['time'] = 1.0
-        if hasattr(self, 'location_scale_unit_dropdown') and self.location_scale_unit_dropdown:
-            scale_data['unit'] = self.location_scale_unit_dropdown.currentText()
-        else:
-            scale_data['unit'] = 'minutes'
-        return scale_data
+        return self._get_scale_settings('location')
     
     def _load_location_scale_settings(self, scale_data):
-        if hasattr(self, 'location_scale_number_input') and self.location_scale_number_input:
-            distance = scale_data.get('distance', 1.0)
-            self.location_scale_number_input.setText(str(distance))
-        
-        if hasattr(self, 'location_scale_time_input') and self.location_scale_time_input:
-            time = scale_data.get('time', 1.0)
-            self.location_scale_time_input.setText(str(time))
-        
-        if hasattr(self, 'location_scale_unit_dropdown') and self.location_scale_unit_dropdown:
-            unit = scale_data.get('unit', 'minutes')
-            index = self.location_scale_unit_dropdown.findText(unit)
-            if index >= 0:
-                self.location_scale_unit_dropdown.setCurrentIndex(index)
+        self._load_scale_settings('location', scale_data)
+    
+    def _on_scale_changed(self, map_type):
+        save_method = f"_save_{map_type}_map_data"
+        getattr(self, save_method)()
     
     def _on_world_scale_changed(self):
-        self._save_world_map_data()
+        self._on_scale_changed('world')
     
     def _on_location_scale_changed(self):
-        self._save_location_map_data()
+        self._on_scale_changed('location')
     
     def calculate_travel_time(self, path_length, map_type='world'):
-        if map_type == 'world':
-            scale_data = self._get_world_scale_settings()
-        else:
-            scale_data = self._get_location_scale_settings()
+        scale_data = self._get_scale_settings(map_type)
         distance_per_unit = scale_data.get('distance', 1.0)
         time_per_unit = scale_data.get('time', 1.0)
         unit = scale_data.get('unit', 'minutes')
@@ -4662,3 +4921,15 @@ class WorldEditorWidget(QWidget):
             return time_in_units * 60 * 24
         else:
             return time_in_units
+    
+    def closeEvent(self, event):
+        for thread in self._active_threads:
+            if thread.isRunning():
+                thread.quit()
+                thread.wait(1000)
+                if thread.isRunning():
+                    thread.terminate()
+                    thread.wait(1000)
+        self._active_threads.clear()
+        self._active_workers.clear()
+        super().closeEvent(event)

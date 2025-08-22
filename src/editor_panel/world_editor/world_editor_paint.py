@@ -1,10 +1,10 @@
-from PyQt5.QtWidgets import QLabel
+from PyQt5.QtWidgets import QLabel, QApplication
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QPainter, QPixmap, QImage, QColor, QPen, QBrush, QPainterPath, QFont, QFontMetrics
 from PyQt5.QtCore import Qt, QRectF, QPointF, QLineF
 from editor_panel.world_editor.region_toolbar import _render_region_borders
 from editor_panel.world_editor.world_editor_select import select_item
-import math, time
+import math
 import numpy as np
 
 def catmull_rom(points, steps=5):
@@ -33,6 +33,8 @@ def mousePressEvent(self, event):
     if self.parent_editor is None:
         QLabel.mousePressEvent(self, event)
         return
+    if not self.hasFocus():
+        self.setFocus()
     current_draw_mode = self.parent_editor.get_draw_mode(self.map_type)
     if hasattr(self.parent_editor, '_path_details_mode') and self.parent_editor._path_details_mode.get(self.map_type, False):
         if event.button() == Qt.RightButton:
@@ -91,7 +93,6 @@ def mousePressEvent(self, event):
                         self.parent_editor._on_location_feature_paint_submode()
                 event.accept()
                 return
-
         if current_draw_mode == 'region_edit' and self.map_type == 'world':
             world_region_sub_mode = getattr(self.parent_editor, '_world_region_sub_mode', 'paint')
             if world_region_sub_mode == 'paint':
@@ -117,7 +118,6 @@ def mousePressEvent(self, event):
                     self.update()
                     event.accept()
                     return
-
         if current_draw_mode != 'none':
             print(f"Right-click cancelling {self.map_type} draw mode: {current_draw_mode}")
             self.parent_editor.cancel_draw_mode(self.map_type)
@@ -138,7 +138,6 @@ def mousePressEvent(self, event):
         elif self.map_type == 'location':
             if current_draw_mode == 'feature_paint':
                 feature_sub_mode = getattr(self.parent_editor, '_location_feature_sub_mode', 'paint')
-
         if current_draw_mode == 'feature_paint' and feature_sub_mode == 'paint':
             widget_pos = event.pos()
             image_coords = self._widget_to_image_coords(widget_pos)
@@ -161,6 +160,7 @@ def mousePressEvent(self, event):
                     self.parent_editor._previous_ema_point = None
                 self._region_paint_stroke_points = [image_coords]
                 self._region_paint_affected_regions = set()
+                self._is_actively_painting = True
                 self.update()
                 event.accept()
                 event_handled = True
@@ -171,7 +171,6 @@ def mousePressEvent(self, event):
                 self.setCursor(Qt.ClosedHandCursor)
                 event.accept()
                 event_handled = True
-
             if event_handled:
                 return
 
@@ -214,7 +213,6 @@ def mousePressEvent(self, event):
                     self._link_visited_dot_positions = [(p_img_x, p_img_y)]
                     self.setCursor(Qt.CrossCursor)
                     self._dragging = False
-                    print("[DEBUG MOUSEPRESS LINE MODE] _dragging set to False, _is_linking_dots set to True.")
                     self.update()
                 else:
                     print(f"Error: Invalid dot index {item_index}")
@@ -223,7 +221,7 @@ def mousePressEvent(self, event):
             event.accept()
             return
         is_selection_or_pan_mode = False
-        if current_draw_mode == 'none':
+        if current_draw_mode in ['none', 'dot', 'line']:
             is_selection_or_pan_mode = True
         elif current_draw_mode == 'feature_paint' and feature_sub_mode == 'select':
             is_selection_or_pan_mode = True
@@ -234,16 +232,80 @@ def mousePressEvent(self, event):
             if item_type is not None:
                 select_item(self.parent_editor, self.map_type, item_type, item_index_or_name)
                 if item_type == 'dot':
-                    self._dragging_selection = True
-                    self._dragging = True
-                    self._drag_start_widget_pos = event.pos()
-                    self._last_mouse_pos = event.pos()
                     dots_list = self.parent_editor.get_world_draw_data()[1] if self.map_type == 'world' else self.parent_editor.get_location_draw_data()[1]
+                    lines = self.parent_editor.get_world_draw_data()[0] if self.map_type == 'world' else self.parent_editor.get_location_draw_data()[0]
+                    has_connected_paths = False
                     if 0 <= item_index_or_name < len(dots_list):
-                        dot_data = dots_list[item_index_or_name]
-                        self._selected_item_start_img_pos = (dot_data[0], dot_data[1])
+                        dot_pos = (dots_list[item_index_or_name][0], dots_list[item_index_or_name][1])
+                        dot_hit_tolerance = 12.0
+                        for line in lines:
+                            if len(line) >= 2:
+                                path_points = line[0]
+                                if len(path_points) >= 2:
+                                    start_point = path_points[0]
+                                    end_point = path_points[-1]
+                                    start_dist = ((start_point[0] - dot_pos[0])**2 + (start_point[1] - dot_pos[1])**2)**0.5
+                                    end_dist = ((end_point[0] - dot_pos[0])**2 + (end_point[1] - dot_pos[1])**2)**0.5
+                                    if start_dist <= dot_hit_tolerance or end_dist <= dot_hit_tolerance:
+                                        has_connected_paths = True
+                                        break
+                    if not has_connected_paths:
+                        self._dragging_selection = True
+                        self._dragging = True
+                        self._drag_start_widget_pos = event.pos()
+                        self._last_mouse_pos = event.pos()
+                        dots_list = self.parent_editor.get_world_draw_data()[1] if self.map_type == 'world' else self.parent_editor.get_location_draw_data()[1]
+                        if 0 <= item_index_or_name < len(dots_list):
+                            dot_data = dots_list[item_index_or_name]
+                            self._selected_item_start_img_pos = (dot_data[0], dot_data[1])
+                    else:
+                        self._dragging_selection = False
+                        can_pan = False
+                        if self._crt_image is not None and self._zoom_level >= 0:
+                            img_rect_base = self._get_image_rect()
+                            if img_rect_base.width() > 0:
+                                user_zoom_factor = self._zoom_step_factor ** self._zoom_level
+                                draw_w = img_rect_base.width() * user_zoom_factor
+                                draw_h = img_rect_base.height() * user_zoom_factor
+                                center_x = img_rect_base.x() + img_rect_base.width() / 2.0 + self._pan[0]
+                                center_y = img_rect_base.y() + img_rect_base.height() / 2.0 + self._pan[1]
+                                x_top_left = center_x - draw_w / 2.0
+                                y_top_left = center_y - draw_h / 2.0
+                                if QRectF(x_top_left, y_top_left, draw_w, draw_h).contains(event.pos()):
+                                    can_pan = True
+                        elif self._crt_image is None:
+                            can_pan = True
+                        if can_pan:
+                            self._dragging = True
+                            self._dragging_selection = False
+                            self._last_mouse_pos = event.pos()
+                            self.setCursor(Qt.ClosedHandCursor)
+                            event.accept()
+                            event_handled = True
                 elif item_type == 'line':
                     self._dragging_selection = False
+                    can_pan = False
+                    if self._crt_image is not None and self._zoom_level >= 0:
+                        img_rect_base = self._get_image_rect()
+                        if img_rect_base.width() > 0:
+                            user_zoom_factor = self._zoom_step_factor ** self._zoom_level
+                            draw_w = img_rect_base.width() * user_zoom_factor
+                            draw_h = img_rect_base.height() * user_zoom_factor
+                            center_x = img_rect_base.x() + img_rect_base.width() / 2.0 + self._pan[0]
+                            center_y = img_rect_base.y() + img_rect_base.height() / 2.0 + self._pan[1]
+                            x_top_left = center_x - draw_w / 2.0
+                            y_top_left = center_y - draw_h / 2.0
+                            if QRectF(x_top_left, y_top_left, draw_w, draw_h).contains(event.pos()):
+                                can_pan = True
+                    elif self._crt_image is None:
+                        can_pan = True
+                    if can_pan:
+                        self._dragging = True
+                        self._dragging_selection = False
+                        self._last_mouse_pos = event.pos()
+                        self.setCursor(Qt.ClosedHandCursor)
+                        event.accept()
+                        event_handled = True
                 elif item_type == 'region':
                     self._dragging_selection = False
                     if hasattr(self.parent_editor, '_select_region_for_painting'):
@@ -307,6 +369,31 @@ def mouseMoveEvent(self, event):
     if self.parent_editor is None:
         QLabel.mouseMoveEvent(self, event)
         return
+    is_dragging = event.buttons() == Qt.LeftButton and getattr(self, '_dragging', False)
+    item_type_hover, item_index_hover = self._find_item_at_pos(event.pos())
+    new_hovered_line_index = -1
+    new_hovered_dot_index = -1
+    if item_type_hover == 'line':
+        new_hovered_line_index = item_index_hover
+    elif item_type_hover == 'dot':
+        new_hovered_dot_index = item_index_hover
+    if hasattr(self, '_hovered_line_index'):
+        if self._hovered_line_index != new_hovered_line_index:
+            self._hovered_line_index = new_hovered_line_index
+            self.update()
+    else:
+        self._hovered_line_index = new_hovered_line_index
+        if new_hovered_line_index != -1:
+            self.update()
+    if hasattr(self, '_hovered_dot_index'):
+        if self._hovered_dot_index != new_hovered_dot_index:
+            self._hovered_dot_index = new_hovered_dot_index
+            self.update()
+    else:
+        self._hovered_dot_index = new_hovered_dot_index
+        if new_hovered_dot_index != -1:
+            self.update()
+
     if getattr(self, '_is_linking_dots', False):
         image_coords = self._widget_to_image_coords(event.pos())
         if image_coords:
@@ -330,18 +417,6 @@ def mouseMoveEvent(self, event):
                 elif len(self._link_path_widget) > 1:
                     self._link_path_widget[-1] = current_widget_pos
                     self._link_path_image[-1] = image_coords
-    item_type_hover, item_index_hover = self._find_item_at_pos(event.pos())
-    new_hovered_line_index = -1
-    if item_type_hover == 'line':
-        new_hovered_line_index = item_index_hover
-    if hasattr(self, '_hovered_line_index'):
-        if self._hovered_line_index != new_hovered_line_index:
-            self._hovered_line_index = new_hovered_line_index
-            self.update()
-    else:
-        self._hovered_line_index = new_hovered_line_index
-        if new_hovered_line_index != -1:
-            self.update()
     if hasattr(self.parent_editor, '_path_details_mode') and \
        self.parent_editor._path_details_mode.get(self.map_type, False) and \
        not self.parent_editor._path_assign_mode.get(self.map_type, False) and \
@@ -404,7 +479,6 @@ def mouseMoveEvent(self, event):
             if self.parent_editor and hasattr(self.parent_editor, 'get_path_mode'):
                 path_mode = self.parent_editor.get_path_mode(self.map_type)
             self._link_preview_end_widget_pos = current_widget_pos
-                
             if path_mode == 'draw':
                 current_image_point = image_coords
                 if not self._link_path_image:
@@ -420,7 +494,6 @@ def mouseMoveEvent(self, event):
                  elif len(self._link_path_widget) > 1:
                      self._link_path_widget[-1] = current_widget_pos
                      self._link_path_image[-1] = image_coords
-
             dots_list = self.parent_editor.get_world_draw_data()[1] if self.map_type == 'world' else self.parent_editor.get_location_draw_data()[1]
             min_dist_sq_link = float('inf')
             closest_dot_idx_link = -1
@@ -444,15 +517,13 @@ def mouseMoveEvent(self, event):
             current_hovered_dot = -1
             if min_dist_sq_link < snap_threshold_sq and closest_dot_idx_link != -1:
                 current_hovered_dot = closest_dot_idx_link
-            
             if self._hovered_dot_index != current_hovered_dot:
                 self._hovered_dot_index = current_hovered_dot
-        
         self.update()
     can_drag_item = False
-    if current_draw_mode == 'none':
-        can_drag_item = True
-    if current_draw_mode == 'feature_paint' and feature_sub_mode == 'select':
+    if current_draw_mode in ['none', 'dot', 'line'] or \
+       (current_draw_mode == 'feature_paint' and feature_sub_mode == 'select') or \
+       (current_draw_mode == 'region_edit' and world_region_sub_mode == 'select'):
         can_drag_item = True
     if can_drag_item and event.buttons() == Qt.LeftButton and \
             getattr(self, '_dragging', False) and getattr(self, '_dragging_selection', False) and getattr(self, '_last_mouse_pos', None):
@@ -470,38 +541,6 @@ def mouseMoveEvent(self, event):
             self._last_mouse_pos = event.pos()
             self.update()
             return
-    if event.buttons() == Qt.LeftButton and \
-            getattr(self, '_dragging', False) and not getattr(self, '_dragging_selection', False) and getattr(self, '_last_mouse_pos', None):
-        delta = event.pos() - self._last_mouse_pos
-        self._pan[0] += delta.x()
-        self._pan[1] += delta.y()
-        self._last_mouse_pos = event.pos()
-        self._clamp_pan()
-        if hasattr(self, '_clear_coord_cache'):
-            self._clear_coord_cache()
-        self.update()
-        return
-    if not event.buttons():
-        if current_draw_mode == 'line' and not getattr(self, '_is_linking_dots', False):
-            image_coords_hover = self._widget_to_image_coords(event.pos())
-            new_hovered_dot_for_line_start = -1
-            if image_coords_hover:
-                dots_list_hover = self.parent_editor.get_world_draw_data()[1] if self.map_type == 'world' else self.parent_editor.get_location_draw_data()[1]
-                min_dist_sq_hover = float('inf')
-                closest_dot_idx_hover = -1
-                for i, (dot_x, dot_y, *_) in enumerate(dots_list_hover):
-                    dist_sq = (dot_x - image_coords_hover[0]) ** 2 + (dot_y - image_coords_hover[1]) ** 2
-                    if dist_sq < min_dist_sq_hover:
-                        min_dist_sq_hover = dist_sq
-                        closest_dot_idx_hover = i
-                hover_snap_sq = 100
-                if min_dist_sq_hover < hover_snap_sq and closest_dot_idx_hover != -1:
-                    new_hovered_dot_for_line_start = closest_dot_idx_hover
-
-            if self._hovered_dot_index != new_hovered_dot_for_line_start:
-                self._hovered_dot_index = new_hovered_dot_for_line_start
-                self.setCursor(Qt.PointingHandCursor if self._hovered_dot_index != -1 else Qt.CrossCursor)
-                self.update()
     if current_draw_mode == 'feature_paint' and event.buttons() == Qt.RightButton:
         image_coords_erase = self._widget_to_image_coords(event.pos())
         if image_coords_erase and hasattr(self.parent_editor, 'erase_feature_at'):
@@ -550,6 +589,7 @@ def mouseReleaseEvent(self, event):
                         list(self._region_paint_stroke_points)
                     )
                 self._region_paint_stroke_points = []
+                self._is_actively_painting = False
                 self.update()
                 event_handled = True
             else:
@@ -596,9 +636,22 @@ def mouseReleaseEvent(self, event):
                         path_to_add = [self._link_start_dot_img_pos, actual_end_image_coords]
                 if path_to_add:
                     if self.map_type == 'world':
-                        self.parent_editor.add_world_line(self._link_start_dot_index, end_dot_index, path_to_add)
-                    elif self.map_type == 'location':
-                        self.parent_editor.add_location_line(self._link_start_dot_index, end_dot_index, path_to_add)
+                        dots_list = self.parent_editor._world_dots
+                    else:
+                        dots_list = self.parent_editor._location_dots
+                    current_start_index = self.parent_editor._find_dot_index_by_pos(dots_list, self._link_start_dot_img_pos)
+                    current_end_index = self.parent_editor._find_dot_index_by_pos(dots_list, actual_end_image_coords)
+                    if current_start_index is not None and current_end_index is not None:
+                        if self.map_type == 'world':
+                            self.parent_editor.add_world_line(current_start_index, current_end_index, path_to_add)
+                        elif self.map_type == 'location':
+                            self.parent_editor.add_location_line(current_start_index, current_end_index, path_to_add)
+                    else:
+                        print(f"Could not find current dot indices. Start pos: {self._link_start_dot_img_pos}, End pos: {actual_end_image_coords}")
+                        if self.map_type == 'world':
+                            self.parent_editor.add_world_line(self._link_start_dot_index, end_dot_index, path_to_add)
+                        elif self.map_type == 'location':
+                            self.parent_editor.add_location_line(self._link_start_dot_index, end_dot_index, path_to_add)
                 else:
                     print(f"Line linking path_to_add was empty. Start: {self._link_start_dot_index}, End: {end_dot_index}")
             else:
@@ -680,16 +733,18 @@ def paintEvent(self, event):
     painter.setRenderHint(QPainter.Antialiasing, True)
     painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
     painter.setClipPath(path)
-    self._pulse_time = time.time()
     self._hovered_line_index = -1
+    if not hasattr(self, '_is_scrolling'):
+        self._is_scrolling = False
     current_name_field = ""
     if self.parent_editor and hasattr(self.parent_editor, '_get_current_path_name'):
         current_name_field = self.parent_editor._get_current_path_name(self.map_type)
     cursor_pos = self.mapFromGlobal(self.cursor().pos())
-    if self.rect().contains(cursor_pos):
-        item_type, item_index = self._find_item_at_pos(cursor_pos)
-        if item_type == 'line':
-            self._hovered_line_index = item_index
+    if self.rect().contains(cursor_pos) and not getattr(self, '_is_scrolling', False):
+        if not QApplication.mouseButtons():
+            item_type, item_index = self._find_item_at_pos(cursor_pos)
+            if item_type == 'line':
+                self._hovered_line_index = item_index
     
     if self._crt_image is not None:
         img_rect_base = self._get_image_rect()
@@ -879,10 +934,10 @@ def paintEvent(self, event):
                                             BASE_LINE_WIDTH_IMAGE * final_scale * 0.75))
         dot_brush = QBrush(dark_draw_color)
         selected_dot_brush = QBrush(selected_color)
-
-        preview_line_color = QColor(selected_color)
-        preview_line_color.setAlpha(80)
-        preview_line_pen = QPen(preview_line_color, temp_widget_line_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+        preview_line_color = QColor(dark_draw_color)
+        preview_line_color.setAlpha(255)
+        preview_line_color = preview_line_color.lighter(140)
+        preview_pen = QPen(preview_line_color, 2, Qt.DashLine)
         temp_line_pen = QPen(selected_color, temp_widget_line_width, Qt.DashLine, Qt.RoundCap, Qt.RoundJoin)
         line_params = {
             'small':  {'base_thickness': 1.0, 'alpha_zoomed_out': 0,  'alpha_zoomed_in': 45, 'fade_start_scale': 0.1, 'fade_end_scale': 2},
@@ -899,7 +954,9 @@ def paintEvent(self, event):
         else:
             lines, dots = [], []
         visible_rect = QRectF(self.rect()).adjusted(-50, -50, 50, 50)
-        
+        if not hasattr(self, '_cached_visible_rect') or self._cached_visible_rect != visible_rect:
+            self._cached_visible_rect = visible_rect
+            self._clear_coord_cache()
         for path_index, line_data in enumerate(lines):
             if isinstance(line_data, tuple) and len(line_data) == 2:
                 path_points, meta = line_data
@@ -907,7 +964,6 @@ def paintEvent(self, event):
                 path_points = line_data
                 meta = None
             if len(path_points) < 2: continue
-            
             if not self._is_line_visible(path_points, visible_rect):
                 continue
             line_type = 'medium'
@@ -915,7 +971,6 @@ def paintEvent(self, event):
             if isinstance(meta, dict):
                 line_type = meta.get('type', 'medium')
                 line_name = meta.get('name', "")
-
             else:
                 line_type = meta if meta else 'medium'
             params = line_params.get(line_type, default_line_params)
@@ -944,104 +999,74 @@ def paintEvent(self, event):
             selected_widget_line_width = max(MIN_WIDGET_LINE_WIDTH, 
                                                 min(MAX_WIDGET_LINE_WIDTH * 1.2, 
                                                     base_image_thickness * final_scale * 1.25))
-            widget_path = QPainterPath()
-            start_widget_point = self._get_cached_widget_coords(path_points[0])
-            if start_widget_point is None: continue
-            widget_path.moveTo(start_widget_point)
-            valid_path = True
-            for i in range(1, len(path_points)):
-                widget_point = self._get_cached_widget_coords(path_points[i])
-                if widget_point is None:
-                    valid_path = False
-                    break
-                widget_path.lineTo(widget_point)
-            if valid_path:
-                is_selected = (selected_item_type == 'line' and path_index == selected_item_index)
-                is_hovered = (path_index == self._hovered_line_index)
-                is_same_name = (current_name_field and line_name == current_name_field)
+            
+            widget_points = self._batch_convert_coords(path_points)
+            if not widget_points or any(p is None for p in widget_points):
+                continue
                 
-                fuzzy_offset = 1.0
-                fuzzy_thickness_scale = 0.6
-                fuzzy_alpha_scale = 0.3
-                main_pen_color = selected_color if is_selected else dark_draw_color
-                main_pen_width = selected_widget_line_width if is_selected else current_widget_line_width
-                is_hovered = (path_index == self._hovered_line_index)
-                is_selected = False
-                if hasattr(self.parent_editor, '_selected_path_index') and hasattr(self.parent_editor, '_path_details_mode'):
-                    map_details_mode = self.parent_editor._path_details_mode.get(self.map_type, False)
-                    selected_index = self.parent_editor._selected_path_index.get(self.map_type, -1)
-                    if map_details_mode and selected_index == path_index:
-                        is_selected = True
-                is_same_name = False
-                current_name_field = ""
-                if self.parent_editor and hasattr(self.parent_editor, '_get_current_path_name'):
-                    current_name_field = self.parent_editor._get_current_path_name(self.map_type)
-                    
-                if current_name_field and isinstance(meta, dict) and meta.get('name', '') == current_name_field:
-                    is_same_name = not is_selected
-                main_pen_alpha = current_dynamic_alpha
-                if is_same_name and current_name_field and not is_selected:
-                    main_pen_color = main_pen_color.lighter(130)
-                    main_pen_alpha = min(220, current_dynamic_alpha + 70)
-                    name_match_pulse_speed = 1.2
-                    name_match_pulse_amplitude = 25
-                    name_match_pulse_phase = (self._pulse_time * name_match_pulse_speed) % (2 * math.pi)
-                    name_match_pulse_factor = (math.sin(name_match_pulse_phase) + 1) / 2.0
-                    name_match_pulse_boost = name_match_pulse_amplitude * name_match_pulse_factor
-                    main_pen_alpha = min(255, int(main_pen_alpha + name_match_pulse_boost))
-                if is_hovered:
-                    line_hover_pulse_speed = 4.0
-                    line_hover_pulse_amplitude_alpha = 100
-                    line_hover_pulse_phase = (self._pulse_time * line_hover_pulse_speed) % (2 * math.pi)
-                    line_hover_pulse_factor = (math.sin(line_hover_pulse_phase) + 1) / 2.0
-                    hover_alpha_boost = line_hover_pulse_amplitude_alpha * line_hover_pulse_factor
-                    main_pen_alpha = min(255, int(main_pen_alpha + hover_alpha_boost))
-                    main_pen_width *= 1.15
-                elif is_selected:
-                    line_selected_pulse_speed = 2.0
-                    line_selected_pulse_amplitude_alpha = 150
-                    line_selected_pulse_phase = (self._pulse_time * line_selected_pulse_speed) % (2 * math.pi)
-                    line_selected_pulse_factor = (math.sin(line_selected_pulse_phase) + 1) / 2.0
-                    selected_alpha_boost = line_selected_pulse_amplitude_alpha * line_selected_pulse_factor
-                    main_pen_alpha = min(255, int(main_pen_alpha + selected_alpha_boost))
-                    main_pen_width *= 1.3
-                    main_pen_color = main_pen_color.lighter(140)
-                main_pen_color.setAlpha(main_pen_alpha)
-                fuzzy_pen_width = max(1.0, main_pen_width * fuzzy_thickness_scale)
-                fuzzy_pen_alpha = int(current_dynamic_alpha * fuzzy_alpha_scale) 
-                fuzzy_final_color = QColor(main_pen_color)
-                fuzzy_final_color.setAlpha(fuzzy_pen_alpha)
-                fuzzy_pen = QPen(fuzzy_final_color, fuzzy_pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
-                painter.setPen(fuzzy_pen)
-                painter.save()
-                painter.translate(fuzzy_offset, fuzzy_offset)
-                painter.drawPath(widget_path)
-                painter.restore()
-                painter.save()
-                painter.translate(-fuzzy_offset, -fuzzy_offset)
-                painter.drawPath(widget_path)
-                painter.restore()
-                pen_style = Qt.SolidLine
-                if isinstance(meta, dict) and meta.get("instant", False):
-                    pen_style = Qt.DashLine
-                main_pen = QPen(main_pen_color, main_pen_width, pen_style, Qt.RoundCap, Qt.RoundJoin)
-                painter.setPen(main_pen)
-                painter.drawPath(widget_path)
-        
-        pulse_speed = 3.0
+            widget_path = QPainterPath()
+            widget_path.moveTo(widget_points[0])
+            for i in range(1, len(widget_points)):
+                widget_path.lineTo(widget_points[i])
+            
+            is_selected = (selected_item_type == 'line' and path_index == selected_item_index)
+            is_hovered = (path_index == self._hovered_line_index)
+            is_same_name = (current_name_field and line_name == current_name_field)
+            main_pen_color = selected_color if is_selected else dark_draw_color
+            main_pen_width = selected_widget_line_width if is_selected else current_widget_line_width
+            main_pen_alpha = 255
+            if is_same_name and current_name_field and not is_selected:
+                main_pen_color = main_pen_color.lighter(150)
+                main_pen_alpha = 255
+            if is_hovered:
+                main_pen_width *= 1.15
+                main_pen_color = main_pen_color.lighter(150)
+            elif is_selected:
+                main_pen_width *= 1.3
+                main_pen_color = main_pen_color.lighter(150)
+            main_pen_color.setAlpha(main_pen_alpha)
+            pen_style = Qt.SolidLine
+            if isinstance(meta, dict) and meta.get("instant", False):
+                pen_style = Qt.DashLine
+            main_pen = QPen(main_pen_color, main_pen_width, pen_style, Qt.RoundCap, Qt.RoundJoin)
+            painter.setPen(main_pen)
+            painter.drawPath(widget_path)
         connected_start_dot_idx = -1
         connected_end_dot_idx = -1
         if selected_item_type == 'line' and 0 <= selected_item_index < len(lines):
             line_data = lines[selected_item_index]
             if isinstance(line_data, tuple) and len(line_data) == 2:
-                _, meta = line_data
+                path_points, meta = line_data
                 if isinstance(meta, dict):
-                    connected_start_dot_idx = meta.get('start', -1)
-                    connected_end_dot_idx = meta.get('end', -1)
+                    if len(path_points) >= 2:
+                        start_point = path_points[0]
+                        end_point = path_points[-1]
+                        min_start_dist = float('inf')
+                        min_end_dist = float('inf')
+                        start_dot_idx = -1
+                        end_dot_idx = -1
+                        dot_hit_tolerance = 12.0
+                        for dot_idx, dot_data in enumerate(dots):
+                            if isinstance(dot_data, (list, tuple)) and len(dot_data) >= 2:
+                                dot_x, dot_y = dot_data[0], dot_data[1]
+                                dot_point = (dot_x, dot_y)
+                                start_dist = math.dist(start_point, dot_point)
+                                if start_dist < min_start_dist and start_dist <= dot_hit_tolerance:
+                                    min_start_dist = start_dist
+                                    start_dot_idx = dot_idx
+                                end_dist = math.dist(end_point, dot_point)
+                                if end_dist < min_end_dist and end_dist <= dot_hit_tolerance:
+                                    min_end_dist = end_dist
+                                    end_dot_idx = dot_idx
+                        connected_start_dot_idx = start_dot_idx
+                        connected_end_dot_idx = end_dot_idx
+                    else:
+                        connected_start_dot_idx = meta.get('start', -1)
+                        connected_end_dot_idx = meta.get('end', -1)
         dot_params = {
-            'small': {'radius': 1.5, 'sel_radius': 1.7, 'amplitude': 2.3, 'speed': 2.0},
-            'medium': {'radius': 5, 'sel_radius': 5, 'amplitude': 4, 'speed': 4.0},
-            'big': {'radius': 11, 'sel_radius': 11, 'amplitude': 6, 'speed': 6.0},
+            'small': {'radius': 3.0, 'sel_radius': 3.4},
+            'medium': {'radius': 10, 'sel_radius': 10},
+            'big': {'radius': 22, 'sel_radius': 22},
         }
         default_dot_params = dot_params['small']
         img_rect_base = self._get_image_rect()
@@ -1060,6 +1085,7 @@ def paintEvent(self, event):
         base_scale = min(base_scale_x, base_scale_y) if base_scale_x > 0 and base_scale_y > 0 else max(base_scale_x, base_scale_y)
         final_scale = base_scale * user_zoom_factor
         min_widget_radius = 1.0
+        dot_coords = []
         for dot_index, dot_data in enumerate(dots):
             dot_type = None
             linked_name = None
@@ -1077,39 +1103,40 @@ def paintEvent(self, event):
             if dot_type is None:
                 print(f"Warning [paintEvent]: dot_type not assigned for dot_data (len={len(dot_data) if isinstance(dot_data, (list, tuple)) else 'N/A'}): {dot_data}")
                 continue
-                
             p_img = (p_img_x, p_img_y)
-            p_widget = self._get_cached_widget_coords(p_img)
-            if not p_widget or not visible_rect.contains(p_widget):
-                continue
-            params = dot_params.get(dot_type, default_dot_params)
-            pulse_speed = params['speed']
-            if p_widget:
+            dot_coords.append((dot_index, p_img, dot_type, linked_name))
+        if dot_coords:
+            image_coords_list = [coord[1] for coord in dot_coords]
+            widget_coords = self._batch_convert_coords(image_coords_list)
+            for i, (dot_index, p_img, dot_type, linked_name) in enumerate(dot_coords):
+                p_widget = widget_coords[i]
+                if not p_widget or not visible_rect.contains(p_widget):
+                    continue
+                params = dot_params.get(dot_type, default_dot_params)
                 is_selected = (selected_item_type == 'dot' and dot_index == selected_item_index)
                 is_hovered = (dot_index == self._hovered_dot_index)
                 should_appear_selected = is_selected or (selected_item_type == 'line' and (dot_index == connected_start_dot_idx or dot_index == connected_end_dot_idx))
-                dot_alpha = 200
+                dot_alpha = 255
                 if should_appear_selected and selected_item_type == 'line':
                     current_image_radius = params['sel_radius']
-                    dot_alpha = 200
+                    dot_alpha = 255
                 elif should_appear_selected and selected_item_type == 'dot':
-                    pulse_phase = (self._pulse_time * pulse_speed + pulse_offset) % (2 * math.pi)
-                    pulse_factor = (math.sin(pulse_phase) + 1) / 2.0
-                    current_image_radius = params['sel_radius'] + params['amplitude'] * pulse_factor
-                    dot_alpha = 220
+                    current_image_radius = params['sel_radius']
+                    dot_alpha = 255
                 else:
-                    pulse_phase = (self._pulse_time * pulse_speed + pulse_offset) % (2 * math.pi)
-                    pulse_factor = (math.sin(pulse_phase) + 1) / 2.0
-                    current_image_radius = params['radius'] + params['amplitude'] * pulse_factor
-                    dot_alpha = 200
+                    current_image_radius = params['radius']
+                    dot_alpha = 255
                 widget_radius = max(min_widget_radius, current_image_radius * final_scale)
                 if is_hovered:
-                    highlight_color = QColor("#FFFF00")
-                    painter.setBrush(Qt.NoBrush)
-                    painter.setPen(QPen(highlight_color, 3))
-                    painter.drawEllipse(p_widget, widget_radius + 4, widget_radius + 4)
+                    widget_radius *= 1.3
                 base_brush = selected_dot_brush if should_appear_selected else dot_brush
                 faded_color = QColor(base_brush.color())
+                if should_appear_selected:
+                    faded_color = faded_color.lighter(150)
+                elif is_hovered:
+                    faded_color = faded_color.lighter(150)
+                else:
+                    faded_color = faded_color.lighter(130)
                 faded_color.setAlpha(dot_alpha)
                 faded_brush = QBrush(faded_color)
                 painter.setBrush(faded_brush)
@@ -1129,7 +1156,6 @@ def paintEvent(self, event):
         if self._is_linking_dots and len(self._link_path_widget) >= 1:
             current_line_type = 'medium'
             path_mode = 'draw'
-            
             if self.parent_editor:
                 if self.map_type == 'world':
                     current_line_type = self.parent_editor._world_line_type_mode
@@ -1137,16 +1163,14 @@ def paintEvent(self, event):
                 elif self.map_type == 'location':
                     current_line_type = self.parent_editor._location_line_type_mode
                     path_mode = self.parent_editor.get_path_mode('location')
-            print(f"[DEBUG PAINT paintEvent] {self.map_type} path_mode for preview: {path_mode}")
             preview_params = line_params.get(current_line_type, default_line_params)
             preview_base_thickness = preview_params['base_thickness']
             calculated_preview_width = max(MIN_WIDGET_LINE_WIDTH, min(MAX_WIDGET_LINE_WIDTH, preview_base_thickness * final_scale * 0.9))
-            preview_line_pen.setWidthF(calculated_preview_width)
-            painter.setPen(preview_line_pen)
+            preview_pen.setWidthF(calculated_preview_width)
+            painter.setPen(preview_pen)
             painter.setBrush(Qt.NoBrush)
             preview_path = QPainterPath()
             preview_path.moveTo(self._link_path_widget[0])
-            
             if path_mode == 'line':
                 if len(self._link_path_widget) > 1:
                     preview_path.lineTo(self._link_path_widget[-1])
@@ -1175,13 +1199,14 @@ def paintEvent(self, event):
         and self.parent_editor and self.map_type == 'world'
         and getattr(self.parent_editor, '_world_draw_mode', None) == 'region_edit'
         and getattr(self.parent_editor, '_world_region_sub_mode', None) == 'paint'
+        and hasattr(self, '_is_actively_painting') and self._is_actively_painting
     ):
         stroke_points = self._region_paint_stroke_points
         brush_size = getattr(self.parent_editor, '_region_brush_size', 5)
         base_color_str = self.parent_editor.theme_colors.get("base_color", "#00A0A0")
         base_color = QColor(base_color_str)
-        preview_color = base_color.darker(150)
-        preview_color.setAlpha(100)
+        preview_color = base_color.lighter(130)
+        preview_color.setAlpha(255)
         overlay_img = QImage(self.size(), QImage.Format_ARGB32_Premultiplied)
         overlay_img.fill(Qt.transparent)
         overlay_painter = QPainter(overlay_img)
@@ -1213,16 +1238,13 @@ def paintEvent(self, event):
         stroke_points = self._region_erase_stroke_points
         brush_size = getattr(self.parent_editor, '_region_brush_size', 5)
         preview_color = QColor(255, 80, 80, 160)
-        
         overlay_img = QImage(self.size(), QImage.Format_ARGB32_Premultiplied)
         overlay_img.fill(Qt.transparent)
-        
         overlay_painter = QPainter(overlay_img)
         overlay_painter.setRenderHint(QPainter.Antialiasing, True)
         eraser_pen = QPen(QColor(255, 0, 0, 200), 1.5, Qt.DashLine)
         overlay_painter.setPen(eraser_pen)
         overlay_painter.setBrush(QBrush(preview_color))
-        
         for i in range(len(stroke_points)):
             x, y = stroke_points[i]
             widget_pt = self._image_to_widget_coords((x, y))
@@ -1251,7 +1273,6 @@ def paintEvent(self, event):
                     widget_pt.y() + visual_brush_radius * 0.7
                 ))
                 overlay_painter.setPen(eraser_pen)
-                
         overlay_painter.end()
         painter.drawImage(0, 0, overlay_img)
     if (
@@ -1432,7 +1453,6 @@ def paintEvent(self, event):
                             feature_border_cache = getattr(self.parent_editor, '_feature_border_cache', {}).get('world', {})
                         elif self.map_type == 'location':
                             feature_border_cache = getattr(self.parent_editor, '_feature_border_cache', {}).get('location', {})
-                            
                     list_of_contours = feature_border_cache.get(feature_name, [])
                     if list_of_contours:
                         painter.save()
@@ -1565,7 +1585,6 @@ def paintEvent(self, event):
             current_feature = getattr(self.parent_editor, '_current_location_feature', None)
             brush_size = getattr(self.parent_editor, '_location_feature_brush_size', 10)
             feature_sub_mode = getattr(self.parent_editor, '_location_feature_sub_mode', 'paint')
-        
         if is_feature_paint_mode and current_feature and feature_sub_mode == 'paint':
             cursor_pos = self.mapFromGlobal(self.cursor().pos())
             if self.rect().contains(cursor_pos):
@@ -1579,11 +1598,13 @@ def paintEvent(self, event):
                     base_scale = img_rect_base.width() / self._virtual_width
                 final_scale = base_scale * user_zoom_factor
                 widget_radius = max(1.0, brush_size * final_scale / 2.0)
-
                 preview_color = QColor(self.parent_editor.theme_colors.get("base_color", "#00A0A0"))
-                preview_color.setAlpha(80)
+                preview_color = preview_color.lighter(130)
+                preview_color.setAlpha(255)
                 painter.setBrush(QBrush(preview_color))
-                painter.setPen(QPen(preview_color.darker(150), 1, Qt.DashLine))
+                preview_stroke_color = preview_color.lighter(120)
+                preview_stroke_color.setAlpha(255)
+                painter.setPen(QPen(preview_stroke_color, 1, Qt.DashLine))
                 painter.drawEllipse(cursor_pos, widget_radius, widget_radius)
 
     if hasattr(self, '_feature_paint_stroke') and self._feature_paint_stroke and len(self._feature_paint_stroke) > 0:
@@ -1631,7 +1652,6 @@ def _find_item_at_pos(self, widget_pos):
         img_w, img_h = self._virtual_width, self._virtual_height
     dot_hit_tolerance = 12.0
     line_hit_tolerance = 8.0
-    
     if self.map_type == 'world':
         lines, dots = self.parent_editor.get_world_draw_data()
     elif self.map_type == 'location':
@@ -1671,9 +1691,15 @@ def _find_item_at_pos(self, widget_pos):
                 if distance <= line_hit_tolerance:
                     return 'line', path_index
     if self.map_type == 'world' and hasattr(self.parent_editor, '_region_masks'):
+        if (not self.parent_editor._region_masks and 
+            hasattr(self.parent_editor, '_world_regions') and 
+            self.parent_editor._world_regions and
+            hasattr(self.parent_editor, '_ensure_region_masks_exist')):
+            self.parent_editor._ensure_region_masks_exist()
+        
         mask_scale = getattr(self.parent_editor, '_region_mask_scale', 1.0)
         image_coords = self._widget_to_image_coords(widget_pos)
-        if image_coords is not None:
+        if image_coords is not None and self.parent_editor._region_masks:
             for region_name in reversed(list(self.parent_editor._region_masks.keys())):
                 mask = self.parent_editor._region_masks.get(region_name)
                 if mask and not mask.isNull():
@@ -1689,6 +1715,9 @@ def leaveEvent(self, event):
     if hasattr(self, '_hovered_line_index') and self._hovered_line_index != -1:
         self._hovered_line_index = -1
         self.update()
+    if hasattr(self, '_hovered_dot_index') and self._hovered_dot_index != -1:
+        self._hovered_dot_index = -1
+        self.update()
     super().leaveEvent(event)
 
 def keyPressEvent(self, event):
@@ -1702,9 +1731,8 @@ def keyPressEvent(self, event):
             parent_selected_index = getattr(self.parent_editor, f"_{self.map_type}_selected_item_index", -1)
         selected_type = local_selected_type if local_selected_type is not None else parent_selected_type
         selected_index = local_selected_index if local_selected_index >= 0 else parent_selected_index
-        print(f"[DEBUG] Selection for delete: type={selected_type}, index={selected_index}")
         if selected_type is not None and hasattr(self.parent_editor, 'delete_selected_item'):
-            print(f"[DEBUG] Calling delete_selected_item with type={selected_type}, index={selected_index}")
             self.parent_editor.delete_selected_item(self.map_type)
             return
-    super().keyPressEvent(event)
+    if not event.isAccepted():
+        QLabel.keyPressEvent(self, event)

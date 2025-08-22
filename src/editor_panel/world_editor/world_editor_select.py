@@ -39,12 +39,18 @@ def select_item(self, map_type, item_type, item_index_or_name):
             if label_widget.text() == "Linked Settings:":
                 world_set_label = label_widget
                 break
-        if world_loc_label: world_loc_label.setVisible(False)
-        if world_loc_dropdown: world_loc_dropdown.setVisible(False)
-        if world_unlink_btn: world_unlink_btn.setVisible(False)
-        if world_set_label: world_set_label.setVisible(False)
-        if world_set_dropdown: world_set_dropdown.setVisible(False)
-        if world_unlink_setting_btn: world_unlink_setting_btn.setVisible(False)
+        if world_loc_label: 
+            world_loc_label.setVisible(False)
+        if world_loc_dropdown: 
+            world_loc_dropdown.setVisible(False)
+        if world_unlink_btn: 
+            world_unlink_btn.setVisible(False)
+        if world_set_label: 
+            world_set_label.setVisible(False)
+        if world_set_dropdown: 
+            world_set_dropdown.setVisible(False)
+        if world_unlink_setting_btn: 
+            world_unlink_setting_btn.setVisible(False)
         if item_type == 'dot' and isinstance(item_index_or_name, int) and 0 <= item_index_or_name < len(self._world_dots):
             self._world_selected_item_type = 'dot'
             self._world_selected_item_index = item_index_or_name
@@ -118,19 +124,32 @@ def select_item(self, map_type, item_type, item_index_or_name):
                 type_display_map = {'big': 'Large Location', 'medium': 'Medium Location', 'small': 'Setting'}
                 type_display = type_display_map.get(dot_type, dot_type.capitalize())
                 title_parts.append(f"{type_display} Dot ({x:.2f}, {y:.2f})")
-            if region_name:
-                title_parts.append(f"in {self._format_region_name_for_display(region_name)}")
+                if region_name and dot_type != 'small':
+                    title_parts.append(f"in {self._format_region_name_for_display(region_name)}")
             self.world_map_title_label.setText(" - ".join(filter(None, title_parts)))
-            if dot_type == 'big' or dot_type == 'medium': # Location-type dots
+            if dot_type == 'big' or dot_type == 'medium':
                 if linked_name:
-                    if world_loc_label: world_loc_label.setVisible(True)
-                    if world_unlink_btn: world_unlink_btn.setVisible(True)
-                    if world_loc_dropdown: world_loc_dropdown.setVisible(False)
+                    if world_loc_label: 
+                        world_loc_label.setVisible(True)
+                        world_loc_label.setEnabled(True)
+                        world_loc_label.setStyleSheet("font-size: 8pt; font-weight: normal;")
+                    if world_unlink_btn: 
+                        world_unlink_btn.setVisible(True)
+                        world_unlink_btn.setEnabled(True)
+                    if world_loc_dropdown: 
+                        world_loc_dropdown.setVisible(True)
+                        world_loc_dropdown.setEnabled(False)
                 else:
-                    if world_loc_label: world_loc_label.setVisible(True)
-                    if world_unlink_btn: world_unlink_btn.setVisible(False)
+                    if world_loc_label: 
+                        world_loc_label.setVisible(True)
+                        world_loc_label.setEnabled(True)
+                        world_loc_label.setStyleSheet("font-size: 8pt; font-weight: normal;")
+                    if world_unlink_btn: 
+                        world_unlink_btn.setVisible(True)
+                        world_unlink_btn.setEnabled(False)
                     if world_loc_dropdown:
                         world_loc_dropdown.setVisible(True)
+                        world_loc_dropdown.setEnabled(True)
                         self._update_world_location_dropdown()
             elif dot_type == 'small':
                 world_set_label = None
@@ -140,15 +159,28 @@ def select_item(self, map_type, item_type, item_index_or_name):
                         break
                 world_unlink_setting_btn = getattr(self, 'world_unlink_setting_btn', None)
                 if linked_name:
-                    if world_set_label: world_set_label.setVisible(True)
-                    if world_set_dropdown: world_set_dropdown.setVisible(False)
-                    if world_unlink_setting_btn: world_unlink_setting_btn.setVisible(True)
+                    if world_set_label: 
+                        world_set_label.setVisible(True)
+                        world_set_label.setEnabled(True)
+                        world_set_label.setStyleSheet("font-size: 8pt; font-weight: normal;")
+                    if world_set_dropdown: 
+                        world_set_dropdown.setVisible(True)
+                        world_set_dropdown.setEnabled(False)
+                    if world_unlink_setting_btn: 
+                        world_unlink_setting_btn.setVisible(True)
+                        world_unlink_setting_btn.setEnabled(True)
                 else:
-                    if world_set_label: world_set_label.setVisible(True)
+                    if world_set_label: 
+                        world_set_label.setVisible(True)
+                        world_set_label.setEnabled(True)
+                        world_set_label.setStyleSheet("font-size: 8pt; font-weight: normal;")
                     if world_set_dropdown:
                         world_set_dropdown.setVisible(True)
+                        world_set_dropdown.setEnabled(True)
                         self._update_world_setting_dropdown()
-                    if world_unlink_setting_btn: world_unlink_setting_btn.setVisible(False)
+                    if world_unlink_setting_btn: 
+                        world_unlink_setting_btn.setVisible(True)
+                        world_unlink_setting_btn.setEnabled(False)
 
         elif item_type == 'line' and isinstance(item_index_or_name, int) and 0 <= item_index_or_name < len(self._world_lines):
             self._world_selected_item_type = 'line'
@@ -159,8 +191,8 @@ def select_item(self, map_type, item_type, item_index_or_name):
                 if isinstance(meta, dict):
                     start_idx, end_idx = meta.get('start', -1), meta.get('end', -1)
                     line_type_disp = meta.get('type', 'path').capitalize()
-                    start_desc = self._get_dot_description(start_idx, self._world_dots)
-                    end_desc = self._get_dot_description(end_idx, self._world_dots)
+                    start_desc = self._get_dot_description(start_idx, self._world_dots) if start_idx is not None and start_idx >= 0 else "Unknown Start"
+                    end_desc = self._get_dot_description(end_idx, self._world_dots) if end_idx is not None and end_idx >= 0 else "Unknown End"
                     path_name = meta.get('name', '')
                     if not path_name:
                         path_display_name = "Unnamed Path"
@@ -233,10 +265,8 @@ def select_item(self, map_type, item_type, item_index_or_name):
                                             fresh_setting_name = setting_data['name']
                                             setting_region = setting_data.get('region', region_name)
                                     break
-                            
                             if location_path:
                                 break
-                
                 title = f"{location_display_name} - Setting: {fresh_setting_name}"
                 if setting_region:
                     title += f" in {self._format_region_name_for_display(setting_region)}"
@@ -250,17 +280,24 @@ def select_item(self, map_type, item_type, item_index_or_name):
                 if label.text() == "Settings:":
                     setting_label = label
                     break
+            if setting_label: 
+                setting_label.setVisible(False)
+            if self.location_setting_dropdown: 
+                self.location_setting_dropdown.setVisible(False)
+            if self.location_unlink_setting_btn: 
+                self.location_unlink_setting_btn.setVisible(False)
             if dot_type == 'small':
-                if setting_label: setting_label.setVisible(True)
-                if self.location_setting_dropdown: self.location_setting_dropdown.setVisible(not linked_name)
-                if self.location_unlink_setting_btn: self.location_unlink_setting_btn.setVisible(bool(linked_name))
-                if not linked_name and self.location_unlink_setting_btn: self.location_unlink_setting_btn.setVisible(False)
-                if not linked_name and self.location_setting_dropdown: self.location_setting_dropdown.setVisible(True)
+                if setting_label: 
+                    setting_label.setVisible(True)
+                    setting_label.setEnabled(True)
+                    setting_label.setStyleSheet("font-size: 8pt; font-weight: normal;")
+                if self.location_setting_dropdown: 
+                    self.location_setting_dropdown.setVisible(True)
+                    self.location_setting_dropdown.setEnabled(not linked_name)
+                if self.location_unlink_setting_btn: 
+                    self.location_unlink_setting_btn.setVisible(True)
+                    self.location_unlink_setting_btn.setEnabled(bool(linked_name))
                 self._update_location_setting_dropdown()
-            else:
-                if setting_label: setting_label.setVisible(False)
-                if self.location_setting_dropdown: self.location_setting_dropdown.setVisible(False)
-                if self.location_unlink_setting_btn: self.location_unlink_setting_btn.setVisible(False)
         elif item_type == 'line' and 0 <= item_index_or_name < len(self._location_lines):
             line_data = self._location_lines[item_index_or_name]
             if isinstance(line_data, tuple) and len(line_data) == 2:
@@ -269,8 +306,8 @@ def select_item(self, map_type, item_type, item_index_or_name):
                     start_idx = meta.get('start', -1)
                     end_idx = meta.get('end', -1)
                     line_type = meta.get('type', 'path').capitalize()
-                    start_desc = self._get_dot_description(start_idx, self._location_dots)
-                    end_desc = self._get_dot_description(end_idx, self._location_dots)
+                    start_desc = self._get_dot_description(start_idx, self._location_dots) if start_idx is not None and start_idx >= 0 else "Unknown Start"
+                    end_desc = self._get_dot_description(end_idx, self._location_dots) if end_idx is not None and end_idx >= 0 else "Unknown End"
                     location_display_name = self.current_location_name.replace("_", " ").title() if self.current_location_name else "Location Map"
                     path_length = 0
                     if len(path_points) >= 2:
@@ -281,14 +318,23 @@ def select_item(self, map_type, item_type, item_index_or_name):
                     for label in self.location_tab.findChildren(QLabel):
                         if label.text() == "Settings:":
                             label.setVisible(False)
-                    if self.location_setting_dropdown: self.location_setting_dropdown.setVisible(False)
+                    if self.location_setting_dropdown: 
+                        self.location_setting_dropdown.setVisible(False)
                 else:
                     self.location_map_title_label.setText("Selected Location Path")
             else:
                     self.location_map_title_label.setText("Selected Location Path")
-        
     label = getattr(self, f"{map_type}_map_label", None)
-    if label: label.update()
+    if label: 
+        if hasattr(label, '_last_selected_type') and hasattr(label, '_last_selected_index'):
+            if label._last_selected_type != item_type or label._last_selected_index != item_index_or_name:
+                label._last_selected_type = item_type
+                label._last_selected_index = item_index_or_name
+                label.update()
+        else:
+            label._last_selected_type = item_type
+            label._last_selected_index = item_index_or_name
+            label.update()
     if world_loc_dropdown and world_loc_dropdown.isVisible():
         world_loc_dropdown.blockSignals(True)
         world_loc_dropdown.blockSignals(False)

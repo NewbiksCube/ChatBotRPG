@@ -1,5 +1,6 @@
 from PyQt5.QtWidgets import QComboBox, QWidget, QLabel, QSlider, QVBoxLayout, QPushButton
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
 
 class FeaturesToolbar(QWidget):
     def __init__(self, parent_editor, map_type, theme_colors, button_text="Feature Edit", *args, **kwargs):
@@ -14,13 +15,41 @@ class FeaturesToolbar(QWidget):
         self._init_ui()
 
     def _init_ui(self):
+        base_color = QColor(self.theme_colors.get("base_color", "#CCCCCC"))
+        pressed_color = base_color.darker(120)
+        if not pressed_color.isValid(): pressed_color = base_color.darker(105)
+        pressed_color_str = pressed_color.name()
+        highlight_color = base_color.lighter(120)
+        highlight_color_str = highlight_color.name()
+        button_style = f"""
+            QPushButton {{
+                padding: 2px 5px;
+                border-radius: 0px;
+                font-size: 9pt;
+            }}
+            QPushButton:checked {{
+                background-color: {highlight_color_str};
+                color: #FFFFFF;
+            }}
+            QPushButton:pressed {{
+                background-color: {pressed_color_str};
+                color: #FFFFFF;
+            }}
+        """
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
         self.feature_paint_btn = QPushButton(self._button_text)
         self.feature_paint_btn.setCheckable(True)
         self.feature_paint_btn.setToolTip("Paint features onto the map")
+        self.feature_paint_btn.setStyleSheet(button_style)
         self.feature_paint_btn.clicked.connect(self._on_feature_paint_toggled)
+        
+        if hasattr(self.parent_editor, 'play_hover_sound'):
+            def play_sound():
+                self.parent_editor.play_hover_sound()
+            self.feature_paint_btn.clicked.connect(play_sound)
+            
         layout.addWidget(self.feature_paint_btn)
         self.feature_selector_label = QLabel("Feature:")
         self.feature_selector_label.setAlignment(Qt.AlignLeft)
@@ -51,13 +80,19 @@ class FeaturesToolbar(QWidget):
         self.feature_selector.setVisible(checked)
         self.brush_size_label.setVisible(checked and self._current_feature_name is not None)
         self.brush_size_slider.setVisible(checked and self._current_feature_name is not None)
+        
         if self.feature_paint_btn.isChecked() != checked:
             self.feature_paint_btn.blockSignals(True)
             self.feature_paint_btn.setChecked(checked)
             self.feature_paint_btn.blockSignals(False)
+        
         if checked:
             if hasattr(self.parent_editor, 'cancel_draw_mode'):
                 self.parent_editor.cancel_draw_mode(self.map_type)
+        else:
+            if hasattr(self.parent_editor, 'cancel_draw_mode'):
+                self.parent_editor.cancel_draw_mode(self.map_type)
+        
         if hasattr(self.parent_editor, 'on_feature_paint_mode_changed'):
             self.parent_editor.on_feature_paint_mode_changed(self.map_type, checked)
 

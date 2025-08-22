@@ -44,10 +44,9 @@ def create_automate_section():
         for text, object_name_suffix in labels:
             cb = QCheckBox(text)
             cb.setObjectName(f"Automate_{object_name_suffix}")
-            cb.setVisible(False)  # Hide initially
+            cb.setVisible(False)
             automate_layout.addWidget(cb)
             all_checkboxes[mode].append((text, cb))
-    
     return automate_widget, all_checkboxes
 
 def connect_automate_checkboxes(world_editor_ref, checkboxes_dict):
@@ -291,7 +290,6 @@ def delete_location(world_editor_ref, location_name):
                                     continue
                         except:
                             continue
-                            
                 if found_location_path:
                     break
         if found_location_path and os.path.exists(found_location_path):
@@ -498,6 +496,20 @@ def generate_setting_file(world_editor_ref, x, y, map_type):
         region_name_at_dot = None
         if hasattr(world_editor_ref, '_get_region_at_point'):
             region_name_at_dot = world_editor_ref._get_region_at_point(x, y)
+        if not region_name_at_dot:
+            if hasattr(world_editor_ref, '_world_regions') and world_editor_ref._world_regions:
+                region_name_at_dot = next(iter(world_editor_ref._world_regions.keys()), None)
+            elif hasattr(world_editor_ref, 'current_world_name') and hasattr(world_editor_ref, 'workflow_data_dir'):
+                world_dir = os.path.join(world_editor_ref.workflow_data_dir, 'resources', 'data files', 'settings', world_editor_ref.current_world_name)
+                if os.path.isdir(world_dir):
+                    for item in os.listdir(world_dir):
+                        item_path = os.path.join(world_dir, item)
+                        if os.path.isdir(item_path) and item.lower() != 'resources':
+                            region_json = os.path.join(item_path, f"{item}_region.json")
+                            if os.path.isfile(region_json):
+                                region_name_at_dot = item
+                                print(f"[FALLBACK] Using existing region from filesystem: {region_name_at_dot}")
+                                break
         current_world_name_from_we = getattr(world_editor_ref, 'current_world_name', None)
         workflow_data_dir_from_we = getattr(world_editor_ref, 'workflow_data_dir', None)
         if not current_world_name_from_we or not workflow_data_dir_from_we:
