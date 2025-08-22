@@ -32,9 +32,9 @@ BASE_CONTEXT_FILE = "context_history"
 BASE_SYSTEM_CONTEXT_FILE = "system_context"
 BASE_THOUGHT_RULES_FILE = "thought_rules"
 BASE_VARIABLES_FILE = "workflow_variables"
-FALLBACK_MODEL_1 = "google/gemini-2.5-flash-lite-preview-06-17"
-FALLBACK_MODEL_2 = "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
-FALLBACK_MODEL_3 = "thedrummer/anubis-70b-v1.1"
+FALLBACK_MODEL_1 = "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
+FALLBACK_MODEL_2 = "thedrummer/anubis-70b-v1.1"
+FALLBACK_MODEL_3 = "google/gemini-2.5-flash-lite-preview-06-17"
 
 
 class InferenceThread(QThread):
@@ -53,15 +53,8 @@ class InferenceThread(QThread):
     def run(self):
         try:
             log_header = "Context for Utility LLM" if self.is_utility_call else "Context for LLM"
-            print(f"--- [{log_header} (Character: {self.character_name})] ---")
-            try:
-                print(json.dumps(self.context, indent=2))
-            except Exception as json_e:
-                print(f"    (Could not json dump context: {json_e})")
-                print(self.context)
-            print(f"--- [End {log_header} (Character: {self.character_name})] ---")
+            print(f"--- [Model: {self.url_type}] ---")
             user_message = self.context[-1]['content'] if self.context and self.context[-1]['role'] == 'user' else ""
-            print(f"--- [Thread {self.character_name}] Calling make_inference --- User Msg: '{user_message[:30]}...'")
             assistant_message = make_inference(
                 self.context,
                 user_message,
@@ -156,7 +149,7 @@ class ChatbotUI(QWidget):
         self._border_width = 5
         self._is_maximized = False
         self.character_name = "Narrator"
-        self.max_tokens = 1024
+        self.max_tokens = 8192
         self._save_timer = QTimer()
         self._save_timer.setSingleShot(True)
         self._save_timer.timeout.connect(self._perform_save_active_tab)
@@ -964,6 +957,15 @@ class ChatbotUI(QWidget):
                     continue
 
                 if role and isinstance(content, str):
+                    # Load portrait data for historical assistant messages
+                    portrait_data = None
+                    if role == 'assistant' and character_name and character_name.strip().lower() != 'narrator':
+                        workflow_data_dir = tab_data.get('workflow_data_dir')
+                        if workflow_data_dir:
+                            actor_data, actor_path = _get_or_create_actor_data(self, workflow_data_dir, character_name)
+                            if actor_data:
+                                portrait_data = actor_data.get('portrait', {})
+                    
                     output_widget.add_message(
                         role,
                         content,
@@ -972,8 +974,10 @@ class ChatbotUI(QWidget):
                         scene_number=message_scene,
                         latest_scene_in_context=desired_scene,
                         character_name=character_name,
-                        post_effects=post_effects
+                        post_effects=post_effects,
+                        portrait_data=portrait_data
                     )
+        # Do not backfill debug posts on load; debug shows live run only
         output_widget._scroll_to_bottom()
         if loaded_context:
             last_message = loaded_context[-1]
@@ -1080,6 +1084,7 @@ class ChatbotUI(QWidget):
 
     def on_enter_pressed(self):
         print("on_enter_pressed method called")
+        print("=== PLAYER ENTERED NEW POST ===")
         try:
             tab_data = self.get_current_tab_data()
             if tab_data:
@@ -1099,6 +1104,8 @@ class ChatbotUI(QWidget):
             output_widget = self.get_current_output_widget()
             if output_widget and hasattr(output_widget, 'force_complete_all_streaming'):
                 streaming_was_forced = output_widget.force_complete_all_streaming()
+                if streaming_was_forced and hasattr(self, '_narrator_streaming_lock'):
+                    self._narrator_streaming_lock = False
             user_message = input_field.toPlainText().strip()
             if not user_message:
                 print("Message was empty, not sending.")
@@ -1117,13 +1124,15 @@ class ChatbotUI(QWidget):
             self._cot_text_tag = None
             if hasattr(self, '_character_tags'):
                 self._character_tags.clear()
-            if not user_message or not user_message.strip():
+            if not user_message or not (user_message.strip() if user_message else ""):
                 return
             output_widget = self.get_current_output_widget()
             if output_widget and hasattr(output_widget, 'force_complete_all_streaming'):
                 streaming_was_forced = output_widget.force_complete_all_streaming()
                 if streaming_was_forced:
                     print("Forced completion of streaming message(s) before processing new message")
+                    if hasattr(self, '_narrator_streaming_lock'):
+                        self._narrator_streaming_lock = False
             if not self.character_name:
                 self.character_name = "Narrator" 
             self.display_message("user", user_message, self.get_current_output_widget())
@@ -1205,6 +1214,9 @@ class ChatbotUI(QWidget):
             self.statusBar.showMessage(f"Error processing message: {str(e)}", 5000)
             
     def _complete_message_processing(self, user_message):
+        if user_message is None:
+            user_message = ""
+        print(f"[NARRATOR] Executing narrator post for user message: '{user_message[:50]}{'...' if len(user_message) > 50 else ''}'")
         tab_data = self.get_current_tab_data()
         if tab_data is None:
             return
@@ -1240,13 +1252,13 @@ class ChatbotUI(QWidget):
                         print(f"Error adding game timestamp to user message: {e}")
             
             current_processing_character = "Narrator"
-            is_timer_triggered_action = ("INTERNAL_TIMER_" in user_message) or bool(tab_data.get('_timer_final_instruction'))
+            is_timer_triggered_action = (user_message and "INTERNAL_TIMER_" in user_message) or bool(tab_data.get('_timer_final_instruction'))
             if is_timer_triggered_action:
-                if "INTERNAL_TIMER_NARRATOR_ACTION" in user_message:
+                if user_message and "INTERNAL_TIMER_NARRATOR_ACTION" in user_message:
                     current_processing_character = "Narrator"
-                elif "INTERNAL_TIMER_ACTION_FOR_" in user_message:
+                elif user_message and "INTERNAL_TIMER_ACTION_FOR_" in user_message:
                     try:
-                        name_and_instruction_part = user_message.split("INTERNAL_TIMER_ACTION_FOR_", 1)[1]
+                        name_and_instruction_part = user_message.split("INTERNAL_TIMER_ACTION_FOR_", 1)[1] if user_message else ""
                         char_name_candidate = ""
                         if '(' in name_and_instruction_part:
                             char_name_candidate = name_and_instruction_part.split('(', 1)[0].strip()
@@ -1313,7 +1325,7 @@ class ChatbotUI(QWidget):
                         self._player_post_visibility_queue.clear()
                         break
 
-            if is_timer_triggered_action and "INTERNAL_TIMER_NARRATOR_ACTION" in user_message:
+            if is_timer_triggered_action and user_message and "INTERNAL_TIMER_NARRATOR_ACTION" in user_message:
                 self.character_name = "Narrator"
             context_for_llm = []
             final_system_prompt_content = ""
@@ -1435,7 +1447,7 @@ class ChatbotUI(QWidget):
                             setting_info_msg_content = f"(The current setting of the scene is: {setting_desc}"
                             connections_dict = setting_data.get('connections', {})
                             if connections_dict:
-                                conn_lines = [f"- {name}: {desc}" if desc else f"- {name}" for name, desc in connections_dict.items()]
+                                conn_lines = [f"- {desc}" if desc else f"- {name}" for name, desc in connections_dict.items()]
                                 if conn_lines:
                                     setting_info_msg_content += "\\\\nWays into and out of this scene and into other scenes are:\\\\n" + "\\\\n".join(conn_lines)
                             setting_info_msg_content += ")"
@@ -1468,7 +1480,7 @@ class ChatbotUI(QWidget):
             for msg in filtered_context:
                 if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene:
                     content = msg['content']
-                    if is_timer_triggered_action and "INTERNAL_TIMER_" in content and msg['role'] == 'user':
+                    if is_timer_triggered_action and content and "INTERNAL_TIMER_" in content and msg['role'] == 'user':
                         continue
                     if content and "Sorry, API error" in content:
                         continue
@@ -1483,7 +1495,7 @@ class ChatbotUI(QWidget):
             if is_timer_triggered_action:
                 has_player_user_message_this_scene = False
                 for hist_msg in reversed(history_to_add):
-                    if hist_msg.get('role') == 'user' and not hist_msg.get('content','').startswith('INTERNAL_TIMER_'):
+                    if hist_msg.get('role') == 'user' and hist_msg.get('content') and not hist_msg.get('content').startswith('INTERNAL_TIMER_'):
                         has_player_user_message_this_scene = True
                         break
                 if not has_player_user_message_this_scene:
@@ -1601,12 +1613,75 @@ class ChatbotUI(QWidget):
             return
         tab_data = self.get_current_tab_data()
         char_name = self.character_name if hasattr(self, 'character_name') else None
+        
+        print(f"\n[NARRATOR LLM RAW RESPONSE DEBUG] ===== RAW LLM OUTPUT FOR {char_name} =====")
+        print(f"[NARRATOR LLM RAW RESPONSE DEBUG] Raw response: '{message}'")
+        print(f"[NARRATOR LLM RAW RESPONSE DEBUG] Response type: {type(message)}")
+        print(f"[NARRATOR LLM RAW RESPONSE DEBUG] Response length: {len(str(message)) if message else 0}")
+        print(f"[NARRATOR LLM RAW RESPONSE DEBUG] ===== END RAW OUTPUT =====\n")
+        
         if char_name and isinstance(message, str):
             prefix = f"{char_name}:"
             if message.strip().startswith(prefix):
                 message = message.strip()[len(prefix):].lstrip()
         if isinstance(message, str):
             message = re.sub(r'<think>[\s\S]*?</think>', '', message, flags=re.IGNORECASE).strip()
+        
+        # Check for failure responses that indicate model issues
+        if isinstance(message, str) and any(message.strip().lower().startswith(failure_start) for failure_start in ['i\'m', 'sorry', 'ext']):
+            print(f"[NARRATOR FALLBACK] Detected failure response '{message}' for {char_name}, retrying with fallback models...")
+            if not tried_fallback1:
+                print("[NARRATOR FALLBACK] Retrying with fallback model 1...")
+                if current_context and current_context[-1].get('role') == 'assistant':
+                    current_context.pop()
+                self.inference_thread = InferenceThread(
+                    current_context,
+                    self.character_name,
+                    FALLBACK_MODEL_1,
+                    self.max_tokens,
+                    self.get_current_temperature()
+                )
+                self.inference_thread.result_signal.connect(lambda msg: self.handle_assistant_message(msg, tried_fallback1=True, tried_fallback2=False, tried_fallback3=False))
+                self.inference_thread.error_signal.connect(self.handle_inference_error)
+                self.inference_thread.finished.connect(self.on_inference_finished)
+                self.inference_thread.start()
+                return
+            elif not tried_fallback2:
+                print("[NARRATOR FALLBACK] Retrying with fallback model 2...")
+                if current_context and current_context[-1].get('role') == 'assistant':
+                    current_context.pop()
+                self.inference_thread = InferenceThread(
+                    current_context,
+                    self.character_name,
+                    FALLBACK_MODEL_2,
+                    self.max_tokens,
+                    self.get_current_temperature()
+                )
+                self.inference_thread.result_signal.connect(lambda msg: self.handle_assistant_message(msg, tried_fallback1=True, tried_fallback2=True, tried_fallback3=False))
+                self.inference_thread.error_signal.connect(self.handle_inference_error)
+                self.inference_thread.finished.connect(self.on_inference_finished)
+                self.inference_thread.start()
+                return
+            elif not tried_fallback3:
+                print("[NARRATOR FALLBACK] Retrying with fallback model 3...")
+                if current_context and current_context[-1].get('role') == 'assistant':
+                    current_context.pop()
+                self.inference_thread = InferenceThread(
+                    current_context,
+                    self.character_name,
+                    FALLBACK_MODEL_3,
+                    self.max_tokens,
+                    self.get_current_temperature()
+                )
+                self.inference_thread.result_signal.connect(lambda msg: self.handle_assistant_message(msg, tried_fallback1=True, tried_fallback2=True, tried_fallback3=True))
+                self.inference_thread.error_signal.connect(self.handle_inference_error)
+                self.inference_thread.finished.connect(self.on_inference_finished)
+                self.inference_thread.start()
+                return
+            else:
+                print("[NARRATOR FALLBACK] All fallback models failed, using error message")
+                message = f"{char_name} seems to be having trouble responding right now."
+        
         if not message.strip() or message.strip().lower().startswith("i'm sorry"):
             if not tried_fallback1:
                 print("LLM refusal or empty response detected, retrying with fallback model 1...")
@@ -1657,12 +1732,20 @@ class ChatbotUI(QWidget):
                 self.inference_thread.start()
                 return
         self._assistant_message_buffer = message
+        self._current_llm_reply = message
         tab_data = self.get_current_tab_data()
         if tab_data and tab_data.get('_is_force_narrator_first_active', False):
             self._finalize_assistant_message()
         elif tab_data and 'thought_rules' in tab_data and tab_data['thought_rules']:
             self._cot_next_step = lambda: self._finalize_assistant_message()
             user_msg_for_post = self._last_user_msg_for_post_rules if self._last_user_msg_for_post_rules else ""
+            try:
+                dbg_widget = tab_data.get('debug_rules_widget')
+                if dbg_widget and hasattr(dbg_widget, 'append_post'):
+                    char_name = self.character_name if (self.character_name and str(self.character_name).strip().lower() != 'narrator') else None
+                    dbg_widget.append_post('assistant', message, char_name)
+            except Exception:
+                pass
             QTimer.singleShot(0, lambda: self._apply_chain_of_thought_rules_post(user_msg_for_post, message))
         else:
             self._finalize_assistant_message()
@@ -1742,6 +1825,14 @@ class ChatbotUI(QWidget):
             narrator_post_effects = {}
             if hasattr(self, '_narrator_post_effects'):
                 narrator_post_effects = self._narrator_post_effects.copy()
+            try:
+                tab_data = self.get_current_tab_data()
+                if tab_data and tab_data.pop('_fade_in_before_next_narrator', False):
+                    fade_overlay = tab_data.get('scene_fade_overlay')
+                    if fade_overlay:
+                        fade_overlay.fade_in(duration_in=880)
+            except Exception:
+                pass
             narrator_msg_widget = self.display_message('assistant', message, text_tag=text_tag_to_use, post_effects=narrator_post_effects)
             if self.return3_sound: self.return3_sound.play()
             message_obj = {"role": "assistant", "content": message}
@@ -1971,14 +2062,40 @@ class ChatbotUI(QWidget):
             QTimer.singleShot(200, lambda: self._apply_chain_of_thought_rules_pre(current_user_msg, prev_assistant_msg))
             return
         tab_data = self.get_current_tab_data()
+        if tab_data:
+            eor_turn = tab_data.get('_end_of_round_rules_processed_for_turn')
+            current_turn = tab_data.get('turn_count', 1)
+            if eor_turn != current_turn:
+                rules_all = tab_data.get('thought_rules', [])
+                end_of_round_rules = [r for r in rules_all if r.get('applies_to') == 'End of Round']
+                if end_of_round_rules:
+                    tab_data['_end_of_round_rules_processed_for_turn'] = current_turn
+                    current_context = self.get_current_context()
+                    user_msg_ctx = ""
+                    assistant_msg_ctx = ""
+                    if current_context and len(current_context) >= 2:
+                        user_msg_ctx = current_context[-2].get('content', '') if current_context[-2].get('role') == 'user' else ""
+                        assistant_msg_ctx = current_context[-1].get('content', '') if current_context[-1].get('role') == 'assistant' else ""
+                    self._is_processing_eor = True
+                    def after_eor():
+                        self._is_processing_eor = False
+                        self._apply_chain_of_thought_rules_pre(current_user_msg, prev_assistant_msg)
+                    self._cot_next_step = after_eor
+                    from rules.rule_evaluator import _process_next_sequential_rule_pre
+                    self._cot_sequential_index = 0
+                    QTimer.singleShot(0, lambda: _process_next_sequential_rule_pre(self, user_msg_ctx, assistant_msg_ctx, end_of_round_rules))
+                    return
         if not tab_data or 'thought_rules' not in tab_data or not tab_data['thought_rules']:
             if hasattr(self, '_cot_next_step') and self._cot_next_step:
                 QTimer.singleShot(0, self._cot_next_step)
                 self._cot_next_step = None
             return
         rules = tab_data['thought_rules']
+        print(f"[DEBUG] Loaded {len(rules)} total rules from thought_rules")
         post_inference_scopes = ['llm_reply', 'convo_llm_reply']
         pre_rules = [rule for rule in rules if rule.get('scope') not in post_inference_scopes and rule.get('applies_to') != 'End of Round']
+        print(f"[DEBUG] Filtered to {len(pre_rules)} pre-phase rules (excluding post-inference and End of Round)")
+        print(f"[DEBUG] Pre-phase rule IDs: {[rule.get('id', 'Unknown') for rule in pre_rules]}")
 
         if not pre_rules:
             if hasattr(self, '_cot_next_step') and self._cot_next_step:
@@ -1998,6 +2115,12 @@ class ChatbotUI(QWidget):
         else:
             if hasattr(self, '_timer_system_modifications'):
                 self._cot_system_modifications = self._timer_system_modifications.copy()
+        try:
+            dbg_widget = tab_data.get('debug_rules_widget')
+            if dbg_widget and hasattr(dbg_widget, 'append_post'):
+                dbg_widget.append_post('user', current_user_msg, None)
+        except Exception:
+            pass
         from rules.rule_evaluator import _process_next_sequential_rule_pre
         _process_next_sequential_rule_pre(self, current_user_msg, prev_assistant_msg, pre_rules)
 
@@ -2020,6 +2143,12 @@ class ChatbotUI(QWidget):
             return
         self._cot_rule_triggered_post = False
         self._cot_sequential_index = 0
+        try:
+            dbg_widget = tab_data.get('debug_rules_widget')
+            if dbg_widget and hasattr(dbg_widget, 'append_post'):
+                dbg_widget.append_post('assistant', assistant_message, None)
+        except Exception:
+            pass
         self._process_next_sequential_rule_post(current_user_msg, assistant_message, post_rules)
 
     def _handle_rule_error(self, error, rule, rule_index, current_user_msg, prev_assistant_msg, rules, triggered_directly=False, is_post_phase=False, tried_fallback1=False, tried_fallback2=False, tried_fallback3=False, character_name_for_rule_context=None):
@@ -2048,6 +2177,7 @@ class ChatbotUI(QWidget):
             tab_data = self.get_current_tab_data()
             if not tab_data:
                  return None
+            
             if tab_data.get('pending_scene_update', False) and role == 'assistant':
                 output_widget.clear_messages()
                 tab_data['pending_scene_update'] = False
@@ -2056,6 +2186,16 @@ class ChatbotUI(QWidget):
             name_for_widget = character_name if character_name is not None else self.character_name
             if role == 'user':
                 name_for_widget = None
+            
+            # Load portrait data for assistant messages
+            portrait_data = None
+            if role == 'assistant' and name_for_widget and name_for_widget.strip().lower() != 'narrator':
+                workflow_data_dir = tab_data.get('workflow_data_dir')
+                if workflow_data_dir:
+                    actor_data, actor_path = _get_or_create_actor_data(self, workflow_data_dir, name_for_widget)
+                    if actor_data:
+                        portrait_data = actor_data.get('portrait', {})
+            
             message_widget = output_widget.add_message(
                 role, 
                 content, 
@@ -2063,7 +2203,8 @@ class ChatbotUI(QWidget):
                 scene_number=current_scene, 
                 latest_scene_in_context=latest_scene_in_context,
                 character_name=name_for_widget,
-                post_effects=post_effects
+                post_effects=post_effects,
+                portrait_data=portrait_data
             )
             return message_widget
         else:
@@ -2079,21 +2220,25 @@ class ChatbotUI(QWidget):
 
     def get_current_model(self):
         tab_data = self.get_current_tab_data()
-        if tab_data and 'settings' in tab_data and 'model' in tab_data['settings']:
-            model_path = tab_data['settings'].get('model')
-            if model_path:
-                return model_path.strip()
-        print(f"[WARN] Could not get model from tab {self.current_tab_index} settings, returning default: {get_default_model()}")
-        return get_default_model()
+        if tab_data:
+            if 'settings' in tab_data:
+                if 'model' in tab_data['settings']:
+                    model_path = tab_data['settings'].get('model')
+                    if model_path:
+                        return model_path.strip()
+        default_model = get_default_model()
+        return default_model
 
     def get_current_cot_model(self):
         tab_data = self.get_current_tab_data()
-        if tab_data and 'settings' in tab_data and 'cot_model' in tab_data['settings']:
-            model_path = tab_data['settings'].get('cot_model')
-            if model_path:
-                return model_path.strip()
-        print(f"[WARN] Could not get CoT model from tab {self.current_tab_index} settings, returning default: {get_default_cot_model()}")
-        return get_default_cot_model()
+        if tab_data:
+            if 'settings' in tab_data:
+                if 'cot_model' in tab_data['settings']:
+                    model_path = tab_data['settings'].get('cot_model')
+                    if model_path:
+                        return model_path.strip()
+        default_cot_model = get_default_cot_model()
+        return default_cot_model
 
     def get_current_temperature(self):
         tab_data = self.get_current_tab_data()
@@ -2395,7 +2540,6 @@ class ChatbotUI(QWidget):
         character_name = None
         if cond.get('applies_to') == 'Character' or ('variable_scope' in cond and cond.get('variable_scope') == 'Character') or ('var_scope' in cond and cond.get('var_scope') == 'Character'):
             character_name = cond.get('character_name')
-            print(f"  Evaluating condition for character: {character_name}")
         if ctype == 'None':
             if triggered_directly:
                 print(f"  Condition type is 'None' but rule was triggered directly. Treating as TRUE.")
@@ -2409,7 +2553,8 @@ class ChatbotUI(QWidget):
             original_value = cond.get('value', '')
             substituted_value = self._substitute_placeholders_in_condition_value(original_value, tab_data, character_name)
             cond['value'] = substituted_value
-            return self._evaluate_variable_condition(tab_data, cond, character_name)
+            result = self._evaluate_variable_condition(tab_data, cond, character_name)
+            return result
         elif ctype == 'Scene Count':
             operator = cond.get('operator', '==')
             target_value = cond.get('value')
@@ -2511,7 +2656,6 @@ class ChatbotUI(QWidget):
                 return result
             elif ctype == 'Location':
                 result = norm(current_location) == target_name
-                print(f"  Evaluating Location: Current='{current_location}' Target='{cond.get('geography_name','')}' => {result}")
                 return result
             elif ctype == 'Region':
                 result = norm(current_region) == target_name
@@ -2521,6 +2665,72 @@ class ChatbotUI(QWidget):
                 result = norm(current_world) == target_name
                 print(f"  Evaluating World: Current='{current_world}' Target='{cond.get('geography_name','')}' => {result}")
                 return result
+        elif ctype == 'Is Exterior':
+            workflow_data_dir = tab_data.get('workflow_data_dir')
+            if not workflow_data_dir:
+                return False
+            current_setting = _get_player_current_setting_name(workflow_data_dir)
+            setting_file, _ = _find_setting_file_prioritizing_game_dir(self, workflow_data_dir, current_setting)
+            if not setting_file or not os.path.isfile(setting_file):
+                return False
+            try:
+                setting_data = _load_json_safely(setting_file)
+                is_exterior_flag = bool(setting_data.get('exterior', False))
+                desired = str(cond.get('value', 'True')).strip().lower() in ('true','1','yes')
+                result = (is_exterior_flag == desired)
+                print(f"  Evaluating Is Exterior: Current={is_exterior_flag}, Target={desired} => {result}")
+                return result
+            except Exception:
+                return False
+        elif ctype == 'Post Dialogue':
+            from core.utils import detect_dialogue_in_text
+            
+            post_type = cond.get('post_type', 'Player Post')
+            operator = cond.get('operator', 'Is')
+            dialogue_amount = cond.get('dialogue_amount', 'All Dialogue')
+            
+            post_text = ""
+            if post_type == 'Current Post':
+                if hasattr(self, '_current_llm_reply') and self._current_llm_reply:
+                    post_text = self._current_llm_reply
+                else:
+                    print(f"  Warning: Current Post not available for Post Dialogue condition. Evaluating as False.")
+                    return False
+            else:
+                conversation_history = tab_data.get('context', [])
+                if conversation_history:
+                    for msg in reversed(conversation_history):
+                        if msg.get('role') == 'user':
+                            post_text = msg.get('content', '')
+                            break
+                if not post_text:
+                    print(f"  Warning: No user message found for Post Dialogue condition. Evaluating as False.")
+                    return False
+            
+            dialogue_result = detect_dialogue_in_text(post_text)
+            
+            base_result = False
+            if dialogue_amount == 'All Dialogue':
+                base_result = dialogue_result['all_dialogue']
+            elif dialogue_amount == 'Some Dialogue':
+                base_result = dialogue_result['some_dialogue']
+            elif dialogue_amount == 'No Dialogue':
+                base_result = not dialogue_result['has_dialogue']
+            else:
+                print(f"  Warning: Unknown dialogue amount '{dialogue_amount}' for Post Dialogue condition. Evaluating as False.")
+                return False
+            
+            if operator == 'Not':
+                final_result = not base_result
+            else:
+                final_result = base_result
+            
+            if hasattr(self, '_debug_transit_conditions'):
+                try:
+                    print(f"[TRANSIT] Post Dialogue: has={dialogue_result['has_dialogue']}, all={dialogue_result['all_dialogue']}, op='{operator}', amount='{dialogue_amount}' => {final_result}")
+                except Exception:
+                    pass
+            return final_result
         print(f"  Warning: Unknown condition type '{ctype}'. Evaluating as False.") # Added warning
         return False
 
@@ -2537,27 +2747,30 @@ class ChatbotUI(QWidget):
         matched_pair = None
         for pair in tag_action_pairs:
             tag = pair.get('tag', '').strip()
-            print(f"  Checking pair with tag: '{tag}'")
             if not tag:
                 found_tag = True
                 matched_pair = pair
-                print(f"✓ FOUND TAG (empty tag): Automatically matched. LLM said: '{result}'")
                 break
             elif tag.lower() == result.lower():
                 found_tag = True
                 matched_pair = pair
-                print(f"✓ FOUND TAG (exact match): '{tag}' in LLM result: '{result}'")
                 break
             elif result.lower().startswith(tag.lower()):
                 found_tag = True
                 matched_pair = pair
-                print(f"✓ FOUND TAG (at start): '{tag}' in LLM result: '{result}'")
                 break
             elif tag.lower() in result.lower():
                 found_tag = True
                 matched_pair = pair
-                print(f"✓ FOUND TAG (contained): '{tag}' in LLM result: '{result}'")
                 break
+        try:
+            dbg_widget = tab_data.get('debug_rules_widget')
+            if dbg_widget and hasattr(dbg_widget, 'on_rule_answer'):
+                dbg_widget.on_rule_answer(rule, result, (matched_pair.get('tag') if matched_pair else None))
+        except Exception:
+            pass
+        if rule.get('id') in ('CORE-SceneTransitDistant', 'CORE-SceneTransitAdjacent'):
+            print(f"[TRANSIT] Tag matched for '{rule.get('id')}': {found_tag} -> tag='{(matched_pair.get('tag') if matched_pair else None)}'")
         if not found_tag:
             if (hasattr(self, '_character_llm_reply_rule_complete_callback') and 
                 self._character_llm_reply_rule_complete_callback and
@@ -2577,7 +2790,17 @@ class ChatbotUI(QWidget):
                     self._cot_next_step = None
             return
         if found_tag and matched_pair:
-            _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, current_user_msg, prev_assistant_msg, rules, triggered_directly, is_post_phase, character_name_for_rule_context=character_name_for_rule_context)
+            actions_completed = _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, current_user_msg, prev_assistant_msg, rules, triggered_directly, is_post_phase, character_name_for_rule_context=character_name_for_rule_context)
+            if not actions_completed:
+                print(f"[TRANSIT] Rule '{rule.get('id', 'Unknown')}' actions were aborted due to failed move - skipping subsequent processing")
+                if (hasattr(self, '_character_llm_reply_rule_complete_callback') and 
+                    self._character_llm_reply_rule_complete_callback and
+                    rule.get('applies_to') == 'Character' and 
+                    character_name_for_rule_context):
+                    callback = self._character_llm_reply_rule_complete_callback
+                    self._character_llm_reply_rule_complete_callback = None
+                    QTimer.singleShot(0, callback)
+                return
             if (hasattr(self, '_character_llm_reply_rule_complete_callback') and 
                 self._character_llm_reply_rule_complete_callback and
                 rule.get('applies_to') == 'Character' and 
@@ -2630,6 +2853,7 @@ class ChatbotUI(QWidget):
         if workflow_data_dir:
             game_settings_dir = os.path.join(workflow_data_dir, 'game', 'settings')
             game_actors_dir = os.path.join(workflow_data_dir, 'game', 'actors')
+            game_generators_dir = os.path.join(workflow_data_dir, 'game', 'generators')
             try:
                 if os.path.isdir(game_settings_dir):
                     shutil.rmtree(game_settings_dir)
@@ -2646,6 +2870,14 @@ class ChatbotUI(QWidget):
                     print(f"  Directory not found, skipping removal: {game_actors_dir}")
             except Exception as e:
                 print(f"  Error removing directory {game_actors_dir}: {e}")
+            try:
+                if os.path.isdir(game_generators_dir):
+                    shutil.rmtree(game_generators_dir)
+                    print(f"  Removed directory: {game_generators_dir}")
+                else:
+                    print(f"  Directory not found, skipping removal: {game_generators_dir}")
+            except Exception as e:
+                print(f"  Error removing directory {game_generators_dir}: {e}")
         output_widget = tab_data.get('output')
         context_file = tab_data.get('context_file')
         log_file = tab_data.get('log_file')
@@ -2768,12 +3000,12 @@ p, li { white-space: pre-wrap; }
                 for effect in tab_effects.values():
                     if hasattr(effect, 'timer') and effect.timer.isActive():
                         effect.timer.stop()
-                    if hasattr(effect, 'anim'):
+                    if hasattr(effect, 'anim') and effect.anim is not None:
                         try:
                             if effect.anim.state() == QPropertyAnimation.Running:
                                 effect.anim.stop()
                         except Exception as e:
-                            print(f"Error stopping animation: {e}")
+                            pass
         if hasattr(self, 'timer_manager'):
             for i in range(self.tab_widget.count() - 2):
                 if i < len(self.tabs_data) and self.tabs_data[i] is not None:
@@ -2790,7 +3022,7 @@ p, li { white-space: pre-wrap; }
         settings = QSettings("ChatBotRPG", "ChatBotRPG")
         settings.setValue("geometry", self.saveGeometry())
         save_tabs_state(self)
-        print(f"Saving data for {self.tab_widget.count() - 2} regular tabs before closing...")
+
         for i in range(self.tab_widget.count() - 2):
             self._save_context_for_tab(i)
             tab_data = self.tabs_data[i]
@@ -2798,18 +3030,18 @@ p, li { white-space: pre-wrap; }
                 if 'notes_manager_widget' in tab_data and tab_data['notes_manager_widget']:
                     tab_data['notes_manager_widget'].force_save()
                 self._save_tab_settings(i)
-        print("Attempting to delete deferred items...")
+
         if hasattr(self, 'files_to_delete_on_exit') and self.files_to_delete_on_exit:
-            print(f"  Found {len(self.files_to_delete_on_exit)} file(s) scheduled for deletion:")
+
             for p in self.files_to_delete_on_exit: print(f"    - {p}")
             successful_deletes = 0
             failed_deletes = []
             for file_path in self.files_to_delete_on_exit:
-                print(f"  Attempting to delete: {file_path}")
+
                 if os.path.exists(file_path):
                     try:
                         os.remove(file_path)
-                        print(f"    Successfully deleted: {os.path.basename(file_path)}")
+
                         successful_deletes += 1
                     except OSError as del_err:
                         print(f"    ERROR deleting deferred file {os.path.basename(file_path)}: {del_err}")
@@ -2819,7 +3051,7 @@ p, li { white-space: pre-wrap; }
                     successful_deletes += 1
             if not failed_deletes:
                 self.files_to_delete_on_exit = []
-                print("Cleared deferred deletion list.")
+        
             else:
                 self.files_to_delete_on_exit = []
         else:
@@ -2831,6 +3063,11 @@ p, li { white-space: pre-wrap; }
         variable = variable_condition.get('variable', '')
         operator = variable_condition.get('operator', '==')
         value = variable_condition.get('value', '')
+        if hasattr(self, '_debug_transit_conditions'):
+            try:
+                print(f"[TRANSIT] Variable condition: scope='{variable_scope}', var='{variable}', op='{operator}', target='{value}'")
+            except Exception:
+                pass
         if not variable:
             return False
         variables = {}
@@ -2923,16 +3160,30 @@ p, li { white-space: pre-wrap; }
                     print(f"ERROR: Could not load variables: {e}")
         if operator == "exists":
             result = variable in variables
+            if hasattr(self, '_debug_transit_conditions'):
+                print(f"[TRANSIT] Variable exists check: var='{variable}' => {result}")
             return result
         elif operator == "not exists":
             result = variable not in variables
+            if hasattr(self, '_debug_transit_conditions'):
+                print(f"[TRANSIT] Variable not exists check: var='{variable}' => {result}")
             return result
         var_val = variables.get(variable)
+        if hasattr(self, '_debug_transit_conditions'):
+            try:
+                print(f"[TRANSIT] Variable read: scope='{variable_scope}', var='{variable}', value='{var_val}'")
+            except Exception:
+                pass
         if var_val is None:
             if operator == "!=":
-                return True
+                res = True
+                if hasattr(self, '_debug_transit_conditions'):
+                    print(f"[TRANSIT] Compare (None != {value}) => {res}")
+                return res
             elif operator == "==":
                  is_target_none = value is None or value == ""
+                 if hasattr(self, '_debug_transit_conditions'):
+                     print(f"[TRANSIT] Compare (None == {value}) => {is_target_none}")
                  return is_target_none
             else:
                 return False
@@ -2956,38 +3207,58 @@ p, li { white-space: pre-wrap; }
         if operator == "==":
             if isinstance(var_val_converted, (int, float)) and isinstance(value_converted, (int, float)):
                 result = var_val_converted == value_converted
+                if hasattr(self, '_debug_transit_conditions'):
+                    print(f"[TRANSIT] Compare numbers: {var_val_converted} == {value_converted} => {result}")
                 return result
             else:
                 var_val_str = str(var_val_converted).strip().lower()
                 value_str = str(value_converted).strip().lower()
                 result = var_val_str == value_str
+                if hasattr(self, '_debug_transit_conditions'):
+                    print(f"[TRANSIT] Compare strings: '{var_val_str}' == '{value_str}' => {result}")
                 return result
         elif operator == "!=":
             if isinstance(var_val_converted, (int, float)) and isinstance(value_converted, (int, float)):
                 result = var_val_converted != value_converted
+                if hasattr(self, '_debug_transit_conditions'):
+                    print(f"[TRANSIT] Compare numbers: {var_val_converted} != {value_converted} => {result}")
                 return result
             else:
                 var_val_str = str(var_val_converted).strip().lower()
                 value_str = str(value_converted).strip().lower()
                 result = var_val_str != value_str
+                if hasattr(self, '_debug_transit_conditions'):
+                    print(f"[TRANSIT] Compare strings: '{var_val_str}' != '{value_str}' => {result}")
                 return result
         elif operator == ">":
             result = var_val_converted > value_converted if isinstance(var_val_converted, (int, float)) and isinstance(value_converted, (int, float)) else False
+            if hasattr(self, '_debug_transit_conditions'):
+                print(f"[TRANSIT] Compare: {var_val_converted} > {value_converted} => {result}")
             return result
         elif operator == "<":
             result = var_val_converted < value_converted if isinstance(var_val_converted, (int, float)) and isinstance(value_converted, (int, float)) else False
+            if hasattr(self, '_debug_transit_conditions'):
+                print(f"[TRANSIT] Compare: {var_val_converted} < {value_converted} => {result}")
             return result
         elif operator == ">=":
             result = var_val_converted >= value_converted if isinstance(var_val_converted, (int, float)) and isinstance(value_converted, (int, float)) else False
+            if hasattr(self, '_debug_transit_conditions'):
+                print(f"[TRANSIT] Compare: {var_val_converted} >= {value_converted} => {result}")
             return result
         elif operator == "<=":
             result = var_val_converted <= value_converted if isinstance(var_val_converted, (int, float)) and isinstance(value_converted, (int, float)) else False
+            if hasattr(self, '_debug_transit_conditions'):
+                print(f"[TRANSIT] Compare: {var_val_converted} <= {value_converted} => {result}")
             return result
         elif operator == "contains":
             result = str(value_converted).lower() in str(var_val_converted).lower()
+            if hasattr(self, '_debug_transit_conditions'):
+                print(f"[TRANSIT] Contains: '{value_converted}' in '{var_val_converted}' => {result}")
             return result
         elif operator == "not contains":
             result = str(value_converted).lower() not in str(var_val_converted).lower()
+            if hasattr(self, '_debug_transit_conditions'):
+                print(f"[TRANSIT] Not contains: '{value_converted}' in '{var_val_converted}' => {result}")
             return result
         return False
 
@@ -3061,7 +3332,11 @@ p, li { white-space: pre-wrap; }
             crt_enabled = theme_settings.get("crt_enabled", True)
             crt_speed = theme_settings.get("crt_speed", 160)
             crt_overlay.setVisible(crt_enabled)
-            crt_overlay.setInterval(crt_speed)
+            try:
+                if hasattr(crt_overlay, 'setInterval'):
+                    crt_overlay.setInterval(crt_speed)
+            except Exception:
+                pass
             if crt_enabled:
                 pass
             else:
@@ -3232,13 +3507,7 @@ p, li { white-space: pre-wrap; }
                             right_splitter.setVisible(False)
 
     def run_utility_inference_sync(self, context, model, max_tokens, temperature=0.7):
-        print("--- [Context for Utility LLM (Sync)] ---")
-        try:
-            print(json.dumps(context, indent=2))
-        except Exception as json_e:
-            print(f"    (Could not json dump context: {json_e})")
-            print(context)
-        print("--- [End Context for Utility LLM (Sync)] ---")
+        print(f"--- [Model: {model}] ---")
 
         thread = UtilityInferenceThread(
             chatbot_ui_instance=self,
@@ -3257,55 +3526,71 @@ p, li { white-space: pre-wrap; }
 
     def _make_api_call_sync(self, api_key, base_url, model_name, messages, max_tokens, temperature):
         current_service = get_current_service()
-        
         if current_service == "google":
-            try:
-                from google import genai
-                client = genai.Client(api_key=api_key)
-                
-                formatted_messages = []
-                for msg in messages:
-                    role = msg.get('role', 'user')
-                    content = msg.get('content', '')
-                    
-                    if role == 'system':
-                        formatted_messages.append(genai.types.Content(role='user', parts=[genai.types.Part(text=f"[SYSTEM] {content}")]))
-                    elif role == 'user':
-                        formatted_messages.append(genai.types.Content(role='user', parts=[genai.types.Part(text=content)]))
-                    elif role == 'assistant':
-                        formatted_messages.append(genai.types.Content(role='model', parts=[genai.types.Part(text=content)]))
-                
-                converted_model_name = model_name[7:] if model_name.startswith("google/") else model_name
-                
-                config = genai.types.GenerateContentConfig(
-                    max_output_tokens=max_tokens,
-                    temperature=temperature,
-                    top_p=0.95
-                )
-                
-                response = client.models.generate_content(
-                    model=converted_model_name,
-                    contents=formatted_messages,
-                    config=config
-                )
-                
-                if response and response.candidates:
-                    candidate = response.candidates[0]
-                    if candidate.content and candidate.content.parts:
-                        return candidate.content.parts[0].text
-                
-                return ""
-            except ImportError:
-                print("[ERROR] google-genai package not installed. Please install it with 'pip install google-genai'")
-                return None
-            except Exception as e:
-                print(f"[ERROR] Google GenAI synchronous request failed: {e}")
-                return None
-        
+            fallback_models = [FALLBACK_MODEL_1, FALLBACK_MODEL_2, FALLBACK_MODEL_3]
+            models_to_try = [model_name] + fallback_models
+            for attempt, current_model in enumerate(models_to_try):
+                try:
+                    from google import genai
+                    client = genai.Client(api_key=api_key)
+                    formatted_messages = []
+                    for msg in messages:
+                        role = msg.get('role', 'user')
+                        content = msg.get('content', '')
+                        if role == 'system':
+                            formatted_messages.append(genai.types.Content(role='user', parts=[genai.types.Part(text=f"[SYSTEM] {content}")]))
+                        elif role == 'user':
+                            formatted_messages.append(genai.types.Content(role='user', parts=[genai.types.Part(text=content)]))
+                        elif role == 'assistant':
+                            formatted_messages.append(genai.types.Content(role='model', parts=[genai.types.Part(text=content)]))
+                    converted_model_name = current_model[7:] if current_model.startswith("google/") else current_model
+                    config = genai.types.GenerateContentConfig(
+                        max_output_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=0.95
+                    )
+                    response = client.models.generate_content(
+                        model=converted_model_name,
+                        contents=formatted_messages,
+                        config=config
+                    )
+                    if response and response.candidates:
+                        candidate = response.candidates[0]
+                        if candidate.content and candidate.content.parts:
+                            content = candidate.content.parts[0].text
+                            if content and any(refusal in content.strip().lower()[:20] for refusal in [
+                                "i'm sorry", "sorry", "error", "i cannot", "i can't", "i am unable", 
+                                "i don't", "i do not", "i won't", "i will not", "i refuse", "i cannot help",
+                                "i'm unable", "i am sorry", "i apologize", "i cannot provide", "i cannot assist"
+                            ]):
+                                if attempt == len(models_to_try) - 1:
+                                    print(f"[REFUSAL] All Google models refused. Final response: {content[:100]}...")
+                                    return content
+                                else:
+                                    print(f"[REFUSAL] Google model '{current_model}' refused with: {content[:100]}...")
+                                    print(f"[FALLBACK] Trying next Google model due to refusal...")
+                                    continue
+                            if attempt > 0:
+                                print(f"[FALLBACK] Successfully used fallback Google model: {current_model}")
+                            return content
+                    return ""
+                except ImportError:
+                    print("[ERROR] google-genai package not installed. Please install it with 'pip install google-genai'")
+                    return None
+                except Exception as e:
+                    error_msg = str(e)
+                    if attempt == 0:
+                        print(f"[ERROR] Primary Google model '{model_name}' failed: {error_msg}")
+                        print("[FALLBACK] Trying fallback Google models...")
+                    else:
+                        print(f"[FALLBACK] Google model '{current_model}' failed: {error_msg}")
+                    if attempt == len(models_to_try) - 1:
+                        print(f"[ERROR] All Google models failed. Last error: {error_msg}")
+                        return None
+                    continue
         headers = {
             "Content-Type": "application/json",
         }
-        
         if current_service == "openrouter":
             headers["Authorization"] = f"Bearer {api_key}"
             headers["HTTP-Referer"] = "https://github.com/your-repo/your-project"
@@ -3313,37 +3598,77 @@ p, li { white-space: pre-wrap; }
         elif current_service == "local":
             if api_key and api_key != "local":
                 headers["Authorization"] = f"Bearer {api_key}"
-        
-        data = {
-             "model": model_name,
-             "messages": messages,
-             "max_tokens": max_tokens,
-             "temperature": temperature,
-             "top_p": 0.95,
-        }
-        base_url_clean = base_url
-        if base_url_clean.endswith('/'):
-            base_url_clean = base_url_clean.rstrip('/')
-        actual_url = f"{base_url_clean}/chat/completions"
-        try:
-            import requests 
-            response = requests.post(actual_url, headers=headers, json=data, timeout=60)
-            response.raise_for_status()
-            response_data = response.json()
-            choices = response_data.get('choices', [])
-            if choices:
-                message = choices[0].get('message', {})
-                return message.get('content', '')
-            return ""
-        except ImportError:
-             print("[ERROR] `requests` library not installed. Cannot make synchronous API call.")
-             return None
-        except requests.exceptions.RequestException as e:
-            print(f"[ERROR] Synchronous API request failed: {e}")
-            return None
-        except Exception as e:
-            print(f"[ERROR] Failed to process synchronous API response: {e}")
-            return None
+        fallback_models = [FALLBACK_MODEL_1, FALLBACK_MODEL_2, FALLBACK_MODEL_3]
+        models_to_try = [model_name] + fallback_models
+        for attempt, current_model in enumerate(models_to_try):
+            data = {
+                 "model": current_model,
+                 "messages": messages,
+                 "max_tokens": max_tokens,
+                 "temperature": temperature,
+                 "top_p": 0.95,
+            }
+            base_url_clean = base_url
+            if base_url_clean.endswith('/'):
+                base_url_clean = base_url_clean.rstrip('/')
+            actual_url = f"{base_url_clean}/chat/completions"
+            try:
+                import requests 
+                response = requests.post(actual_url, headers=headers, json=data, timeout=60)
+                response.raise_for_status()
+                response_data = response.json()
+                choices = response_data.get('choices', [])
+                if choices:
+                    message = choices[0].get('message', {})
+                    content = message.get('content', '')
+                    if content and any(refusal in content.strip().lower()[:20] for refusal in [
+                        "i'm sorry", "sorry", "error", "i cannot", "i can't", "i am unable", 
+                        "i don't", "i do not", "i won't", "i will not", "i refuse", "i cannot help",
+                        "i'm unable", "i am sorry", "i apologize", "i cannot provide", "i cannot assist"
+                    ]):
+                        matched_refusal = None
+                        for refusal in ["i'm sorry", "sorry", "error", "i cannot", "i can't", "i am unable", 
+                                      "i don't", "i do not", "i won't", "i will not", "i refuse", "i cannot help",
+                                      "i'm unable", "i am sorry", "i apologize", "i cannot provide", "i cannot assist"]:
+                            if refusal in content.strip().lower()[:20]:
+                                matched_refusal = refusal
+                                break
+                        if attempt == len(models_to_try) - 1:
+                            print(f"[REFUSAL] All models refused. Final response: {content[:100]}...")
+                            return content
+                        else:
+                            print(f"[REFUSAL] Model '{current_model}' refused with pattern '{matched_refusal}': {content[:100]}...")
+                            print(f"[FALLBACK] Trying next model due to refusal...")
+                            continue
+                    if attempt > 0:
+                        print(f"[FALLBACK] Successfully used fallback model: {current_model}")
+                    return content
+                return ""
+            except ImportError:
+                print("[ERROR] `requests` library not installed. Cannot make synchronous API call.")
+                return None
+            except requests.exceptions.RequestException as e:
+                error_msg = str(e)
+                if attempt == 0:
+                    print(f"[ERROR] Primary model '{model_name}' failed: {error_msg}")
+                    if "429" in error_msg or "Too Many Requests" in error_msg:
+                        print("[FALLBACK] Rate limit exceeded, trying fallback models...")
+                    elif "400" in error_msg or "Bad Request" in error_msg:
+                        print("[FALLBACK] Bad request, trying fallback models...")
+                    else:
+                        print("[FALLBACK] Request failed, trying fallback models...")
+                else:
+                    print(f"[FALLBACK] Model '{current_model}' failed: {error_msg}")
+                if attempt == len(models_to_try) - 1:
+                    print(f"[ERROR] All models failed. Last error: {error_msg}")
+                    return None
+                continue
+            except Exception as e:
+                print(f"[ERROR] Failed to process synchronous API response: {e}")
+                if attempt == len(models_to_try) - 1:
+                    return None
+                continue
+        return None
 
     def _process_next_sequential_rule_post(self, current_user_msg, assistant_msg, rules):
         tab_data = self.get_current_tab_data()
@@ -3387,6 +3712,10 @@ p, li { white-space: pre-wrap; }
         timer_tab_id = str(tab_data.get('id', '')) if tab_data else ''
         if current_tab_id and timer_tab_id and current_tab_id != timer_tab_id:
             return
+        time_manager_widget = tab_data.get('time_manager_widget')
+        if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
+            time_manager_widget.update_time(self, tab_data)
+        
         actions = rule_data.get('actions', [])
         if not actions:
             return
@@ -3532,7 +3861,7 @@ p, li { white-space: pre-wrap; }
         )
         result_text = text_to_process
         if '(character)' in result_text.lower() and actor_name_context:
-            result_text = re.sub(r'\(character\)', actor_name_context, result_text, flags=re.IGNORECASE)
+            result_text = re.sub(r'(?<!\[)\(character\)(?![^,\]]*\])', actor_name_context, result_text, flags=re.IGNORECASE)
         if '(player)' in result_text.lower():
             workflow_data_dir = tab_data.get('workflow_data_dir') if tab_data else None
             if workflow_data_dir:
@@ -3631,7 +3960,9 @@ Brief note from {character_name}'s perspective:"""
             ]
             tab_data = self.get_current_tab_data()
             model = tab_data.get('settings', {}).get('model', get_default_model()) if tab_data else get_default_model()
+            print(f"[NPC NOTE DEBUG] Using model: {model}")
             generated_note = self.run_utility_inference_sync(note_context, model, 100)
+            print(f"[NPC NOTE DEBUG] Generated note: {generated_note[:100] if generated_note else 'None'}...")
             if generated_note and generated_note.strip():
                 note_content = generated_note.strip()
                 if note_content.startswith('"') and note_content.endswith('"'):
@@ -3730,13 +4061,11 @@ Brief note from {character_name}'s perspective:"""
                         setup_complete = True
                     elif not setup_complete or msg.get('role') == 'system':
                         new_context.append(msg)
-                # Filter conversation history by visibility for the current character
                 from core.utils import _filter_conversation_history_by_visibility
                 workflow_data_dir = tab_data.get('workflow_data_dir')
                 filtered_context = _filter_conversation_history_by_visibility(
                     full_history_context, character_name, workflow_data_dir, tab_data
                 )
-                
                 for msg in filtered_context:
                     if msg.get('role') != 'system' and msg.get('scene', 1) == current_scene:
                         content = msg['content']
@@ -3753,8 +4082,6 @@ Brief note from {character_name}'s perspective:"""
         except Exception as e:
             import traceback
             traceback.print_exc()
-
-
 
     def _cleanup_old_backup_files(self):
         try:
@@ -3787,7 +4114,7 @@ Brief note from {character_name}'s perspective:"""
             print(f"Error during backup file cleanup: {e}")
 
 def main():
-    QApplication.setApplicationName("Chatbot RPG | A Text Adventure Game")
+    QApplication.setApplicationName("Chatbot RPG | A Text Adventure Engine")
     app = QApplication(sys.argv)
     settings = QSettings("ChatBotRPG", "ChatBotRPG")
     splash = SplashScreen()
