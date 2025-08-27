@@ -9,6 +9,7 @@ import time
 import re
 import core.game_intro
 from core.theme_customizer import ThemeCustomizationDialog, update_ui_colors
+from core.music_manager import get_music_manager, cleanup_music_manager
 from core.tab_manager import TabManagerWidget, restore_tabs, save_tabs_state, remove_tab
 from core.make_inference import make_inference
 from core.add_tab import add_new_tab, get_default_tab_settings, update_top_splitter_location_text
@@ -150,6 +151,8 @@ class ChatbotUI(QWidget):
         self._is_maximized = False
         self.character_name = "Narrator"
         self.max_tokens = 8192
+        self._music_volume = 1.0
+        self._sfx_volume = 1.0
         self._save_timer = QTimer()
         self._save_timer.setSingleShot(True)
         self._save_timer.timeout.connect(self._perform_save_active_tab)
@@ -212,6 +215,16 @@ class ChatbotUI(QWidget):
         self._processing_npc_queue = False
         self.timer_manager = TimerManager(self)
         self.timer_manager.timer_action_signal.connect(self._handle_timer_fired)
+        print("[TIMER SIGNAL] Connected timer_action_signal to _handle_timer_fired")
+        # Initialize game music controller
+        try:
+            from core.game_music import get_game_music_controller
+            self._game_music = get_game_music_controller()
+        except Exception:
+            self._game_music = None
+        
+        QApplication.instance().aboutToQuit.connect(self._handle_application_quit)
+        self.setAttribute(Qt.WA_DeleteOnClose, True)
         if final_active_index >= 0 and final_active_index < len(self.tabs_data):
             active_tab_data = self.tabs_data[final_active_index]
             if active_tab_data:
@@ -241,6 +254,45 @@ class ChatbotUI(QWidget):
         self.start_effects_check_timer()
         self._input_disabled_for_pipeline = False
         self._allow_live_input_for_current_action = False
+        if final_active_index >= 0 and final_active_index < len(self.tabs_data):
+            QTimer.singleShot(1000, lambda: self._activate_startup_music(final_active_index))
+
+    def _activate_startup_music(self, tab_index):
+        """Activate game music on startup if tab is not in intro state"""
+        print(f"[STARTUP_MUSIC] Called for tab {tab_index}")
+        try:
+            if 0 <= tab_index < len(self.tabs_data):
+                tab_data = self.tabs_data[tab_index]
+                print(f"[STARTUP_MUSIC] Tab data exists: {tab_data is not None}")
+                print(f"[STARTUP_MUSIC] Is showing intro: {tab_data.get('_is_showing_intro', False) if tab_data else 'N/A'}")
+                
+                if tab_data and not tab_data.get('_is_showing_intro', False):
+                    print("[STARTUP_MUSIC] Conditions met, initializing controller")
+                    if not hasattr(self, '_game_music') or not self._game_music:
+                        from core.game_music import get_game_music_controller
+                        self._game_music = get_game_music_controller()
+                        print("[STARTUP_MUSIC] Created new controller")
+                    
+                    from core.game_music import get_game_music_controller
+                    controller = get_game_music_controller()
+                    print(f"[STARTUP_MUSIC] Got controller: {controller}")
+                    
+                    controller.activate_for_tab(self, tab_index)
+                    print("[STARTUP_MUSIC] Activated controller")
+                    
+                    print(f"[STARTUP_MUSIC] Music playing: {controller._music_manager.is_playing()}")
+                    if not controller._music_manager.is_playing():
+                        print("[STARTUP_MUSIC] No music playing, forcing evaluation")
+                        controller._evaluate_and_play_next()
+                        print("[STARTUP_MUSIC] Evaluation complete")
+                    else:
+                        print("[STARTUP_MUSIC] Music already playing, skipping")
+                else:
+                    print("[STARTUP_MUSIC] Conditions not met - either no tab_data or is_showing_intro=True")
+        except Exception as e:
+            print(f"[STARTUP_MUSIC] Error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _schedule_timer_checks(self):
         def comprehensive_timer_processing():
@@ -388,6 +440,7 @@ class ChatbotUI(QWidget):
             self.sort_sound = pygame.mixer.Sound('sounds/Sort.mp3')
             self.medium_click_sound = pygame.mixer.Sound('sounds/MediumClick.mp3')
             self.hover_message_sound = pygame.mixer.Sound('sounds/hoverMessage.mp3')
+            self._apply_sfx_volume()
         except pygame.error as e:
             print(f"Pygame sound error: {e}. Sounds disabled.")
             self.return1_sound = None
@@ -410,6 +463,30 @@ class ChatbotUI(QWidget):
             self.sort_sound = None
             self.medium_click_sound = None
             self.hover_message_sound = None
+
+    def _apply_sfx_volume(self):
+        try:
+            sfx_volume = getattr(self, '_sfx_volume', 1.0)
+            if hasattr(self, 'return1_sound') and self.return1_sound:
+                self.return1_sound.set_volume(sfx_volume)
+            if hasattr(self, 'return3_sound') and self.return3_sound:
+                self.return3_sound.set_volume(sfx_volume)
+            if hasattr(self, 'add_rule_sound') and self.add_rule_sound:
+                self.add_rule_sound.set_volume(sfx_volume)
+            if hasattr(self, 'update_rule_sound') and self.update_rule_sound:
+                self.update_rule_sound.set_volume(sfx_volume)
+            if hasattr(self, 'delete_rule_sound') and self.delete_rule_sound:
+                self.delete_rule_sound.set_volume(sfx_volume)
+            if hasattr(self, 'splash_sound') and self.splash_sound:
+                self.splash_sound.set_volume(sfx_volume)
+            if hasattr(self, 'sort_sound') and self.sort_sound:
+                self.sort_sound.set_volume(sfx_volume)
+            if hasattr(self, 'medium_click_sound') and self.medium_click_sound:
+                self.medium_click_sound.set_volume(sfx_volume)
+            if hasattr(self, 'hover_message_sound') and self.hover_message_sound:
+                self.hover_message_sound.set_volume(sfx_volume)
+        except Exception as e:
+            print(f"Error applying SFX volume: {e}")
 
     def initUI(self):
         layout = QVBoxLayout()
@@ -694,6 +771,12 @@ class ChatbotUI(QWidget):
                 chargen_widget = prev_tab_data.get('_chargen_widget')
                 if chargen_widget:
                     chargen_widget.setVisible(False)
+            
+            # Stop current music on tab switch so new tab can init their own
+            try:
+                self.stop_current_music()
+            except Exception as e:
+                print(f"Error stopping music when switching tabs: {e}")
         elif previous_index == index:
             return
         if 0 <= index < len(self.tabs_data) and self.tabs_data[index]:
@@ -727,7 +810,7 @@ class ChatbotUI(QWidget):
                  is_actively_showing_intro = tab_data.get('_is_showing_intro', False)
                  if current_input_field:
                      if is_actively_showing_intro:
-                         self._show_introduction(index) 
+                         pass 
                      elif current_input_field._current_state == 'chargen':
                          chargen_widget = tab_data.get('_chargen_widget')
                          if chargen_widget:
@@ -775,6 +858,22 @@ class ChatbotUI(QWidget):
                  
                  if current_input_field:
                      current_input_field.setFocus()
+                 if is_actively_showing_intro:
+                     try:
+                         from core.game_intro import _play_title_music_if_configured
+                         _play_title_music_if_configured(self, index)
+                     except Exception as e:
+                         print(f"Error starting title music for tab {index}: {e}")
+                 else:
+                     # Activate runtime music for gameplay when not in intro
+                     try:
+                         if hasattr(self, '_game_music') and self._game_music:
+                             from core.game_music import get_game_music_controller
+                             controller = get_game_music_controller()
+                             controller.activate_for_tab(self, index)
+                     except Exception as e:
+                         print(f"Error activating game music for tab {index}: {e}")
+                 
                  right_splitter_for_update = tab_data.get('right_splitter')
                  workflow_data_dir = tab_data.get('workflow_data_dir')
                  if (right_splitter_for_update and 
@@ -992,7 +1091,15 @@ class ChatbotUI(QWidget):
         tab_data['turn_count'] = assistant_message_count + 1
         if index == self.tab_widget.currentIndex():
             self._update_turn_counter_display()
-        show_intro = not loaded_context
+        # Only show intro if there's no conversation history AND the tab is configured for intro
+        # Don't automatically show intro just because there's no context
+        show_intro = False  # Default to not showing intro
+        if not loaded_context:
+            # Check if this tab is configured to show introduction
+            variables = self._load_variables(index)
+            if variables and variables.get('introduction_checked', False):
+                show_intro = True
+        
         tab_data['_is_showing_intro'] = show_intro
         current_scene_for_tab = tab_data.get('scene_number', 1)
         narrator_posted_in_current_scene_on_load = False
@@ -1015,7 +1122,6 @@ class ChatbotUI(QWidget):
             right_splitter = tab_data.get('right_splitter')
             if right_splitter:
                 right_splitter.setVisible(False)
-            self._show_introduction(index)
             if top_splitter:
                 if top_splitter.isVisible():
                     print("Warning: Top splitter became visible during intro - hiding again")
@@ -1831,6 +1937,10 @@ class ChatbotUI(QWidget):
                     fade_overlay = tab_data.get('scene_fade_overlay')
                     if fade_overlay:
                         fade_overlay.fade_in(duration_in=880)
+                        try:
+                            tab_data['_suppress_rule_screen_effects'] = False
+                        except Exception:
+                            pass
             except Exception:
                 pass
             narrator_msg_widget = self.display_message('assistant', message, text_tag=text_tag_to_use, post_effects=narrator_post_effects)
@@ -2908,7 +3018,11 @@ p, li { white-space: pre-wrap; }
         
         variables = self._load_variables(tab_index)
         if variables:
-            keys_to_keep = {'introduction_checked', 'introduction_title', 'introduction_text', 'introduction_description', 'introduction_messages', 'introduction_sequence', 'origin'}
+            keys_to_keep = {
+                'introduction_checked', 'introduction_title', 'introduction_text', 'introduction_description', 
+                'introduction_messages', 'introduction_sequence', 'origin', 'title_music_file',
+                'advancement_mode', 'time_multiplier', 'timemode', '_last_real_time_update', 'starting_datetime'
+            }
             persistent_variables = {k: v for k, v in variables.items() 
                                   if k.endswith('*') or k in keys_to_keep or k.startswith('introduction_')}
             removed_count = len(variables) - len(persistent_variables)
@@ -2958,6 +3072,12 @@ p, li { white-space: pre-wrap; }
             self.npc_inference_threads.clear()
         self._processing_npc_queue = False
         
+        # Initialize time from Intro Manager's starting datetime BEFORE clearing tab_data variables
+        time_manager_widget = tab_data.get('time_manager_widget')
+        if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
+            print("  Reset: Initializing time from Intro Manager settings")
+            time_manager_widget.update_time(self, tab_data)
+        
         if tab_data is not None:
             if 'variables' in tab_data:
                 tab_data['variables'] = {}
@@ -2990,6 +3110,21 @@ p, li { white-space: pre-wrap; }
             print(f"Unexpected error saving variables file {variables_file}: {e}")
 
     def closeEvent(self, event):
+        try:
+            self._cleanup_all_audio_managers()
+        except Exception as e:
+            print(f"Error cleaning up AudioManager instances: {e}")
+        
+        try:
+            import pygame
+            if pygame.mixer.get_init():
+                if pygame.mixer.music.get_busy():
+                    pygame.mixer.music.fadeout(500)
+                    pygame.mixer.music.stop()
+                pygame.mixer.quit()
+        except Exception as e:
+            print(f"Error cleaning up pygame mixer: {e}")
+        
         if hasattr(self, 'effects_check_timer') and self.effects_check_timer.isActive():
             self.effects_check_timer.stop()
         if hasattr(self, '_screen_effects'):
@@ -3015,6 +3150,11 @@ p, li { white-space: pre-wrap; }
                 if time_manager_widget and hasattr(time_manager_widget, 'save_state_on_shutdown'):
                     time_manager_widget.save_state_on_shutdown()
         print("Time state saved for all tabs")
+
+        try:
+            self._stop_all_music()
+        except Exception as e:
+            print(f"Error stopping music during shutdown: {e}")
 
         settings = QSettings("ChatBotRPG", "ChatBotRPG")
         settings.setValue("geometry", self.saveGeometry())
@@ -3709,12 +3849,15 @@ p, li { white-space: pre-wrap; }
             QTimer.singleShot(0, lambda: self._process_next_sequential_rule_post(current_user_msg, assistant_msg, rules))
 
     def _handle_timer_fired(self, timer_instance, rule_data, tab_data):
+        print(f"[TIMER FIRED] Timer '{rule_data.get('id', 'Unknown')}' fired for character '{timer_instance.character}'")
         current_tab_data = self.get_current_tab_data()
         if current_tab_data != tab_data:
+            print(f"[TIMER FIRED] Timer from inactive tab attempted to fire - BLOCKED")
             return
         current_tab_id = str(current_tab_data.get('id', '')) if current_tab_data else ''
         timer_tab_id = str(tab_data.get('id', '')) if tab_data else ''
         if current_tab_id and timer_tab_id and current_tab_id != timer_tab_id:
+            print(f"[TIMER FIRED] Tab ID mismatch - BLOCKED")
             return
         time_manager_widget = tab_data.get('time_manager_widget')
         if time_manager_widget and hasattr(time_manager_widget, 'update_time'):
@@ -3722,13 +3865,17 @@ p, li { white-space: pre-wrap; }
         
         actions = rule_data.get('actions', [])
         if not actions:
+            print(f"[TIMER FIRED] No actions defined for rule {rule_data.get('id', 'Unknown')}")
             return
+        print(f"[TIMER FIRED] Executing {len(actions)} actions for timer rule '{rule_data.get('id', 'Unknown')}'")
         self._execute_timer_actions_sequentially(rule_data, actions, 0, timer_instance.character, tab_data)
     
     def _execute_timer_actions_sequentially(self, rule_data, actions, index, character_name, tab_data):
         if index >= len(actions):
+            print(f"[TIMER ACTIONS] Completed all {len(actions)} actions for timer rule '{rule_data.get('id', 'Unknown')}'")
             return
         action = actions[index]
+        print(f"[TIMER ACTIONS] Executing action {index+1}/{len(actions)}: {action.get('type', 'Unknown')} for character '{character_name}'")
         try:
             execute_timer_action(self, rule_data, action, character_name, tab_data)
             delay_ms = 50
@@ -3737,6 +3884,7 @@ p, li { white-space: pre-wrap; }
                 lambda: self._execute_timer_actions_sequentially(rule_data, actions, index+1, character_name, tab_data)
             )
         except Exception as e:
+            print(f"[TIMER ACTIONS] Error executing action {index+1}: {e}")
             QTimer.singleShot(
                 50,
                 lambda: self._execute_timer_actions_sequentially(rule_data, actions, index+1, character_name, tab_data)
@@ -3816,11 +3964,6 @@ p, li { white-space: pre-wrap; }
             return False
 
     def _update_screen_effects(self, tab_data):
-        """
-        Update screen effects based on gamestate.
-        NOTE: This function handles rule-based screen effects (blur, flicker, static, darken/brighten).
-        Scene transition fade effects are handled separately by SceneFadeOverlay and should not conflict.
-        """
         if not tab_data:
             return
         tab_index = self.tabs_data.index(tab_data) if tab_data in self.tabs_data else -1
@@ -3848,6 +3991,13 @@ p, li { white-space: pre-wrap; }
             
             # Fallback to content widget if conversation widget not found
             return content_widget
+        if tab_data.get('_suppress_rule_screen_effects', False):
+            for effect_type, effect_instance in self._screen_effects.get(tab_index, {}).items():
+                if hasattr(effect_instance, 'set_config'):
+                    effect_instance.set_config(enabled=False)
+                if hasattr(effect_instance, 'hide'):
+                    effect_instance.hide()
+            return
         if not effects_config:
             # Disable all screen effects and ensure they don't interfere with scene transitions
             for effect_type, effect_instance in self._screen_effects.get(tab_index, {}).items():
@@ -3863,8 +4013,6 @@ p, li { white-space: pre-wrap; }
             print(f"Warning: No target widget found for screen effects in tab {tab_index}")
             return
         
-        # Ensure screen effects are applied below the scene fade overlay
-        # by setting them to a lower z-order
         target_widget.lower()
         
         blur_config = effects_config.get('blur', {})
@@ -4175,6 +4323,47 @@ Brief note from {character_name}'s perspective:"""
         except Exception as e:
             print(f"Error during backup file cleanup: {e}")
 
+    def _cleanup_all_audio_managers(self):
+        print("Cleaning up all AudioManager instances...")
+        for i, tab_data in enumerate(self.tabs_data):
+            if tab_data and isinstance(tab_data, dict):
+                audio_manager = tab_data.get('audio_manager_widget')
+                if audio_manager and hasattr(audio_manager, '_cleanup_audio'):
+                    try:
+                        print(f"Cleaning up AudioManager for tab {i}")
+                        audio_manager._cleanup_audio()
+                    except Exception as e:
+                        print(f"Error cleaning up AudioManager for tab {i}: {e}")
+        
+        try:
+            print("Cleaning up global music manager...")
+            music_manager = get_music_manager()
+            music_manager.cleanup()
+            print("Global music manager cleanup completed")
+        except Exception as e:
+            print(f"Error during global music manager cleanup: {e}")
+
+    def _stop_all_music(self):
+        try:
+            music_manager = get_music_manager()
+            music_manager.stop_music(fade_out_ms=500)
+        except Exception as e:
+            print(f"Error stopping music: {e}")
+
+    def stop_current_music(self):
+        try:
+            music_manager = get_music_manager()
+            music_manager.stop_music(fade_out_ms=500)
+        except Exception as e:
+            print(f"Error stopping current music: {e}")
+
+    def _handle_application_quit(self):
+        try:
+            self._cleanup_all_audio_managers()
+            self._stop_all_music()
+        except Exception as e:
+            print(f"Error handling application quit: {e}")
+
 def main():
     QApplication.setApplicationName("Chatbot RPG | A Text Adventure Engine")
     app = QApplication(sys.argv)
@@ -4184,7 +4373,7 @@ def main():
     try:
         import pygame
         if not pygame.mixer.get_init():
-            pygame.mixer.init()
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=4096)
         splash_sound = pygame.mixer.Sound('sounds/SplashScreen.mp3')
         splash_sound.play()
     except Exception:
