@@ -328,7 +328,7 @@ def create_pair_widget(tab_data):
             "Rewrite Post", "Generate Setting",
             "Generate Character", "Generate Random List",
             "Text Tag", "New Scene", "Change Actor Location", "Force Narrator", "Set Screen Effect", "Skip Post", "Change Brightness", "Exit Rule Processing", "Game Over",
-            "Post Visibility", "Add Item", "Remove Item", "Move Item", "Determine Items", "Post Streaming", "Advance Time", "Change Time Passage", "Delete Character"
+            "Post Visibility", "Add Item", "Remove Item", "Move Item", "Determine Items", "Post Streaming", "Advance Time", "Change Time Passage", "Delete Character", "Next Track"
         ]
         type_selector.addItems(action_items)
         

@@ -966,7 +966,7 @@ class TimerRulesWidget(QWidget):
         action_layout.setSpacing(5)
         type_combo = QComboBox()
         type_combo.setObjectName("TimerRuleActionTypeCombo")
-        type_combo.addItems(["Set Var", "System Message", "Narrator Post", "Actor Post", "New Scene", "Game Over", "Set Screen Effect"])
+        type_combo.addItems(["Set Var", "System Message", "Narrator Post", "Actor Post", "New Scene", "Game Over", "Set Screen Effect", "Next Track"]) 
         type_combo.setMinimumWidth(100)
         action_layout.addWidget(type_combo)
         value_input = QLineEdit()

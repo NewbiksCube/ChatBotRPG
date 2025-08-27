@@ -500,39 +500,51 @@ INSTRUCTIONS:
             new_value = param_value
         if effect_type != "Clear":
             if param_name in ["animate", "enabled"]:
-                if param_value.lower() in ["true", "yes", "1"]:
-                    new_value = True
-                elif param_value.lower() in ["false", "no", "0"]:
-                    new_value = False
+                if isinstance(param_value, str):
+                    if param_value.lower() in ["true", "yes", "1"]:
+                        new_value = True
+                    elif param_value.lower() in ["false", "no", "0"]:
+                        new_value = False
+                    else:
+                        new_value = bool(param_value)
+                else:
+                    new_value = bool(param_value)
             else:
                 try:
+                    baseline = 0.0
+                    if effect_key == "darken_brighten" and param_name == "factor":
+                        baseline = 1.0
+                    elif effect_key == "blur" and param_name == "animation_speed":
+                        baseline = 2000.0
+                    elif effect_key == "flicker" and param_name == "frequency":
+                        baseline = 500.0
+                    elif effect_key == "static" and param_name == "frequency":
+                        baseline = 100.0
+                    elif effect_key == "static" and param_name == "dot_size":
+                        baseline = 3.0
                     if current_value is not None:
                         current_num = float(current_value)
-                        try:
-                            param_num = float(param_value)
-                            if operation == "increment":
-                                new_value = current_num + param_num
-                            elif operation == "decrement":
-                                new_value = current_num - param_num
-                            elif operation == "set":
-                                new_value = param_num
-                            if isinstance(current_value, int) and new_value.is_integer():
-                                new_value = int(new_value)
-                        except ValueError:
-                            new_value = param_value
                     else:
-                        try:
-                            param_num = float(param_value)
-                            if operation == "increment":
-                                new_value = param_num
-                            elif operation == "decrement":
-                                new_value = -param_num
-                            elif operation == "set":
-                                new_value = param_num
-                            if new_value.is_integer():
-                                new_value = int(new_value)
-                        except ValueError:
-                            new_value = param_value
+                        current_num = float(baseline)
+                    try:
+                        param_num = float(param_value)
+                        if operation == "increment":
+                            new_value = current_num + param_num
+                        elif operation == "decrement":
+                            new_value = current_num - param_num
+                        elif operation == "set":
+                            new_value = param_num
+                        else:
+                            new_value = current_num
+                        if effect_key == "darken_brighten" and param_name == "factor":
+                            if new_value < 0.0:
+                                new_value = 0.0
+                            if new_value > 2.0:
+                                new_value = 2.0
+                        if isinstance(current_value, int) and isinstance(new_value, float) and new_value.is_integer():
+                            new_value = int(new_value)
+                    except ValueError:
+                        new_value = param_value
                 except (ValueError, TypeError):
                     new_value = param_value
             effect_config[param_name] = new_value

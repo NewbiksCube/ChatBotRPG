@@ -306,8 +306,15 @@ def load_effects_from_gamestate(tab_data):
                     if param_name not in combined_effects[effect_type]:
                         combined_effects[effect_type][param_name] = param_value
                     else:
-                        if isinstance(param_value, (int, float)) and isinstance(combined_effects[effect_type][param_name], (int, float)):
-                            combined_effects[effect_type][param_name] = max(combined_effects[effect_type][param_name], param_value)
+                        existing_value = combined_effects[effect_type][param_name]
+                        if param_name == 'enabled':
+                            combined_effects[effect_type][param_name] = bool(existing_value or param_value)
+                        elif effect_type == 'darken_brighten' and param_name == 'factor' and isinstance(param_value, (int, float)) and isinstance(existing_value, (int, float)):
+                            current_mag = abs(float(existing_value) - 1.0)
+                            new_mag = abs(float(param_value) - 1.0)
+                            combined_effects[effect_type][param_name] = param_value if new_mag >= current_mag else existing_value
+                        elif isinstance(param_value, (int, float)) and isinstance(existing_value, (int, float)):
+                            combined_effects[effect_type][param_name] = max(existing_value, param_value)
                         else:
                             combined_effects[effect_type][param_name] = param_value
         return combined_effects

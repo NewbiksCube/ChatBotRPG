@@ -75,7 +75,7 @@ def _process_specific_rule(self, rule, current_user_msg, prev_assistant_msg, rul
                  QTimer.singleShot(0, self._cot_next_step)
                  self._cot_next_step = None
             return
-        if not applies_to_char and tab_data.get('_narrator_to_exit_rules', False):
+        if not applies_to_char and tab_data.get('_exit_rule_processing_narrator', False):
              print(f"Skipping narrator rule '{rule.get('id')}' due to prior Exit Rule Processing action.")
              if not triggered_directly and rule_index is not None:
                 self._cot_sequential_index += 1
@@ -327,8 +327,8 @@ def _process_next_sequential_rule_pre(self, current_user_msg, prev_assistant_msg
     tab_data = self.get_current_tab_data()
     if not tab_data:
         return
-    if tab_data.get('_exit_rule_processing'):
-        tab_data.pop('_exit_rule_processing', None)
+    if tab_data.get('_exit_rule_processing_narrator'):
+        tab_data.pop('_exit_rule_processing_narrator', None)
         if hasattr(self, '_cot_next_step') and self._cot_next_step:
             QTimer.singleShot(0, self._cot_next_step)
             self._cot_next_step = None
@@ -397,8 +397,8 @@ def _process_next_sequential_rule_post(self, current_user_msg, assistant_msg, ru
     tab_data = self.get_current_tab_data()
     if not tab_data:
         return
-    if tab_data.get('_exit_rule_processing'):
-        tab_data.pop('_exit_rule_processing', None)
+    if tab_data.get('_exit_rule_processing_narrator'):
+        tab_data.pop('_exit_rule_processing_narrator', None)
         if hasattr(self, '_cot_next_step') and self._cot_next_step:
             QTimer.singleShot(0, self._cot_next_step)
             self._cot_next_step = None
@@ -666,6 +666,13 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
 
         elif action_type == 'Set Screen Effect':
             _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
+        elif action_type == 'Next Track':
+            try:
+                from core.game_music import get_game_music_controller
+                controller = get_game_music_controller()
+                controller.next_track(self)
+            except Exception as e:
+                print(f"[RULE ACTION] Error advancing music track: {e}")
         elif action_type == 'Change Actor Location':
             actor_name_str = action_obj.get('actor_name', '')
             location_mode = action_obj.get('location_mode', 'Setting')
@@ -701,6 +708,73 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
                 break
             else:
                 print(f"[TRANSIT] Move was successful, continue processing remaining actions in this rule")
+                
+                # Process character deletions on successful scene change
+                workflow_data_dir = tab_data.get('workflow_data_dir')
+                if workflow_data_dir:
+                    try:
+                        variables_file = os.path.join(workflow_data_dir, "game", "variables.json")
+                        if os.path.exists(variables_file):
+                            with open(variables_file, 'r', encoding='utf-8') as f:
+                                variables = json.load(f)
+                            
+                            characters_to_delete = variables.get('CharactersToDelete', [])
+                            if isinstance(characters_to_delete, list) and characters_to_delete:
+                                game_actors_dir = os.path.join(workflow_data_dir, 'game', 'actors')
+                                if os.path.exists(game_actors_dir):
+                                    deleted_count = 0
+                                    for character_name in characters_to_delete:
+                                        if character_name and character_name.strip():
+                                            character_name_clean = character_name.strip()
+                                            for filename in os.listdir(game_actors_dir):
+                                                if filename.lower().endswith('.json'):
+                                                    file_path = os.path.join(game_actors_dir, filename)
+                                                    try:
+                                                        with open(file_path, 'r', encoding='utf-8') as f:
+                                                            actor_data = json.load(f)
+                                                        if actor_data.get('name', '').strip() == character_name_clean:
+                                                            os.remove(file_path)
+                                                            print(f"✓ Deleted character '{character_name_clean}' from game directory")
+                                                            deleted_count += 1
+                                                            break
+                                                    except Exception as e:
+                                                        print(f"Error checking/deleting character file {filename}: {e}")
+                                    
+                                    if deleted_count > 0:
+                                        print(f"✓ Scene change: Deleted {deleted_count} character(s) marked for deletion")
+                                    
+                                    # Clear the deletion list and remove from location files
+                                    if deleted_count > 0:
+                                        # Remove deleted characters from all setting files
+                                        settings_dir = os.path.join(workflow_data_dir, 'game', 'settings')
+                                        if os.path.exists(settings_dir):
+                                            for root, dirs, files in os.walk(settings_dir):
+                                                dirs[:] = [d for d in dirs if d.lower() != 'saves']
+                                                for filename in files:
+                                                    if filename.lower().endswith('_setting.json'):
+                                                        setting_file_path = os.path.join(root, filename)
+                                                        try:
+                                                            with open(setting_file_path, 'r', encoding='utf-8') as f:
+                                                                setting_data = json.load(f)
+                                                            
+                                                            if 'characters' in setting_data and isinstance(setting_data['characters'], list):
+                                                                original_chars = list(setting_data['characters'])
+                                                                new_chars = [c for c in original_chars if c not in characters_to_delete]
+                                                                if len(new_chars) < len(original_chars):
+                                                                    setting_data['characters'] = new_chars
+                                                                    with open(setting_file_path, 'w', encoding='utf-8') as f:
+                                                                        json.dump(setting_data, f, indent=2, ensure_ascii=False)
+                                                                    print(f"✓ Removed deleted characters from {filename}")
+                                                        except Exception as e:
+                                                            print(f"Error updating setting file {filename}: {e}")
+                                    
+                                    variables['CharactersToDelete'] = []
+                                    with open(variables_file, 'w', encoding='utf-8') as f:
+                                        json.dump(variables, f, indent=2, ensure_ascii=False)
+                    except Exception as e:
+                        print(f"ERROR: Failed to process character deletions during scene change: {e}")
+                        import traceback
+                        traceback.print_exc()
         elif action_type == 'Rewrite Post':
             if not is_post_phase:
                 continue
@@ -1006,16 +1080,16 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
             else:
                 pass
         elif action_type == 'Exit Rule Processing':
-            character_to_exit = character_name_for_rule_context or character_name_override or getattr(self, 'character_name', None)
+            target_for_message = character_name_for_rule_context or character_name_override or getattr(self, 'character_name', None)
             if tab_data:
-                if character_to_exit:
-                    if '_characters_to_exit_rules_after_current' not in tab_data:
-                        tab_data['_characters_to_exit_rules_after_current'] = set()
-                    tab_data['_characters_to_exit_rules_after_current'].add(character_to_exit)
-                    print(f"  >> Rule '{rule_id}' Action: Exit Rule Processing for '{character_to_exit}'. Further rules for this character will be skipped after this rule completes.")
+                if target_for_message:
+                    if '_exit_rule_processing_chars' not in tab_data:
+                        tab_data['_exit_rule_processing_chars'] = set()
+                    tab_data['_exit_rule_processing_chars'].add(target_for_message)
+                    print(f"  >> Rule '{rule_id}' Action: Exit Rule Processing for '{target_for_message}'. Stopping further rule processing for this character this post.")
                 else:
-                    tab_data['_narrator_to_exit_rules_after_current'] = True
-                    print(f"  >> Rule '{rule_id}' Action: Exit Rule Processing for Narrator. Further rules will be skipped after this rule completes.")
+                    tab_data['_exit_rule_processing_narrator'] = True
+                    print(f"  >> Rule '{rule_id}' Action: Exit Rule Processing for Narrator. Stopping further narrator rule processing this post.")
         elif action_type == 'Add Item':
             _apply_rule_side_effects(self, action_obj, rule, actor_for_substitution)
         elif action_type == 'Remove Item':
@@ -1207,14 +1281,10 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
         else:
             triggered_next_rule_id = None
     if tab_data:
-        if tab_data.get('_characters_to_exit_rules_after_current'):
-            if '_characters_to_exit_rules' not in tab_data:
-                tab_data['_characters_to_exit_rules'] = set()
-            tab_data['_characters_to_exit_rules'].update(tab_data['_characters_to_exit_rules_after_current'])
-            tab_data.pop('_characters_to_exit_rules_after_current', None)
-        if tab_data.get('_narrator_to_exit_rules_after_current'):
-            tab_data['_narrator_to_exit_rules'] = True
-            tab_data.pop('_narrator_to_exit_rules_after_current', None)
+        if tab_data.get('_exit_rule_processing_chars'):
+            pass
+        if tab_data.get('_exit_rule_processing_narrator'):
+            pass
     if not triggered_next_rule_id and not (rewrite_instructions is not None and rewrite_buffer_content is not None and is_post_phase):
         is_char_post_phase_rule = is_post_phase and rule.get('applies_to') == 'Character'
         if not triggered_directly and rule_index is not None and not is_char_post_phase_rule:
@@ -1231,14 +1301,10 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
              QTimer.singleShot(0, lambda rules_arg=rules: callback(self, current_user_msg, prev_assistant_msg, rules_arg))
         elif triggered_directly:
             if tab_data:
-                if tab_data.get('_characters_to_exit_rules_after_current'):
-                    if '_characters_to_exit_rules' not in tab_data:
-                        tab_data['_characters_to_exit_rules'] = set()
-                    tab_data['_characters_to_exit_rules'].update(tab_data['_characters_to_exit_rules_after_current'])
-                    tab_data.pop('_characters_to_exit_rules_after_current', None)
-                if tab_data.get('_narrator_to_exit_rules_after_current'):
-                    tab_data['_narrator_to_exit_rules'] = True
-                    tab_data.pop('_narrator_to_exit_rules_after_current', None)
+                if tab_data.get('_exit_rule_processing_chars'):
+                    pass
+                if tab_data.get('_exit_rule_processing_narrator'):
+                    pass
             original_context = getattr(self, '_original_sequential_context', None)
             if original_context:
                 self._original_sequential_context = None
@@ -1262,16 +1328,15 @@ def _apply_rule_actions_and_continue(self, matched_pair, rule, rule_index, curre
         rule.get('applies_to') == 'Character' and 
         character_name_for_rule_context):
         if tab_data:
-            if tab_data.get('_characters_to_exit_rules_after_current'):
-                if '_characters_to_exit_rules' not in tab_data:
-                    tab_data['_characters_to_exit_rules'] = set()
-                tab_data['_characters_to_exit_rules'].update(tab_data['_characters_to_exit_rules_after_current'])
-                tab_data.pop('_characters_to_exit_rules_after_current', None)
-            if tab_data.get('_narrator_to_exit_rules_after_current'):
-                tab_data['_narrator_to_exit_rules'] = True
-                tab_data.pop('_narrator_to_exit_rules_after_current', None)
+            if tab_data.get('_exit_rule_processing_chars'):
+                pass
+            if tab_data.get('_exit_rule_processing_narrator'):
+                pass
         callback = self._character_llm_reply_rule_complete_callback
         QTimer.singleShot(0, callback)
+        return npc_text_tag_for_character_rule
+    # For character rules, return the tag; for narrator rules, return success boolean
+    if rule.get('applies_to') == 'Character':
         return npc_text_tag_for_character_rule
     return not abort_actions_in_rule
 
