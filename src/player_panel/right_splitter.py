@@ -391,71 +391,87 @@ class RightSplitterWidget(QWidget):
                         world_map_available = False
                     if world_map_available:
                         def resolve_relative_path(base_path, relative_path):
+                            if not relative_path:
+                                return None
+                            
+                            print(f"Resolving path: base_path='{base_path}', relative_path='{relative_path}'")
+                            
+                            if os.path.isabs(relative_path):
+                                print(f"  Absolute path detected: {relative_path}")
+                                return relative_path
+                            
                             if relative_path.startswith(".."):
                                 rel_components = relative_path.replace('\\', '/').split('/')
                                 current_path = base_path
                                 i = 0
+                                print(f"  Processing relative path with {len(rel_components)} components: {rel_components}")
+                                print(f"  Starting from base_path: {current_path}")
+                                
                                 while i < len(rel_components) and rel_components[i] == "..":
                                     parent = os.path.dirname(current_path)
+                                    if parent == current_path:
+                                        print(f"  Reached root directory, stopping")
+                                        break
                                     current_path = parent
                                     i += 1
+                                    print(f"  Going up to parent: {current_path}")
+                                
                                 remaining_components = rel_components[i:]
                                 if remaining_components:
                                     remaining_path = os.path.join(*remaining_components)
                                     resolved = os.path.normpath(os.path.join(current_path, remaining_path))
+                                    print(f"  Remaining components: {remaining_components}")
+                                    print(f"  Final resolved path: {resolved}")
                                 else:
                                     resolved = os.path.normpath(current_path)
+                                    print(f"  No remaining components, resolved to: {resolved}")
                                 return resolved
                             else:
                                 resolved = os.path.normpath(os.path.join(base_path, relative_path))
+                                print(f"  Simple relative path, resolved to: {resolved}")
                                 return resolved
                         
                         def load_image_if_exists(image_path):
                             if not image_path:
+                                print("  No image path provided")
                                 return None
-                            dir_path = os.path.dirname(image_path)
-                            filename = os.path.basename(image_path)
-                            if os.path.exists(dir_path):
-                                try:
-                                    files_in_dir = os.listdir(dir_path)
-                                    filename_lower = filename.lower()
-                                    for file in files_in_dir:
-                                        if file.lower() == filename_lower:
-                                            actual_path = os.path.join(dir_path, file)
-                                            if os.path.exists(actual_path):
-                                                image_path = actual_path
-                                                break
-                                except Exception:
-                                    pass
-                            if not os.path.exists(image_path):
-                                import getpass
-                                username = getpass.getuser()
-                                user_fallback_path = None
-                                if "Downloads" in image_path:
-                                    if image_path.startswith("C:\\Downloads"):
-                                        user_fallback_path = image_path.replace("C:\\Downloads", f"C:\\Users\\{username}\\Downloads")
-                                    elif image_path.startswith("Downloads\\") or image_path == "Downloads":
-                                        relative_part = image_path[len("Downloads\\"):] if image_path.startswith("Downloads\\") else ""
-                                        user_fallback_path = os.path.join(f"C:\\Users\\{username}\\Downloads", relative_part)
-                                elif "Pictures" in image_path:
-                                    if image_path.startswith("C:\\Pictures"):
-                                        user_fallback_path = image_path.replace("C:\\Pictures", f"C:\\Users\\{username}\\Pictures")
-                                    elif image_path.startswith("Pictures\\") or image_path == "Pictures":
-                                        relative_part = image_path[len("Pictures\\"):] if image_path.startswith("Pictures\\") else ""
-                                        user_fallback_path = os.path.join(f"C:\\Users\\{username}\\Pictures", relative_part)
-                                if user_fallback_path:
-                                    if os.path.exists(user_fallback_path):
-                                        image_path = user_fallback_path
-                                    else:
-                                        return None
+                            
+                            print(f"  Attempting to load image: {image_path}")
+                            
+                            if os.path.isabs(image_path):
+                                print(f"  Absolute path detected")
+                                if os.path.exists(image_path):
+                                    print(f"  File exists at absolute path")
+                                    try:
+                                        temp_qimage = QImage(image_path)
+                                        if not temp_qimage.isNull():
+                                            print(f"  Successfully loaded image from absolute path: {image_path}")
+                                            return temp_qimage
+                                        else:
+                                            print(f"  Failed to load image from absolute path: {image_path} - QImage is null")
+                                    except Exception as e:
+                                        print(f"  Error loading absolute path image {image_path}: {e}")
+                                        pass
                                 else:
-                                    return None
-                            try:
-                                temp_qimage = QImage(image_path)
-                                if not temp_qimage.isNull():
-                                    return temp_qimage
-                            except Exception as e:
-                                pass
+                                    print(f"  File does not exist at absolute path: {image_path}")
+                                return None
+                            
+                            print(f"  Relative path detected, checking if file exists")
+                            if os.path.exists(image_path):
+                                print(f"  File exists at relative path: {image_path}")
+                                try:
+                                    temp_qimage = QImage(image_path)
+                                    if not temp_qimage.isNull():
+                                        print(f"  Successfully loaded image from relative path: {image_path}")
+                                        return temp_qimage
+                                    else:
+                                        print(f"  Failed to load image from relative path: {image_path} - QImage is null")
+                                except Exception as e:
+                                    print(f"  Error loading image {image_path}: {e}")
+                                    pass
+                            else:
+                                print(f"  File does not exist at relative path: {image_path}")
+                            
                             return None
                         setting_file = None
                         search_dirs = [
@@ -501,62 +517,44 @@ class RightSplitterWidget(QWidget):
                                         try:
                                             with open(world_json_path, 'r', encoding='utf-8') as f:
                                                 world_data = json.load(f)
+                                            print(f"  World data loaded successfully from: {world_json_path}")
+                                            print(f"  World data keys: {list(world_data.keys())}")
                                             map_image_path = world_data.get('map_image')
                                             if map_image_path:
-                                                resolved_path = resolve_relative_path(os.path.dirname(world_json_path), map_image_path)
+                                                print(f"  Found map_image_path: {map_image_path}")
+                                                maps_base_dir = os.path.normpath(os.path.join(os.path.dirname(world_json_path), "resources", "maps"))
+                                                print(f"  Maps base dir: {maps_base_dir}")
+                                                resolved_path = resolve_relative_path(maps_base_dir, map_image_path)
+                                                print(f"  Resolved path: {resolved_path}")
                                                 qimage_for_map = load_image_if_exists(resolved_path)
                                                 if qimage_for_map:
+                                                    print(f"  Successfully loaded world map from: {resolved_path}")
                                                     break
+                                                else:
+                                                    print(f"  Failed to load world map from resolved path: {resolved_path}")
+                                            else:
+                                                print(f"  No map_image found in world data")
                                         except Exception as e:
-                                            pass
+                                            print(f"  Error reading world JSON: {e}")
                                     if qimage_for_map:
                                         break
                             if not qimage_for_map:
-                                current_dir = os.path.dirname(setting_file)
-                                hierarchy_levels = ["setting", "location", "region"]
-                                for level_idx, level_name in enumerate(hierarchy_levels):
-                                    if not current_dir or not os.path.exists(current_dir):
-                                        break
-                                    json_patterns = []
-                                    if level_name == "setting":
-                                        json_patterns = ["*_setting.json"]
-                                    elif level_name == "location":
-                                        json_patterns = ["*_location.json"]
-                                    elif level_name == "region":
-                                        json_patterns = ["*_region.json"]
-                                    for pattern in json_patterns:
-                                        matching_files = glob.glob(os.path.join(current_dir, pattern))
-                                        for json_file in matching_files:
+                                print(f"No world map found for setting: {setting_name}")
+                                print(f"Setting file: {setting_file}")
+                                if world_name:
+                                    print(f"World name: {world_name}")
+                                    print(f"World JSON locations checked:")
+                                    for world_json_path in world_json_locations:
+                                        print(f"  - {world_json_path} (exists: {os.path.exists(world_json_path)})")
+                                        if os.path.exists(world_json_path):
                                             try:
-                                                with open(json_file, 'r', encoding='utf-8') as f:
-                                                    data = json.load(f)
-                                                map_image_path = data.get('map_image')
-                                                if map_image_path:
-                                                    resolved_path = resolve_relative_path(os.path.dirname(json_file), map_image_path)
-                                                    qimage_for_map = load_image_if_exists(resolved_path)
-                                                    if qimage_for_map:
-                                                        break
+                                                with open(world_json_path, 'r', encoding='utf-8') as f:
+                                                    world_data = json.load(f)
+                                                map_image_path = world_data.get('map_image')
+                                                print(f"    map_image: {map_image_path}")
                                             except Exception as e:
-                                                pass
-                                        if qimage_for_map:
-                                            break
-                                    if qimage_for_map:
-                                        break
-                                    parent_dir = os.path.dirname(current_dir)
-                                    if parent_dir == current_dir:
-                                        break
-                                    current_dir = parent_dir
-                        if not qimage_for_map:
-                            map_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.gif']
-                            for root, dirs, files in os.walk(workflow_data_dir):
-                                for file in files:
-                                    if ('map' in file.lower() or 'world' in file.lower()) and any(file.lower().endswith(ext) for ext in map_extensions):
-                                        potential_map = os.path.join(root, file)
-                                        qimage_for_map = load_image_if_exists(potential_map)
-                                        if qimage_for_map:
-                                            break
-                                if qimage_for_map:
-                                    break
+                                                print(f"    Error reading world JSON: {e}")
+                        
                         if qimage_for_map and not qimage_for_map.isNull():
                             try:
                                 if hasattr(self, '_last_loaded_setting') and self._last_loaded_setting == setting_name:
@@ -577,11 +575,19 @@ class RightSplitterWidget(QWidget):
                                     else:
                                         self._player_just_moved = False
                                 self._last_loaded_setting = setting_name
-                            except Exception:
+                                print(f"Successfully loaded map for setting: {setting_name}")
+                            except Exception as e:
+                                print(f"Error setting map image for {setting_name}: {e}")
                                 try:
                                     set_map_image_from_qimage(self.setting_minimap_widget, None)
-                                except:
-                                    pass
+                                except Exception as clear_error:
+                                    print(f"Error clearing map image: {clear_error}")
+                        else:
+                            print(f"No map image found for setting: {setting_name}")
+                            try:
+                                set_map_image_from_qimage(self.setting_minimap_widget, None)
+                            except Exception as clear_error:
+                                print(f"Error clearing map image: {clear_error}")
                 except Exception:
                     pass
             try:
