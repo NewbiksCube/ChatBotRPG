@@ -806,6 +806,164 @@ class TimeManager(QWidget):
         except Exception as e:
             print(f"[TIME TRIGGER] Error checking time triggers: {e}")
 
+    def _check_character_schedules(self):
+        """Check character schedules and move characters to their scheduled locations when time matches."""
+        if not self.main_ui or not self.tab_data or not self.workflow_data_dir:
+            return
+        
+        try:
+            tab_index = self.main_ui.tabs_data.index(self.tab_data) if self.tab_data in self.main_ui.tabs_data else -1
+            if tab_index < 0:
+                return
+            
+            variables = self.main_ui._load_variables(tab_index)
+            current_datetime_str = variables.get('datetime')
+            if not current_datetime_str:
+                return
+            
+            try:
+                current_datetime = datetime.fromisoformat(current_datetime_str)
+            except (ValueError, TypeError):
+                return
+            
+            # Get current time in HH:MM format for schedule matching
+            current_time_str = current_datetime.strftime("%H:%M")
+            
+            # Load all characters and check their schedules
+            characters_moved = self._process_character_schedules(current_time_str)
+            
+            if characters_moved:
+                print(f"[SCHEDULE] Moved {len(characters_moved)} characters based on schedules: {', '.join(characters_moved)}")
+                
+        except Exception as e:
+            print(f"[SCHEDULE] Error checking character schedules: {e}")
+
+    def _process_character_schedules(self, current_time_str):
+        """Process all character schedules and move characters to scheduled locations."""
+        characters_moved = []
+        
+        # Load all characters from both game and resources directories
+        all_characters = self._load_all_characters()
+        
+        for character_name, character_data in all_characters.items():
+            schedule = character_data.get('schedule', {})
+            if not schedule:
+                continue
+            
+            # Check if current time matches any schedule entry
+            if current_time_str in schedule:
+                target_location = schedule[current_time_str]
+                current_location = character_data.get('location', '')
+                
+                # Only move if not already at the scheduled location
+                if current_location != target_location:
+                    # Verify the target location exists
+                    if self._location_exists(target_location):
+                        success = self._move_character_to_location(character_name, target_location)
+                        if success:
+                            characters_moved.append(character_name)
+                    else:
+                        print(f"[SCHEDULE] Warning: Character '{character_name}' scheduled for '{target_location}' but location not found")
+        
+        return characters_moved
+
+    def _load_all_characters(self):
+        """Load all characters from both game and resources directories."""
+        characters = {}
+        
+        # Load from game/actors (session characters)
+        game_actors_dir = os.path.join(self.workflow_data_dir, 'game', 'actors')
+        if os.path.exists(game_actors_dir):
+            for filename in os.listdir(game_actors_dir):
+                if filename.lower().endswith('.json'):
+                    file_path = os.path.join(game_actors_dir, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            character_data = json.load(f)
+                            character_name = character_data.get('name', filename.replace('.json', ''))
+                            characters[character_name] = character_data
+                    except Exception as e:
+                        print(f"[SCHEDULE] Error loading game character {filename}: {e}")
+        
+        # Load from resources/data files/actors (base characters)
+        resource_actors_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'actors')
+        if os.path.exists(resource_actors_dir):
+            for filename in os.listdir(resource_actors_dir):
+                if filename.lower().endswith('.json'):
+                    file_path = os.path.join(resource_actors_dir, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            character_data = json.load(f)
+                            character_name = character_data.get('name', filename.replace('.json', ''))
+                            # Only add if not already loaded from game directory (game takes precedence)
+                            if character_name not in characters:
+                                characters[character_name] = character_data
+                    except Exception as e:
+                        print(f"[SCHEDULE] Error loading resource character {filename}: {e}")
+        
+        return characters
+
+    def _location_exists(self, location_name):
+        """Check if a location/setting exists in the world."""
+        if not location_name:
+            return False
+        
+        # Check in game/settings directory
+        session_settings_dir = os.path.join(self.workflow_data_dir, 'game', 'settings')
+        if os.path.exists(session_settings_dir):
+            for root, dirs, files in os.walk(session_settings_dir):
+                dirs[:] = [d for d in dirs if d.lower() != 'saves']
+                for filename in files:
+                    if filename.lower().endswith('_setting.json'):
+                        file_path = os.path.join(root, filename)
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                setting_data = json.load(f)
+                                if setting_data.get('name') == location_name:
+                                    return True
+                        except Exception:
+                            continue
+        
+        # Check in resources/data files/settings directory
+        base_settings_dir = os.path.join(self.workflow_data_dir, 'resources', 'data files', 'settings')
+        if os.path.exists(base_settings_dir):
+            for root, dirs, files in os.walk(base_settings_dir):
+                dirs[:] = [d for d in dirs if d.lower() != 'saves']
+                for filename in files:
+                    if filename.lower().endswith('_setting.json'):
+                        file_path = os.path.join(root, filename)
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                setting_data = json.load(f)
+                                if setting_data.get('name') == location_name:
+                                    return True
+                        except Exception:
+                            continue
+        
+        return False
+
+    def _move_character_to_location(self, character_name, target_location):
+        """Move a character to the specified location."""
+        try:
+            # Import the move_characters function
+            from core.move_character import move_characters
+            
+            # Move the character to the target location
+            result = move_characters(
+                workflow_data_dir=self.workflow_data_dir,
+                actors_to_move=[character_name],
+                target_setting_name=target_location,
+                tab_data=self.tab_data,
+                advance_time=False,  # Don't advance time for schedule moves
+                speed_multiplier=1.0
+            )
+            
+            return result.get('success', False)
+            
+        except Exception as e:
+            print(f"[SCHEDULE] Error moving character '{character_name}' to '{target_location}': {e}")
+            return False
+
     def _trigger_conditions_match(self, conditions, current_datetime):
         if not conditions:
             return True
@@ -874,33 +1032,45 @@ class TimeManager(QWidget):
             variables['datetime'] = current_datetime.isoformat()
             variables['timemode'] = 'real_world'
         else:
-            advancement_mode = self.time_passage_data.get('advancement_mode', 'static')
+            advancement_mode = variables.get('advancement_mode', 'Static')
+            if not advancement_mode or advancement_mode == 'Static':
+                advancement_mode = self.time_passage_data.get('advancement_mode', 'static')
             variables['timemode'] = 'game_world'
             if 'datetime' not in variables:
-                starting_dt_str = self.time_passage_data.get('starting_datetime')
+                starting_dt_str = variables.get('starting_datetime')
+                if not starting_dt_str:
+                    starting_dt_str = self.time_passage_data.get('starting_datetime')
                 if starting_dt_str:
                     try:
-                        starting_dt = datetime.fromisoformat(starting_dt_str)
-                    except (ValueError, TypeError):
+                        if ' ' in starting_dt_str and ':' in starting_dt_str and '-' in starting_dt_str:
+                            starting_dt = datetime.strptime(starting_dt_str, "%Y-%m-%d %H:%M")
+                        else:
+                            starting_dt = datetime.fromisoformat(starting_dt_str)
+                    except (ValueError, TypeError) as e:
                         starting_dt = datetime.now()
                 else:
                     starting_dt = datetime.now()
                     self.time_passage_data['starting_datetime'] = starting_dt.isoformat()
                     self._save_time_passage_data()
+                    variables['starting_datetime'] = starting_dt.strftime("%Y-%m-%d %H:%M")
                 variables['datetime'] = starting_dt.isoformat()
                 variables['_last_real_time_update'] = datetime.now().isoformat()
                 main_ui._save_variables(tab_index, variables)
             else:
-                if advancement_mode == 'realtime':
-                    time_multiplier = self.time_passage_data.get('time_multiplier', 1.0)
+                if advancement_mode.lower() == 'realtime':
+                    time_multiplier = variables.get('time_multiplier', 1.0)
+                    if not time_multiplier or time_multiplier == 0.0:
+                        time_multiplier = self.time_passage_data.get('time_multiplier', 1.0)
                     now = datetime.now()
                     try:
                         current_game_time = datetime.fromisoformat(variables['datetime'])
                     except (ValueError, TypeError):
-                        starting_dt_str = self.time_passage_data.get('starting_datetime')
+                        starting_dt_str = variables.get('starting_datetime')
+                        if not starting_dt_str:
+                            starting_dt_str = self.time_passage_data.get('starting_datetime')
                         if starting_dt_str:
                             try:
-                                current_game_time = datetime.fromisoformat(starting_dt_str)
+                                current_game_time = datetime.strptime(starting_dt_str, "%Y-%m-%d %H:%M")
                             except (ValueError, TypeError):
                                 current_game_time = datetime.now()
                         else:
@@ -939,6 +1109,7 @@ class TimeManager(QWidget):
                     main_ui._save_variables(tab_index, variables)
         main_ui._save_variables(tab_index, variables)
         self._check_time_triggers()
+        self._check_character_schedules()
 
     def _apply_styling(self):
         base_color = self.theme_colors.get('base_color', '#00FF66')

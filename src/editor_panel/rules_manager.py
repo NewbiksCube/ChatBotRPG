@@ -613,29 +613,38 @@ def _add_rule(self, tab_index, rule_id_editor, condition_editor, tag_action_pair
                                             except RuntimeError:
                                                 action_obj["force_narrator_system_message"] = ""
                                     elif action_type == "Set Screen Effect":
+                                        effect_id_input = action_row_widget.findChild(QLineEdit, "ScreenEffectIdInput")
                                         effect_type_combo = action_row_widget.findChild(QComboBox, "ScreenEffectTypeCombo")
                                         effect_operation_combo = action_row_widget.findChild(QComboBox, "ScreenEffectOperationCombo")
                                         param_name_combo = action_row_widget.findChild(QComboBox, "ScreenEffectParamNameCombo")
                                         param_value_input = action_row_widget.findChild(QLineEdit, "ScreenEffectParamValueInput")
                                         enable_combo = action_row_widget.findChild(QComboBox, "ScreenEffectEnabledCombo")
-                                        if effect_type_combo and param_name_combo and param_value_input:
+                                        if effect_type_combo:
                                             try:
+                                                effect_id = effect_id_input.text().strip() if effect_id_input else ""
+                                                if not effect_id:
+                                                    effect_id = "default"
+                                                action_obj["effect_id"] = effect_id
                                                 action_obj["effect_type"] = effect_type_combo.currentText()
-                                                action_obj["operation"] = effect_operation_combo.currentText().lower()
-                                                param_name_text = param_name_combo.currentText()
-                                                action_obj["param_name"] = param_name_text
-                                                if action_obj["effect_type"] == "Flicker" and param_name_text == "color":
-                                                    flicker_color_widget = action_row_widget.findChild(QComboBox, "ScreenEffectFlickerColorCombo")
-                                                    if flicker_color_widget:
-                                                        action_obj["param_value"] = flicker_color_widget.currentText()
+                                                
+                                                if action_obj["effect_type"] == "Clear":
+                                                    print(f"    [DEBUG] Set Screen Effect: id={action_obj['effect_id']}, type=Clear")
+                                                elif param_name_combo and param_value_input:
+                                                    action_obj["operation"] = effect_operation_combo.currentText().lower()
+                                                    param_name_text = param_name_combo.currentText()
+                                                    action_obj["param_name"] = param_name_text
+                                                    if action_obj["effect_type"] == "Flicker" and param_name_text == "color":
+                                                        flicker_color_widget = action_row_widget.findChild(QComboBox, "ScreenEffectFlickerColorCombo")
+                                                        if flicker_color_widget:
+                                                            action_obj["param_value"] = flicker_color_widget.currentText()
+                                                        else:
+                                                            action_obj["param_value"] = param_value_input.text().strip()
                                                     else:
                                                         action_obj["param_value"] = param_value_input.text().strip()
-                                                else:
-                                                    action_obj["param_value"] = param_value_input.text().strip()
-                                                action_obj["enabled"] = enable_combo.currentText() == "True"
-                                                print(f"    [DEBUG] Set Screen Effect: type={action_obj['effect_type']}, "
-                                                      f"operation={action_obj['operation']}, param={action_obj['param_name']}, "
-                                                      f"value={action_obj['param_value']}, enabled={action_obj['enabled']}")
+                                                    action_obj["enabled"] = enable_combo.currentText() == "True"
+                                                    print(f"    [DEBUG] Set Screen Effect: id={action_obj['effect_id']}, type={action_obj['effect_type']}, "
+                                                          f"operation={action_obj['operation']}, param={action_obj['param_name']}, "
+                                                          f"value={action_obj['param_value']}, enabled={action_obj['enabled']}")
                                             except RuntimeError:
                                                 pass
                                     elif action_type == "Change Brightness":

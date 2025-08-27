@@ -53,6 +53,44 @@ class SettingManagerWidget(QWidget):
         self.update_theme(theme_colors)
         self._ensure_default_setting_structure()
         self.populate_worlds()
+    def _log(self, message):
+        try:
+            print(f"SettingManager[DEBUG]: {message}")
+        except Exception:
+            pass
+
+    def _log_file_info(self, file_path):
+        try:
+            exists = os.path.exists(file_path)
+            size = os.path.getsize(file_path) if exists else -1
+            mtime = os.path.getmtime(file_path) if exists else -1
+            self._log(f"File info: path={file_path} exists={exists} size={size} mtime={mtime}")
+        except Exception as e:
+            self._log(f"File info error for {file_path}: {e}")
+
+    def _force_save_description(self, description_widget):
+        """Direct save for description fields - bypasses all the complex logic"""
+        if not hasattr(self, '_current_setting_file_path_absolute') or not self._current_setting_file_path_absolute:
+            print("No current setting file path")
+            return
+            
+        if not os.path.exists(self._current_setting_file_path_absolute):
+            print(f"Setting file doesn't exist: {self._current_setting_file_path_absolute}")
+            return
+        try:
+            with open(self._current_setting_file_path_absolute, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            new_description = description_widget.toPlainText().strip()
+            data['description'] = new_description
+            with open(self._current_setting_file_path_absolute, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception as e:
+            print(f"Force save failed: {e}")
+            import traceback
+            traceback.print_exc()
+
         self._is_navigating = False
 
     def _init_ui(self):
@@ -60,27 +98,19 @@ class SettingManagerWidget(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(10)
-        
-        # Create scroll area for the tab widget
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        
-        # Create a container widget for the scroll area
         self.scroll_content = QWidget()
         self.scroll_content.setStyleSheet(f"background-color: {self.theme_colors.get('bg_color', '#2B2B2B')};")
         self.scroll_content_layout = QVBoxLayout(self.scroll_content)
         self.scroll_content_layout.setContentsMargins(0, 0, 0, 0)
         self.scroll_content_layout.setSpacing(10)
-        
-        # Create button layout for mode selection
         self.button_layout = QHBoxLayout()
         self.button_layout.setSpacing(10)
         self.button_layout.setContentsMargins(0, 0, 0, 10)
         self.button_layout.setAlignment(Qt.AlignCenter)
-        
-        # Create mode buttons
         self.setting_details_btn = QPushButton("Setting Details")
         self.setting_details_btn.setCheckable(True)
         self.setting_details_btn.setChecked(True)
@@ -130,19 +160,15 @@ class SettingManagerWidget(QWidget):
         self.button_layout.addWidget(self.setting_details_btn)
         self.button_layout.addWidget(self.world_editor_btn)
         self.button_layout.addStretch()
-        
-        # Connect button signals
         self.setting_details_btn.clicked.connect(self._on_setting_details_clicked)
         self.world_editor_btn.clicked.connect(self._on_world_editor_clicked)
         
         self.scroll_content_layout.addLayout(self.button_layout)
-        
-        # Create stacked widget for content
+
         self.content_stack = QStackedWidget()
         self.content_stack.setStyleSheet(f"background-color: {self.theme_colors.get('bg_color', '#2B2B2B')};")
         self.scroll_content_layout.addWidget(self.content_stack)
-        
-        # Set the scroll content as the scroll area widget
+
         self.scroll_area.setWidget(self.scroll_content)
         main_layout.addWidget(self.scroll_area)
         self.setting_details_tab = QWidget()
@@ -657,8 +683,6 @@ class SettingManagerWidget(QWidget):
         actors_header_layout.addWidget(self.remove_actor_from_setting_button)
         
         actors_layout.addLayout(actors_header_layout)
-        
-        # Add text input for actor name
         self.actor_name_input = QLineEdit()
         self.actor_name_input.setObjectName("SettingManagerNameInput")
         self.actor_name_input.setPlaceholderText("Enter actor name...")
@@ -1262,8 +1286,7 @@ class SettingManagerWidget(QWidget):
             location_data.get('name', self._selected_location_orig.replace('_', ' ').title())
         )
         self.location_description_input.setPlainText(location_data.get('description', ''))
-        
-        # Reconnect signals
+
         self.location_name_input.editingFinished.connect(self._save_current_details)
         self.location_description_input.textChanged.connect(self._schedule_description_save)
         self.current_location_features = location_data.get('features', [])
@@ -1383,6 +1406,7 @@ class SettingManagerWidget(QWidget):
         self.setting_description_input.blockSignals(True)
         self.setting_description_input.setText(description)
         self.setting_description_input.blockSignals(False)
+        self.setting_description_input.textChanged.connect(self._schedule_description_save)
         self.setting_inventory_table.setRowCount(0)
         inventory = setting_data.get('inventory', [])
         if isinstance(inventory, str):
@@ -1560,15 +1584,28 @@ class SettingManagerWidget(QWidget):
         if not file_path:
             print("SettingManager: Error - Cannot save JSON, no file path provided.")
             return False
+        self._log(f"_save_json called: path={file_path}")
         try:
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            dir_path = os.path.dirname(file_path)
+            self._log(f"Creating directory: {dir_path}")
+            os.makedirs(dir_path, exist_ok=True)
+            self._log(f"Opening file for write: {file_path}")
             with open(file_path, 'w', encoding='utf-8') as f:
+                self._log(f"Writing JSON data (keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'})")
                 json.dump(data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except Exception:
+                    pass
+            self._log(f"Successfully wrote JSON to: {file_path}")
             return True
         except (IOError, OSError) as e:
+            self._log(f"IOError writing JSON to {file_path}: {e}")
             print(f"SettingManager: Error writing JSON to {file_path}: {e}")
             return False
         except Exception as e:
+            self._log(f"Unexpected error writing JSON to {file_path}: {e}")
             print(f"SettingManager: Unexpected error writing JSON to {file_path}: {e}")
             return False
 
@@ -1616,6 +1653,10 @@ class SettingManagerWidget(QWidget):
         return data.get('inventory', '')
 
     def _schedule_description_save(self):
+        try:
+            self._log(f"Schedule save: level={self._editing_level} world={self._editing_world_orig} region={self._editing_region_orig} location={self._editing_location_orig} setting={self._editing_setting_orig}")
+        except Exception:
+            pass
         self._description_save_timer.start(500)
         
     def _save_exterior_state_immediately(self, state):
@@ -1632,7 +1673,9 @@ class SettingManagerWidget(QWidget):
 
     def _save_current_details(self):
         if hasattr(self, '_is_navigating') and self._is_navigating:
+            self._log("Save blocked: currently navigating")
             return
+        self._log("Begin save pipeline")
         level_to_save = self._editing_level if self._editing_level else self._selected_level
         world_orig_to_save = self._editing_world_orig if self._editing_world_orig else self._selected_world_orig
         region_orig_to_save = self._editing_region_orig if self._editing_region_orig else self._selected_region_orig
@@ -1641,6 +1684,7 @@ class SettingManagerWidget(QWidget):
         if not level_to_save or not world_orig_to_save:
             self._editing_level = None
             return
+        self._log(f"Saving level={level_to_save} world={world_orig_to_save} region={region_orig_to_save} location={location_orig_to_save} setting={setting_orig_to_save}")
         json_path = None
         data = {}
         name_input_field = None
@@ -1770,6 +1814,11 @@ class SettingManagerWidget(QWidget):
             self._editing_level = None; return
         if not isinstance(data, dict): data = {}
         new_display_name_from_input = name_input_field.text().strip()
+        try:
+            self._log(f"Inputs: name='{new_display_name_from_input}' desc_len={len(desc_input_field.toPlainText())}")
+        except Exception:
+            pass
+        self._log(f"Target save path: {json_path}")
         if level_to_save in ['world', 'region', 'setting'] and not new_display_name_from_input:
             print(f"SettingManager: Cannot save {level_to_save} - no name provided.")
             self._editing_level = None
@@ -1986,7 +2035,20 @@ class SettingManagerWidget(QWidget):
                     del data['connections']
             data['exterior'] = self.setting_exterior_checkbox.isChecked()
             print(f"Successfully saved setting: {new_display_name_from_input} to {json_path}")
-        if self._save_json(json_path, data):
+        self._log(f"About to call _save_json with data keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
+        if 'description' in data:
+            self._log(f"Data description field: '{data['description'][:50]}...' (len={len(data['description'])})")
+        save_result = self._save_json(json_path, data)
+        self._log(f"_save_json returned: {save_result}")
+        if save_result:
+            self._log_file_info(json_path)
+            if level_to_save == 'setting':
+                try:
+                    verify_data = self._load_json(json_path)
+                    verify_desc = verify_data.get('description', '') if isinstance(verify_data, dict) else ''
+                    self._log(f"Post-save verify: desc_len={len(verify_desc)} match={(verify_desc.strip()==data.get('description','').strip())}")
+                except Exception as e:
+                    self._log(f"Post-save verify error: {e}")
             if current_list_item:
                 if level_to_save == 'setting':
                     is_game_version_flag = False
@@ -2015,6 +2077,8 @@ class SettingManagerWidget(QWidget):
                         display_text = new_display_name_from_input
                         if is_game_version_flag: display_text += " *"
                         self.list3.currentItem().setText(display_text)
+        else:
+            self._log("SAVE FAILED - _save_json returned False")
         if hasattr(self, '_original_edit_level') and self._original_edit_level is not None:
             self._editing_level = self._original_edit_level
             self._original_edit_level = None
@@ -2227,8 +2291,6 @@ class SettingManagerWidget(QWidget):
         self.theme_colors = theme_colors
         base_color = theme_colors.get('base_color', '#FFFFFF')
         bg_color = theme_colors.get('bg_color', '#2B2B2B')
-        
-        # Theme the scroll area
         if hasattr(self, 'scroll_area'):
             self.scroll_area.setStyleSheet(f"""
                 QScrollArea {{
@@ -2383,6 +2445,25 @@ class SettingManagerWidget(QWidget):
                 self._editing_region_orig = self._selected_region_orig
                 self._editing_location_orig = self._selected_location_orig
                 self._editing_setting_orig = self._selected_setting_orig
+        elif event.type() == event.FocusOut:
+            if obj in (
+                getattr(self, 'world_description_input', None),
+                getattr(self, 'region_description_input', None),
+                getattr(self, 'location_description_input', None),
+                getattr(self, 'setting_description_input', None),
+            ):
+                try:
+                    self._force_save_description(obj)
+                except Exception as e:
+                    print(f"Force save error: {e}")
+                try:
+                    self._schedule_description_save()
+                except Exception:
+                    pass
+                try:
+                    self._save_current_details()
+                except Exception:
+                    pass
         elif event.type() == event.MouseButtonRelease and obj.objectName() == "VariableRow":
             self._selected_variable_row_widget = obj
         return super().eventFilter(obj, event)
@@ -2589,8 +2670,6 @@ class SettingManagerWidget(QWidget):
                     break
         elif level != 'setting':
             print(f"[WARN _add_item] target_list was None after repopulation for level '{level}'. Cannot select new item.")
-            
-        # Play add sound
         main_ui = self._get_main_ui()
         if main_ui and hasattr(main_ui, 'add_rule_sound') and main_ui.add_rule_sound:
             try:
@@ -2830,7 +2909,6 @@ class SettingManagerWidget(QWidget):
                         self.world_editor_tab.set_location(old_location_name)
                 self.populate_settings(base_path)
                 
-                # Play delete sound
                 main_ui = self._get_main_ui()
                 if main_ui and hasattr(main_ui, 'delete_rule_sound') and main_ui.delete_rule_sound:
                     try:

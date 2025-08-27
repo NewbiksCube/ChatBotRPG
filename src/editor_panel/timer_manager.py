@@ -127,6 +127,8 @@ class TimerInstance:
             return False
         now = datetime.now()
         expired = now >= self.next_fire_time
+        if expired:
+            pass
         return expired
 
 class TimerManager(QObject):
@@ -512,6 +514,7 @@ class TimerManager(QObject):
                             try:
                                 new_timer = TimerInstance(rule, timer_instance_character_binding, tab_data)
                                 self.active_timers[tab_id][rule_id][actual_timer_key_for_dict] = new_timer
+                                print(f"[TIMER MANAGER] Started timer for rule '{rule_id}' targeting '{timer_instance_character_binding}' with interval {rule.get('interval', 'Unknown')}")
                                 new_timer.start()
                                 self.save_timer_state(tab_data)
                             finally:
@@ -665,6 +668,7 @@ class TimerManager(QObject):
                         if timer.is_running:
                             if hasattr(timer, '_is_firing') and timer._is_firing:
                                 continue
+                            remaining_ms = timer.time_remaining_ms()
                             if timer.is_expired():
                                 rule_data = timer.rule_data
                                 tab_data = timer.tab_data
@@ -706,6 +710,7 @@ class TimerManager(QObject):
                     timer._is_firing = False
                     continue
                 
+                print(f"[TIMER EMIT] Emitting timer_action_signal for rule '{rule_id}' character '{timer.character}'")
                 self.timer_action_signal.emit(timer, rule_data, tab_data)
                 
                 with self.lock:
@@ -941,6 +946,7 @@ class TimerManager(QObject):
             if not rule_lookup:
                 return
         restored_count = 0
+        print(f"[TIMER MANAGER] Loading {len(timer_state)} saved timers from gamestate")
         with self.lock:
             for timer_data in timer_state:
                 rule_id = timer_data.get('rule_id')
@@ -997,8 +1003,11 @@ class TimerManager(QObject):
                     else:
                         timer_instance.next_fire_time = datetime.now() + timedelta(milliseconds=1000)
                     restored_count += 1
-                except Exception:
+                    print(f"[TIMER MANAGER] Restored timer '{rule_id}' for character '{character_binding}' with {time_remaining_ms}ms remaining")
+                except Exception as e:
+                    print(f"[TIMER MANAGER] Error restoring timer '{rule_id}': {e}")
                     pass
+        print(f"[TIMER MANAGER] Successfully restored {restored_count} timers for tab {tab_id}")
 
     def remove_timer_rule(self, rule_id, tab_data):
         if not tab_data:
@@ -1176,6 +1185,10 @@ def execute_timer_action(main_ui, rule_data, action, character_name=None, tab_da
                             'switch_model': None
                         }
                         timer_system_modifications.append(timer_mod)
+
+        if '_exit_rule_processing_chars' in tab_data and target_actor_name in tab_data['_exit_rule_processing_chars']:
+            tab_data['_exit_rule_processing_chars'].discard(target_actor_name)
+        
         run_single_character_post(
             main_ui,
             target_actor_name,
@@ -1201,6 +1214,13 @@ def execute_timer_action(main_ui, rule_data, action, character_name=None, tab_da
             _apply_rule_side_effects(main_ui, action, None, None, None)
         except Exception as e:
             print(f"[TIMER ACTION] Error setting screen effect from timer rule: {e}")
+    elif action_type == "Next Track":
+        try:
+            from core.game_music import get_game_music_controller
+            controller = get_game_music_controller()
+            controller.next_track(main_ui)
+        except Exception as e:
+            print(f"[TIMER ACTION] Error advancing music track: {e}")
 
 def _execute_set_var_action(main_ui, action, character_name, tab_data):
     var_name = action.get('var_name', '')
