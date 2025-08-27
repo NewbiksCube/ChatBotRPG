@@ -13,6 +13,7 @@ from editor_panel.rules_manager import _add_rule, _load_selected_rule, _delete_s
 from editor_panel.left_splitter import LeftSplitterWidget
 from editor_panel.setting_manager import SettingManagerWidget
 from editor_panel.time_manager import TimeManager
+from editor_panel.audio_manager import AudioManager
 from editor_panel.keyword_manager import KeywordManagerWidget
 from editor_panel.actor_manager import ActorManagerWidget
 from player_panel.right_splitter import RightSplitterWidget
@@ -1285,6 +1286,9 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
     center_stack.addWidget(notes_manager_widget_standalone)
     setting_manager_widget = SettingManagerWidget(workflow_data_dir=tab_dir, theme_colors=tab_settings)
     center_stack.addWidget(setting_manager_widget)
+    audio_manager_widget = AudioManager(theme_colors=tab_settings, workflow_data_dir=tab_dir, main_ui=self, tab_data=None)
+    center_stack.addWidget(audio_manager_widget)
+    audio_manager_widget.set_main_ui(self)
     time_manager_widget = TimeManager(theme_colors=tab_settings, workflow_data_dir=tab_dir, main_ui=self, tab_data=None)
     center_stack.addWidget(time_manager_widget)
     actor_manager_widget = ActorManagerWidget(tab_dir)
@@ -1428,37 +1432,42 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
             center_stack.setCurrentIndex(3)
             if hasattr(left_splitter_widget, 'agent_panel'):
                 left_splitter_widget.agent_panel.setVisible(True)
-        elif sender == left_splitter_widget.time_manager_button:
+        elif sender == left_splitter_widget.audio_manager_button:
             center_stack.setCurrentIndex(4)
             if hasattr(left_splitter_widget, 'agent_panel'):
                 left_splitter_widget.agent_panel.setVisible(True)
-        elif sender == left_splitter_widget.actor_manager_button:
+        elif sender == left_splitter_widget.time_manager_button:
             center_stack.setCurrentIndex(5)
             if hasattr(left_splitter_widget, 'agent_panel'):
                 left_splitter_widget.agent_panel.setVisible(True)
-        elif sender == left_splitter_widget.rules_button:
+        elif sender == left_splitter_widget.actor_manager_button:
             center_stack.setCurrentIndex(6)
             if hasattr(left_splitter_widget, 'agent_panel'):
                 left_splitter_widget.agent_panel.setVisible(True)
-        elif sender == left_splitter_widget.keyword_manager_button:
+        elif sender == left_splitter_widget.rules_button:
             center_stack.setCurrentIndex(7)
             if hasattr(left_splitter_widget, 'agent_panel'):
                 left_splitter_widget.agent_panel.setVisible(True)
-        elif sender == left_splitter_widget.inventory_manager_button:
+        elif sender == left_splitter_widget.keyword_manager_button:
             center_stack.setCurrentIndex(8)
             if hasattr(left_splitter_widget, 'agent_panel'):
                 left_splitter_widget.agent_panel.setVisible(True)
-        elif sender == left_splitter_widget.random_generators_button:
+        elif sender == left_splitter_widget.inventory_manager_button:
             center_stack.setCurrentIndex(9)
             if hasattr(left_splitter_widget, 'agent_panel'):
                 left_splitter_widget.agent_panel.setVisible(True)
-        elif sender == left_splitter_widget.start_conditions_button:
+        elif sender == left_splitter_widget.random_generators_button:
             center_stack.setCurrentIndex(10)
+            if hasattr(left_splitter_widget, 'agent_panel'):
+                left_splitter_widget.agent_panel.setVisible(True)
+        elif sender == left_splitter_widget.start_conditions_button:
+            center_stack.setCurrentIndex(11)
             if hasattr(left_splitter_widget, 'agent_panel'):
                 left_splitter_widget.agent_panel.setVisible(True)
     left_splitter_widget.live_game_button.toggled.connect(update_center_panel)
     left_splitter_widget.notes_button.toggled.connect(update_center_panel)
     left_splitter_widget.setting_manager_button.toggled.connect(update_center_panel)
+    left_splitter_widget.audio_manager_button.toggled.connect(update_center_panel)
     left_splitter_widget.time_manager_button.toggled.connect(update_center_panel)
     left_splitter_widget.actor_manager_button.toggled.connect(update_center_panel)
     left_splitter_widget.rules_button.toggled.connect(update_center_panel)
@@ -1591,6 +1600,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
         'right_splitter': right_splitter_instance,
         'actor_manager_widget': actor_manager_widget,
         'time_manager_widget': time_manager_widget,
+        'audio_manager_widget': audio_manager_widget,
         'start_conditions_manager_widget': start_conditions_manager_widget,
         'random_generators_widget': random_generators_widget,
         'workflow_data_dir': tab_dir,
@@ -1602,6 +1612,7 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
     }
     output_field.tab_data = tab_data
     time_manager_widget.set_tab_data(tab_data)
+    audio_manager_widget.set_tab_data(tab_data)
     if replace_existing_index is not None:
         if replace_existing_index < len(self.tabs_data):
             old_tab_data = self.tabs_data[replace_existing_index]
@@ -1795,7 +1806,10 @@ def add_new_tab(self, name=None, log_file=None, notes_file=None, context_file=No
     if top_splitter_widget:
         top_splitter_widget.setVisible(False)
     if not skip_heavy_loading and replace_existing_index is None:
-        self._show_introduction(actual_index)
+        tab_data = self.tabs_data[actual_index]
+        context = tab_data.get('context', [])
+        if not context:
+            self._show_introduction(actual_index)
     if hasattr(self, 'setting_manager_widget') and self.setting_manager_widget:
         self.setting_manager_widget.update_workflow_data_dir(self.workflow_data_dir)
     try:

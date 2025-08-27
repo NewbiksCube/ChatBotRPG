@@ -228,7 +228,7 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
         model_to_use = tab_data['settings'].get('model', self.get_current_model())
         if not skip_rules:
             if tab_data and character_name:
-                if character_name in tab_data.get('_characters_to_exit_rules', set()):
+                if character_name in tab_data.get('_exit_rule_processing_chars', set()):
                     print(f"Skipping all rules for '{character_name}' due to prior Exit Rule Processing action.")
                 else:
                     if not hasattr(self, '_character_tags'):
@@ -236,7 +236,7 @@ def run_single_character_post(self, character_name, tab_data=None, system_messag
                     character_rules = [r for r in tab_data.get('thought_rules', []) 
                                       if r.get('applies_to', 'Narrator') == 'Character']
                     for char_rule in character_rules:
-                        if character_name in tab_data.get('_characters_to_exit_rules', set()):
+                        if character_name in tab_data.get('_exit_rule_processing_chars', set()):
                             print(f"Stopping rule processing for '{character_name}' due to Exit Rule Processing action during rule evaluation.")
                             break
                         rule_target_character = char_rule.get('character_name')

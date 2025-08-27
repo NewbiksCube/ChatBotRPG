@@ -1,12 +1,23 @@
 import os
 import pyfiglet
 import json
+import subprocess
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtWidgets import QApplication
+import pygame
+from core.music_manager import get_music_manager
+
+_title_music_playing = False
 
 def handle_intro_load_requested(ui_instance, tab_index):
     if not (0 <= tab_index < len(ui_instance.tabs_data) and ui_instance.tabs_data[tab_index]):
         return
+    
+    try:
+        stop_title_music()
+    except Exception as e:
+        print(f"Error stopping music before loading game: {e}")
+    
     ui_instance.tab_widget.setCurrentIndex(tab_index)
     from core.utils import load_game_state
     load_game_state(ui_instance)
@@ -39,6 +50,8 @@ def handle_intro_new_requested(ui_instance, tab_index):
             input_field.intro_enter_pressed.connect(
                 lambda emitted_idx: handle_intro_sequence_continue(ui_instance, tab_index if emitted_idx == -1 else emitted_idx)
             )
+            
+            _play_intro_music_if_configured(ui_instance, tab_index)
             begin_intro_sequence_streaming(ui_instance, tab_index, intro_sequence)
 
 def begin_intro_sequence_streaming(ui_instance, tab_index, intro_sequence):
@@ -48,6 +61,7 @@ def begin_intro_sequence_streaming(ui_instance, tab_index, intro_sequence):
     if not intro_sequence:
         finish_intro_sequence(ui_instance, tab_index)
         return
+    
     ui_instance.intro_sequence = intro_sequence
     ui_instance.current_intro_sequence_index = 0
     if tab_data and tab_data.get('output'):
@@ -168,7 +182,15 @@ def show_intro_continue_prompt(ui_instance, tab_index):
 def finish_intro_sequence(ui_instance, tab_index):
     if not (0 <= tab_index < len(ui_instance.tabs_data) and ui_instance.tabs_data[tab_index]):
         return
+    
     _finish_intro_to_normal_chat(ui_instance, tab_index)
+    try:
+        # After finishing intro, enable runtime game music controller
+        from core.game_music import get_game_music_controller
+        controller = get_game_music_controller()
+        controller.activate_for_tab(ui_instance, tab_index)
+    except Exception as e:
+        print(f"Error activating game music after intro: {e}")
 
 def show_character_generator(ui_instance, tab_index, player_gen_data):
     if not (0 <= tab_index < len(ui_instance.tabs_data) and ui_instance.tabs_data[tab_index]):
@@ -263,6 +285,9 @@ def _finish_intro_to_normal_chat(ui_instance, tab_index):
         del ui_instance.intro_sequence
     if hasattr(ui_instance, 'current_intro_sequence_index'):
         del ui_instance.current_intro_sequence_index
+    
+    # Don't stop title music here - let it continue playing during normal chat
+    # It will only stop when explicitly replaced by another music track
 
 def handle_intro_prompt_finished(ui_instance, tab_index):
     if not (0 <= tab_index < len(ui_instance.tabs_data) and ui_instance.tabs_data[tab_index]):
@@ -318,6 +343,9 @@ def show_introduction(ui_instance, tab_index):
     show_intro_vars = variables.get('introduction_checked', False)
     intro_title = variables.get('introduction_title', "Introduction")
     intro_desc = variables.get('introduction_description', '')
+    
+    _play_title_music_if_configured(ui_instance, tab_index)
+    
     if show_intro_vars and not context and input_field and output_widget:
         output_widget.clear_messages()
         try:
@@ -348,6 +376,100 @@ def show_introduction(ui_instance, tab_index):
     elif not show_intro_vars:
         print(f"Intro not checked for tab {tab_index}. Finishing intro sequence early.")
         finish_intro_sequence(ui_instance, tab_index) 
+
+def _play_title_music_if_configured(ui_instance, tab_index):
+    global _title_music_playing
+    
+    if _title_music_playing:
+        print("Title music already playing, skipping...")
+        return
+        
+    try:
+        tab_data = ui_instance.tabs_data[tab_index]
+        
+        # ONLY play title music if this tab is actually showing intro
+        # Don't play title music for ongoing conversations!
+        if not tab_data.get('_is_showing_intro', False):
+            print(f"Tab {tab_index} is not showing intro, skipping title music")
+            return
+        
+        variables = load_variables(ui_instance, tab_index)
+        title_music_file = variables.get('title_music_file')
+        if not title_music_file:
+            return
+        workflow_dir = tab_data.get('workflow_data_dir')
+        if not workflow_dir:
+            return
+        music_path = os.path.join(workflow_dir, 'resources', 'audio', 'music', title_music_file)
+        if not os.path.exists(music_path):
+            print(f"Title music file not found: {music_path}")
+            return
+            
+        _title_music_playing = True
+        
+        music_manager = get_music_manager()
+        if hasattr(ui_instance, '_music_volume'):
+            music_manager.set_volume(ui_instance._music_volume)
+        
+        success = music_manager.play_music(music_path, fade_in_ms=1500, loop=True)
+        if success:
+            print(f"Title music started: {music_path}")
+        else:
+            print(f"Failed to start title music: {music_path}")
+            _title_music_playing = False
+            
+    except Exception as e:
+        print(f"Error playing title music: {e}")
+        _title_music_playing = False
+
+
+
+
+
+
+
+def _play_intro_music_if_configured(ui_instance, tab_index):
+    try:
+        tab_data = ui_instance.tabs_data[tab_index]
+        variables = load_variables(ui_instance, tab_index)
+        intro_music_file = variables.get('intro_music_file')
+        if not intro_music_file:
+            return
+        
+        workflow_dir = tab_data.get('workflow_data_dir')
+        if not workflow_dir:
+            return
+        music_path = os.path.join(workflow_dir, 'resources', 'audio', 'music', intro_music_file)
+        if not os.path.exists(music_path):
+            print(f"Intro music file not found: {music_path}")
+            return
+            
+        music_manager = get_music_manager()
+        if hasattr(ui_instance, '_music_volume'):
+            music_manager.set_volume(ui_instance._music_volume)
+        
+        success = music_manager.play_music(music_path, fade_in_ms=1500, loop=False)
+        if success:
+            print(f"Intro music started: {music_path}")
+        else:
+            print(f"Failed to start intro music: {music_path}")
+            
+    except Exception as e:
+        print(f"Error playing intro music: {e}")
+
+def stop_title_music():
+    global _title_music_playing
+    
+    try:
+        music_manager = get_music_manager()
+        music_manager.stop_music(fade_out_ms=1500)
+        
+        _title_music_playing = False
+        print("Title music stopped and flag reset")
+        
+    except Exception as e:
+        print(f"Error stopping title music: {e}")
+        _title_music_playing = False
 
 def handle_keypress_for_intro(ui_instance, event):
     tab_data = ui_instance.get_current_tab_data()
@@ -411,7 +533,13 @@ def begin_intro_text_streaming(ui_instance, tab_index, intro_messages):
     begin_intro_sequence_streaming(ui_instance, tab_index, intro_sequence)
 
 def stream_next_intro_line(ui_instance, tab_index):
+    # Don't stop title music here - let it continue playing during intro sequence
+    # It will only stop when explicitly replaced by another music track
+    
     process_next_intro_sequence_item(ui_instance, tab_index)
 
 def handle_intro_text_continue(ui_instance, tab_index):
+    # Don't stop title music here - let it continue playing during intro sequence
+    # It will only stop when explicitly replaced by another music track
+    
     handle_intro_sequence_continue(ui_instance, tab_index)

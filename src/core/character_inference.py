@@ -453,16 +453,15 @@ def _start_npc_inference_threads(self):
                         if returned_tag:
                             tag_for_this_npc = returned_tag
                             print(f"    -> Captured tag '{tag_for_this_npc}' for NPC '{char}' from rule '{rule_id}'")
-                        if char in tab_data.get('_characters_to_exit_rules', set()):
+                        if char in tab_data.get('_exit_rule_processing_chars', set()):
                             print(f"[EXIT RULE PROCESSING] Character '{char}' marked to exit rule processing - stopping further rules for this character")
                             break
                         characters_to_skip = tab_data.get('_characters_to_skip', set())
                         if char in characters_to_skip:
                             print(f"[SKIP POST] Character '{char}' marked to skip during rule '{rule_id}' - exiting rule processing early")
                             break
-                        if tab_data.get('_exit_rule_processing'):
+                        if char in tab_data.get('_exit_rule_processing_chars', set()):
                             print(f"[EXIT RULE PROCESSING] Stopping rule processing for '{char}' due to Exit Rule Processing action")
-                            tab_data['_exit_rule_processing'] = False
                             break
             npc_context_for_llm = []
             npc_context_for_llm.append({"role": "system", "content": system_msg_base_intro})
@@ -534,24 +533,19 @@ def _start_npc_inference_threads(self):
                 if mod.get('switch_model'):
                     model_to_use = mod['switch_model']
                     break
-            characters_to_skip = tab_data.get('_characters_to_skip', set())
-            if char in characters_to_skip:
-                print(f"[SKIP POST] Character '{char}' marked to skip posting - skipping inference")
-                characters_to_skip.discard(char)
-                continue
             npc_inference_data = {
                 'character': char,
                 'context': npc_context_for_llm,
                 'model': model_to_use,
                 'tag': tag_for_this_npc
             }
-            if (
-                char not in tab_data.get('_characters_to_exit_rules', set())
-                and char not in tab_data.get('_characters_to_skip', set())
-                and not tab_data.get('_exit_rule_processing')
-            ):
+            characters_to_skip = tab_data.get('_characters_to_skip', set())
+            if char in characters_to_skip:
+                print(f"[SKIP POST] Character '{char}' marked to skip posting - skipping inference")
+                characters_to_skip.discard(char)
+            else:
                 self._npc_inference_queue.append(npc_inference_data)
-            final_npcs_to_infer_after_rules.append(char)
+                final_npcs_to_infer_after_rules.append(char)
         if not final_npcs_to_infer_after_rules:
             print("[INPUT DEBUG] No characters to process (all skipped or none in scene)")
             had_npcs_but_all_skipped = len(npcs_in_scene) > 0 and len(final_npcs_to_infer_after_rules) == 0
@@ -658,9 +652,7 @@ def _start_next_npc_inference(self):
         tab_data = self.get_current_tab_data()
         if tab_data:
             if (
-                character in tab_data.get('_characters_to_exit_rules', set())
-                or character in tab_data.get('_characters_to_skip', set())
-                or tab_data.get('_exit_rule_processing')
+                character in tab_data.get('_characters_to_skip', set())
             ):
                 _start_next_npc_inference(self)
                 return
@@ -708,6 +700,10 @@ def _start_next_npc_inference(self):
             if isinstance(msg, str):
                 msg = re.sub(r'<think>[\s\S]*?</think>', '', msg, flags=re.IGNORECASE).strip()
             tab_data = self.get_current_tab_data()
+            if tab_data and actual_character_name in tab_data.get('_characters_to_skip', set()):
+                print(f"[NPC INFERENCE] Character '{actual_character_name}' marked to skip - skipping LLM reply rules")
+                _start_next_npc_inference(self)
+                return
             has_llm_reply_rules = False
             print(f"[NPC INFERENCE] Checking for LLM reply rules for character: '{actual_character_name}'")
             if tab_data and 'thought_rules' in tab_data:
@@ -927,6 +923,10 @@ def _process_end_of_round_rules(self, tab_data, callback=None):
     if '_narrator_to_exit_rules' in tab_data:
         print(f"[END OF ROUND] Clearing exit rule processing flag for narrator")
         tab_data.pop('_narrator_to_exit_rules', None)
+    if '_exit_rule_processing_chars' in tab_data:
+        tab_data.pop('_exit_rule_processing_chars', None)
+    if '_exit_rule_processing_narrator' in tab_data:
+        tab_data.pop('_exit_rule_processing_narrator', None)
     rules = tab_data.get('thought_rules', [])
     end_of_round_rules = [r for r in rules if r.get('applies_to') == 'End of Round']
     if not end_of_round_rules:

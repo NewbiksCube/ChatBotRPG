@@ -683,6 +683,10 @@ def move_characters(
         if scene_fade_overlay:
             try:
                 def on_black():
+                    try:
+                        tab_data['_suppress_rule_screen_effects'] = True
+                    except Exception:
+                        pass
                     if advance_time and result['player_moved'] and current_setting_name and final_player_setting_name and current_setting_name != final_player_setting_name:
                         travel_time_minutes = _calculate_travel_time_between_settings(
                             workflow_data_dir_for_update,

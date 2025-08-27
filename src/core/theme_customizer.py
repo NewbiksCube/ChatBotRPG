@@ -196,6 +196,21 @@ def update_ui_colors(chatbot_ui_instance, theme_colors):
     if hasattr(chatbot_ui_instance, '_last_theme') and chatbot_ui_instance._last_theme == theme_colors:
         return
     chatbot_ui_instance._last_theme = theme_colors.copy()
+    
+    music_volume = theme_colors.get("music_volume", 100) / 100.0
+    sfx_volume = theme_colors.get("sfx_volume", 100) / 100.0
+    chatbot_ui_instance._music_volume = music_volume
+    chatbot_ui_instance._sfx_volume = sfx_volume
+    
+    # Apply volume to global music manager
+    try:
+        from core.music_manager import get_music_manager
+        music_manager = get_music_manager()
+        music_manager.set_volume(music_volume)
+        print(f"Applied volume {music_volume:.2f} to global music manager during theme update")
+    except Exception as e:
+        print(f"Error applying volume during theme update: {e}")
+    
     intensity = theme_colors.get("intensity", 0.8)
     themed_cursors = create_cursor_set(base_color, intensity)
     chatbot_ui_instance.themed_cursors = themed_cursors
@@ -277,8 +292,17 @@ class ThemeCustomizationDialog(QDialog):
             "streaming_enabled": False,
             "streaming_speed": 50,
             "crt_enabled": True,
-            "crt_speed": 120
+            "crt_speed": 120,
+            "music_volume": 100,
+            "sfx_volume": 100
         }
+        
+        # Ensure volume keys exist
+        if 'music_volume' not in self.current_theme:
+            self.current_theme['music_volume'] = 100
+        if 'sfx_volume' not in self.current_theme:
+            self.current_theme['sfx_volume'] = 100
+            
         self.result_theme = self.current_theme.copy()
         self._drag_position = None
         bg_value = int(80 * self.current_theme["contrast"])
@@ -609,6 +633,43 @@ class ThemeCustomizationDialog(QDialog):
         self.crt_speed_label.setEnabled(self.crt_checkbox.isChecked())
         self.crt_speed_slider.setEnabled(self.crt_checkbox.isChecked())
         self.crt_speed_value.setEnabled(self.crt_checkbox.isChecked())
+        
+        audio_section_label = QLabel("Audio Settings:")
+        audio_section_label.setFont(QFont('Arial', 12, QFont.Bold))
+        content_layout.addWidget(audio_section_label)
+        
+        music_volume_layout = QHBoxLayout()
+        self.music_volume_label = QLabel("Music Volume:")
+        self.music_volume_label.setFont(QFont('Arial', 12))
+        self.music_volume_slider = QSlider(Qt.Horizontal)
+        self.music_volume_slider.setRange(0, 100)
+        self.music_volume_slider.setValue(int(self.current_theme.get("music_volume", 100)))
+        self.music_volume_slider.valueChanged.connect(self.update_music_volume)
+        self.music_volume_value = QLabel(f"{self.current_theme.get('music_volume', 100)}%")
+        self.music_volume_value.setFont(QFont('Arial', 12))
+        self.music_volume_value.setAlignment(Qt.AlignCenter)
+        self.music_volume_value.setFixedWidth(50)
+        music_volume_layout.addWidget(self.music_volume_label)
+        music_volume_layout.addWidget(self.music_volume_slider, 1)
+        music_volume_layout.addWidget(self.music_volume_value)
+        content_layout.addLayout(music_volume_layout)
+        
+        sfx_volume_layout = QHBoxLayout()
+        self.sfx_volume_label = QLabel("SFX Volume:")
+        self.sfx_volume_label.setFont(QFont('Arial', 12))
+        self.sfx_volume_slider = QSlider(Qt.Horizontal)
+        self.sfx_volume_slider.setRange(0, 100)
+        self.sfx_volume_slider.setValue(int(self.current_theme.get("sfx_volume", 100)))
+        self.sfx_volume_slider.valueChanged.connect(self.update_sfx_volume)
+        self.sfx_volume_value = QLabel(f"{self.current_theme.get('sfx_volume', 100)}%")
+        self.sfx_volume_value.setFont(QFont('Arial', 12))
+        self.sfx_volume_value.setAlignment(Qt.AlignCenter)
+        self.sfx_volume_value.setFixedWidth(50)
+        sfx_volume_layout.addWidget(self.sfx_volume_label)
+        sfx_volume_layout.addWidget(self.sfx_volume_slider, 1)
+        sfx_volume_layout.addWidget(self.sfx_volume_value)
+        content_layout.addLayout(sfx_volume_layout)
+        
         self.preview_label = QLabel("PREVIEW:")
         self.preview_label.setFont(QFont('Arial', 12, QFont.Bold))
         self.preview = QTextEdit()
@@ -710,6 +771,55 @@ class ThemeCustomizationDialog(QDialog):
         self.result_theme["crt_speed"] = value
         self.crt_speed_value.setText(f"{value} ms")
         self.update_preview()
+
+    def update_music_volume(self, value):
+        print(f"Music volume slider changed to: {value}%")
+        self.result_theme["music_volume"] = value
+        self.music_volume_value.setText(f"{value}%")
+        self._apply_volume_settings()
+
+    def update_sfx_volume(self, value):
+        print(f"SFX volume slider changed to: {value}%")
+        self.result_theme["sfx_volume"] = value
+        self.sfx_volume_value.setText(f"{value}%")
+        self._apply_volume_settings()
+
+    def _apply_volume_settings(self):
+        # Safely get volume values with defaults
+        music_volume = self.result_theme.get('music_volume', 100)
+        sfx_volume = self.result_theme.get('sfx_volume', 100)
+        
+        print(f"_apply_volume_settings called with music: {music_volume}%, sfx: {sfx_volume}%")
+        try:
+            if hasattr(self, 'parent') and self.parent():
+                parent = self.parent()
+                print(f"Parent found: {type(parent)}")
+                if hasattr(parent, '_music_volume'):
+                    old_vol = parent._music_volume
+                    parent._music_volume = music_volume / 100.0
+                    print(f"Updated parent music volume: {old_vol:.2f} -> {parent._music_volume:.2f}")
+                if hasattr(parent, '_sfx_volume'):
+                    old_vol = parent._sfx_volume
+                    parent._sfx_volume = sfx_volume / 100.0
+                    print(f"Updated parent SFX volume: {old_vol:.2f} -> {parent._sfx_volume:.2f}")
+                
+                try:
+                    from core.music_manager import get_music_manager
+                    music_manager = get_music_manager()
+                    print(f"Got music manager: {type(music_manager)}")
+                    music_manager.set_volume(music_volume / 100.0)
+                    print(f"✓ Applied volume {music_volume}% to global music manager")
+                except Exception as e:
+                    print(f"Error updating global music manager volume: {e}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print("No parent found")
+                    
+        except Exception as e:
+            print(f"Error applying volume settings: {e}")
+            import traceback
+            traceback.print_exc()
 
     def update_preview(self):
         base_color = self.result_theme["base_color"]

@@ -15,16 +15,16 @@ def trigger_game_over(ui_instance, tab_index, game_over_message="Game Over"):
     return True
 
 def _stop_all_rule_processing(ui_instance, tab_data):
-    if '_characters_to_exit_rules' not in tab_data:
-        tab_data['_characters_to_exit_rules'] = set()
-    tab_data['_narrator_to_exit_rules'] = True
+    if '_exit_rule_processing_chars' not in tab_data:
+        tab_data['_exit_rule_processing_chars'] = set()
+    tab_data['_exit_rule_processing_narrator'] = True
     workflow_data_dir = tab_data.get('workflow_data_dir')
     if workflow_data_dir and hasattr(ui_instance, 'get_character_names_in_scene_for_timers'):
         try:
             characters_in_scene = ui_instance.get_character_names_in_scene_for_timers(tab_data)
             if characters_in_scene:
                 for char_name in characters_in_scene:
-                    tab_data['_characters_to_exit_rules'].add(char_name)
+                    tab_data['_exit_rule_processing_chars'].add(char_name)
         except Exception as e:
             pass
     tab_data['_exit_rule_processing'] = True
@@ -121,7 +121,7 @@ p, li { white-space: pre-wrap; }
             pass
     variables = ui_instance._load_variables(tab_index)
     if variables:
-        keys_to_keep = {'introduction_checked', 'introduction_title', 'introduction_text', 'introduction_description', 'introduction_messages', 'introduction_sequence', 'origin'}
+        keys_to_keep = {'introduction_checked', 'introduction_title', 'introduction_text', 'introduction_description', 'introduction_messages', 'introduction_sequence', 'origin', 'title_music_file'}
         persistent_variables = {k: v for k, v in variables.items() if k.endswith('*') or k in keys_to_keep or k.startswith('introduction_')}
         removed_count = len(variables) - len(persistent_variables)
         ui_instance._save_variables(tab_index, persistent_variables)
